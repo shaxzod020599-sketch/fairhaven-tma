@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 const TASHKENT_CENTER = { lat: 41.2995, lng: 69.2401 };
-const YANDEX_API_KEY = 'your_yandex_api_key_here'; // Will be replaced from env
+const YANDEX_API_KEY = '69307a33-0864-4402-b3ea-22f2656336f4';
 
 export default function YandexMapCheckout({ onConfirm, onClose }) {
   const mapRef = useRef(null);
