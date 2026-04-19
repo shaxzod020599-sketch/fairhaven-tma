@@ -1,0 +1,14 @@
+{
+  "name": "fairhaven",
+  "version": "1.0.0",
+  "description": "FairHaven — Vitamins & Supplements TMA Store",
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "build:frontend": "cd frontend && npm run build",
+    "start": "cd backend && node server.js",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "render:build": "npm run install:all && npm run build:frontend",
+    "render:start": "npm start"
+  }
+}

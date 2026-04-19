@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: fairhaven
+    runtime: node
+    buildCommand: npm run render:build
+    startCommand: npm run render:start
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: MONGO_URI
+        sync: false
+      - key: YANDEX_MAPS_API_KEY
+        sync: false
+      - key: PORT
+        value: 3000
+      - key: FRONTEND_URL
+        fromService:
+          name: fairhaven
+          type: web
+          property: host
+      - key: NODE_ENV
+        value: production
