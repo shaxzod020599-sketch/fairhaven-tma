@@ -5,7 +5,47 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="description" content="FairHaven — витамины и добавки с доставкой в Ташкенте" />
     <meta name="theme-color" content="#F6F1E6" />
+
+    <!-- Cache-bust: force reload if build changed. -->
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="build-id" content="__BUILD_ID__" />
+
     <title>FairHaven — Витамины и добавки</title>
+
+    <script>
+      // Cache-bust guard — runs BEFORE any app script. Compares baked-in build id
+      // against the one saved on the device; if different, purge caches & reload.
+      (function () {
+        try {
+          var buildId = '__BUILD_ID__';
+          var storageKey = 'fh-build-id';
+          var reloadFlag = 'fh-reloaded-at';
+          var saved = localStorage.getItem(storageKey);
+
+          if (saved !== buildId) {
+            // First visit or new build — wipe caches.
+            if (window.caches && caches.keys) {
+              caches.keys().then(function (keys) {
+                keys.forEach(function (k) { caches.delete(k); });
+              }).catch(function () {});
+            }
+            localStorage.setItem(storageKey, buildId);
+
+            // Avoid reload loop: only force-reload once per build id.
+            var lastReload = sessionStorage.getItem(reloadFlag);
+            if (saved !== null && lastReload !== buildId) {
+              sessionStorage.setItem(reloadFlag, buildId);
+              // Hard reload (bypasses http cache where possible).
+              window.location.replace(window.location.pathname + '?v=' + buildId);
+              return;
+            }
+          }
+        } catch (e) { /* ignore */ }
+      })();
+    </script>
+
     <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

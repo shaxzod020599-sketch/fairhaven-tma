@@ -43,13 +43,37 @@ app.get('/api/health', (_req, res) => {
 // Serve frontend static files (production)
 const path = require('path');
 const frontendDist = path.resolve(__dirname, '../frontend/dist');
-app.use(express.static(frontendDist));
 
-// SPA fallback — serve index.html for non-API routes
-app.get('*', (req, res, next) => {
+// Hashed assets (Vite generates /assets/*.{hash}.{ext}) — cache forever
+app.use(
+  '/assets',
+  express.static(path.join(frontendDist, 'assets'), {
+    maxAge: '1y',
+    immutable: true,
+  })
+);
+
+// Everything else (index.html, icons, manifest, etc.) — never cache HTML
+app.use(
+  express.static(frontendDist, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) {
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
+      }
+    },
+  })
+);
+
+// SPA fallback — serve index.html for non-API routes with no-cache
+app.get('*', (req, res, _next) => {
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ success: false, error: 'Route not found' });
   }
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   res.sendFile(path.join(frontendDist, 'index.html'));
 });
 
