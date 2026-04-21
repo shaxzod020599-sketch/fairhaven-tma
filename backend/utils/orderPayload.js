@@ -46,7 +46,7 @@ async function buildOrderData({ items, location, customerName, customerPhone, no
   });
 
   const uniqueIds = [...new Set(normalizedItems.map((item) => item.productId))];
-  const products = await Product.find({ _id: { $in: uniqueIds } }).select('name price isAvailable');
+  const products = await Product.find({ _id: { $in: uniqueIds } }).select('name price isAvailable').lean();
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   const missingIds = uniqueIds.filter((id) => !productMap.has(id));
   if (missingIds.length > 0) {

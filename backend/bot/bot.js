@@ -3,7 +3,6 @@ const User = require('../models/User');
 const Order = require('../models/Order');
 const { formatOrderReceipt } = require('../utils/helpers');
 const { buildOrderData } = require('../utils/orderPayload');
-const { toSafeString } = require('../utils/validators');
 
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || null;
 
@@ -166,7 +165,7 @@ function createBot(token, frontendUrl) {
       }
     } catch (err) {
       console.error('Error processing web_app_data:', err);
-      await ctx.reply(`❌ ${toSafeString(err.message || 'Произошла ошибка при оформлении заказа. Попробуйте ещё раз.', { max: 180 })}`);
+      await ctx.reply('❌ Произошла ошибка при оформлении заказа. Попробуйте ещё раз.');
     }
   });
 

@@ -68,13 +68,14 @@ exports.getAll = async (req, res) => {
       filter.telegramId = telegramId;
     }
 
-    const orders = await Order.find(filter)
-      .populate('items.productId', 'name imageUrl')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    const total = await Order.countDocuments(filter);
+    const [orders, total] = await Promise.all([
+      Order.find(filter)
+        .populate('items.productId', 'name imageUrl')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Order.countDocuments(filter),
+    ]);
 
     res.json({
       success: true,
