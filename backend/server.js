@@ -7,17 +7,43 @@ const { createBot } = require('./bot/bot');
 const productRoutes = require('./routes/productRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const userRoutes = require('./routes/userRoutes');
+const { createRateLimiter } = require('./utils/rateLimit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL;
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+function normalizeOrigin(url) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `https://${url}`;
+}
+
+if (IS_PRODUCTION && !FRONTEND_URL) {
+  throw new Error('FRONTEND_URL is required in production');
+}
+
+const allowedOrigins = new Set(
+  [
+    normalizeOrigin(FRONTEND_URL),
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ].filter(Boolean)
+);
 
 // Middleware
 app.use(cors({
-  origin: FRONTEND_URL || true,
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.has(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('CORS origin not allowed'));
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  credentials: Boolean(FRONTEND_URL),
+  credentials: true,
 }));
+app.use(createRateLimiter({ windowMs: 60_000, max: 180 }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -97,6 +123,7 @@ async function autoSeed() {
 
 // Start server
 async function start() {
+  // `mongod` is only set when fallback in-memory MongoDB is used.
   let mongod = null;
   try {
     let mongoUri = process.env.MONGO_URI;

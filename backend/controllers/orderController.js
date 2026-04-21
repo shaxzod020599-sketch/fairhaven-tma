@@ -1,7 +1,7 @@
 const Order = require('../models/Order');
 const User = require('../models/User');
 const { buildOrderData } = require('../utils/orderPayload');
-const { ensureObjectId, parseTelegramId, toSafeString } = require('../utils/validators');
+const { ensureObjectId, parseTelegramId } = require('../utils/validators');
 
 const ALLOWED_STATUSES = new Set(['pending', 'confirmed', 'preparing', 'delivering', 'delivered', 'cancelled']);
 
@@ -105,15 +105,16 @@ exports.getById = async (req, res) => {
 exports.updateStatus = async (req, res) => {
   try {
     const { status } = req.body;
+    const normalizedStatus = typeof status === 'string' ? status.trim() : '';
     if (!ensureObjectId(req.params.id)) {
       return res.status(400).json({ success: false, error: 'Invalid order id' });
     }
-    if (!ALLOWED_STATUSES.has(toSafeString(status, { max: 30 }))) {
+    if (!normalizedStatus || !ALLOWED_STATUSES.has(normalizedStatus)) {
       return res.status(400).json({ success: false, error: 'Invalid status' });
     }
     const order = await Order.findByIdAndUpdate(
       req.params.id,
-      { status },
+      { status: normalizedStatus },
       { new: true, runValidators: true }
     );
     if (!order) {

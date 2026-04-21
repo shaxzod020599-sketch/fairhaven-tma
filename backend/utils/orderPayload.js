@@ -48,12 +48,13 @@ async function buildOrderData({ items, location, customerName, customerPhone, no
   const uniqueIds = [...new Set(normalizedItems.map((item) => item.productId))];
   const products = await Product.find({ _id: { $in: uniqueIds } }).select('name price isAvailable');
   const productMap = new Map(products.map((product) => [String(product._id), product]));
+  const missingIds = uniqueIds.filter((id) => !productMap.has(id));
+  if (missingIds.length > 0) {
+    throw new Error(`Missing products: ${missingIds.join(', ')}`);
+  }
 
   const orderItems = normalizedItems.map((item) => {
     const product = productMap.get(item.productId);
-    if (!product) {
-      throw new Error('Some products are missing');
-    }
     if (!product.isAvailable) {
       throw new Error(`Product is unavailable: ${product.name}`);
     }
