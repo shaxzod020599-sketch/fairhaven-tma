@@ -20,10 +20,6 @@ function normalizeOrigin(url) {
   return `https://${url}`;
 }
 
-if (IS_PRODUCTION && !FRONTEND_URL) {
-  throw new Error('FRONTEND_URL is required in production');
-}
-
 const allowedOrigins = new Set(
   [
     normalizeOrigin(FRONTEND_URL),
@@ -126,6 +122,10 @@ async function start() {
   // `mongod` is only set when fallback in-memory MongoDB is used.
   let mongod = null;
   try {
+    if (IS_PRODUCTION && !FRONTEND_URL) {
+      throw new Error('FRONTEND_URL is required in production. Set it in environment variables.');
+    }
+
     let mongoUri = process.env.MONGO_URI;
 
     // Try real MongoDB first, fall back to in-memory

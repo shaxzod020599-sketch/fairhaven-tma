@@ -1,5 +1,5 @@
 const User = require('../models/User');
-const { parseTelegramId, pick, toSafeString } = require('../utils/validators');
+const { ensureObjectId, parseTelegramId, pick, toSafeString } = require('../utils/validators');
 
 const ALLOWED_USER_UPDATE_FIELDS = [
   'firstName',
@@ -125,6 +125,9 @@ exports.removeAddress = async (req, res) => {
     const user = await User.findOne({ telegramId });
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    if (!ensureObjectId(req.params.addressId)) {
+      return res.status(400).json({ success: false, error: 'Invalid address id' });
     }
     const address = user.savedAddresses.id(req.params.addressId);
     if (!address) {

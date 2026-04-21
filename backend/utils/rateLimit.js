@@ -11,8 +11,13 @@ function createRateLimiter({ windowMs = 60_000, max = 120 } = {}) {
     const entry = hits.get(key);
 
     if (hits.size > 10_000) {
+      let removed = 0;
       for (const [k, v] of hits.entries()) {
-        if (now > v.resetAt) hits.delete(k);
+        if (now > v.resetAt) {
+          hits.delete(k);
+          removed += 1;
+          if (removed >= 200) break;
+        }
       }
     }
 
