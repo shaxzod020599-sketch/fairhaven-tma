@@ -2,6 +2,8 @@ const { Telegraf, Markup } = require('telegraf');
 const User = require('../models/User');
 const Order = require('../models/Order');
 const { formatOrderReceipt } = require('../utils/helpers');
+const { buildOrderData } = require('../utils/orderPayload');
+const { toSafeString } = require('../utils/validators');
 
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || null;
 
@@ -122,23 +124,31 @@ function createBot(token, frontendUrl) {
         });
       }
 
-      // Create order
-      const order = await Order.create({
-        userId: user._id,
-        telegramId: tgUser.id,
+      // Create order (recalculate prices from DB, do not trust client totals)
+      const orderData = await buildOrderData({
         items: data.items,
-        totalAmount: data.total,
         location: data.location,
         customerName: data.user?.name || `${tgUser.first_name || ''} ${tgUser.last_name || ''}`.trim(),
         customerPhone: data.user?.phone || user.phone || '',
         notes: data.notes || '',
       });
 
+      const order = await Order.create({
+        userId: user._id,
+        telegramId: tgUser.id,
+        items: orderData.items,
+        totalAmount: orderData.totalAmount,
+        location: orderData.location,
+        customerName: orderData.customerName || '',
+        customerPhone: orderData.customerPhone || '',
+        notes: orderData.notes || '',
+      });
+
       // Confirm to user
       await ctx.replyWithHTML(
         `✅ <b>Заказ оформлен!</b>\n\n` +
         `📋 Номер: <b>#${order._id.toString().slice(-6).toUpperCase()}</b>\n` +
-        `💰 Сумма: <b>${data.total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} UZS</b>\n\n` +
+        `💰 Сумма: <b>${order.totalAmount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} UZS</b>\n\n` +
         `Мы свяжемся с вами для подтверждения. Спасибо! 🌿`
       );
 
@@ -156,7 +166,7 @@ function createBot(token, frontendUrl) {
       }
     } catch (err) {
       console.error('Error processing web_app_data:', err);
-      await ctx.reply('❌ Произошла ошибка при оформлении заказа. Попробуйте ещё раз.');
+      await ctx.reply(`❌ ${toSafeString(err.message || 'Произошла ошибка при оформлении заказа. Попробуйте ещё раз.', { max: 180 })}`);
     }
   });
 

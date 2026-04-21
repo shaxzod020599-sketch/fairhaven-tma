@@ -10,14 +10,15 @@ const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const FRONTEND_URL = process.env.FRONTEND_URL;
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
+  origin: FRONTEND_URL || true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  credentials: true,
+  credentials: Boolean(FRONTEND_URL),
 }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Request logger (dev)
@@ -96,23 +97,28 @@ async function autoSeed() {
 
 // Start server
 async function start() {
+  let mongod = null;
   try {
     let mongoUri = process.env.MONGO_URI;
 
     // Try real MongoDB first, fall back to in-memory
-    try {
-      await mongoose.connect(mongoUri, { dbName: 'fairhaven', serverSelectionTimeoutMS: 3000 });
-      console.log('✅ MongoDB connected (external)');
-    } catch (_connErr) {
+    if (mongoUri) {
+      try {
+        await mongoose.connect(mongoUri, { dbName: 'fairhaven', serverSelectionTimeoutMS: 3000 });
+        console.log('✅ MongoDB connected (external)');
+      } catch (_connErr) {
+        console.log('⚠️  External MongoDB unavailable, starting in-memory server...');
+      }
+    } else {
       console.log('⚠️  External MongoDB unavailable, starting in-memory server...');
+    }
+
+    if (mongoose.connection.readyState !== 1) {
       const { MongoMemoryServer } = require('mongodb-memory-server');
-      const mongod = await MongoMemoryServer.create();
+      mongod = await MongoMemoryServer.create();
       mongoUri = mongod.getUri();
       await mongoose.connect(mongoUri, { dbName: 'fairhaven' });
       console.log('✅ MongoDB connected (in-memory)');
-
-      // Store for shutdown
-      process._mongod = mongod;
     }
 
     // Auto-seed
@@ -127,7 +133,7 @@ async function start() {
     let bot = null;
     try {
       bot = createBot(process.env.TELEGRAM_BOT_TOKEN, process.env.FRONTEND_URL);
-      bot.launch();
+      await bot.launch();
       console.log('🤖 Telegram bot launched');
     } catch (botErr) {
       console.warn('⚠️  Bot launch failed (non-critical):', botErr.message);
@@ -138,7 +144,7 @@ async function start() {
       console.log(`\n${signal} received. Shutting down gracefully...`);
       if (bot) bot.stop(signal);
       await mongoose.connection.close();
-      if (process._mongod) await process._mongod.stop();
+      if (mongod) await mongod.stop();
       process.exit(0);
     };
 
