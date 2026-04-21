@@ -1,3 +1,12 @@
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /**
  * Formats a number as UZS currency string
  * @param {number} amount
@@ -39,11 +48,15 @@ function formatOrderReceipt(order) {
 
   const mapLink = googleMapsLink(order.location.lat, order.location.lng);
   const yMapLink = yandexMapsLink(order.location.lat, order.location.lng);
+  const customerName = escapeHtml(order.customerName || 'Не указано');
+  const customerPhone = escapeHtml(order.customerPhone || 'Не указано');
+  const addressString = escapeHtml(order.location.addressString || '');
+  const notes = order.notes ? escapeHtml(order.notes) : '';
 
   return `🧾 <b>Новый заказ #${order._id.toString().slice(-6).toUpperCase()}</b>
 
-👤 <b>Клиент:</b> ${order.customerName || 'Не указано'}
-📞 <b>Телефон:</b> ${order.customerPhone || 'Не указано'}
+👤 <b>Клиент:</b> ${customerName}
+📞 <b>Телефон:</b> ${customerPhone}
 🆔 <b>Telegram ID:</b> ${order.telegramId}
 
 📦 <b>Товары:</b>
@@ -51,10 +64,10 @@ ${itemLines}
 
 💰 <b>Итого:</b> ${formatUZS(order.totalAmount)}
 
-📍 <b>Адрес:</b> ${order.location.addressString}
+📍 <b>Адрес:</b> ${addressString}
 🗺 <a href="${yMapLink}">Yandex Maps</a> | <a href="${mapLink}">Google Maps</a>
 
-${order.notes ? `📝 <b>Примечание:</b> ${order.notes}` : ''}
+${notes ? `📝 <b>Примечание:</b> ${notes}` : ''}
 🕐 ${new Date(order.createdAt).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' })}`;
 }
 
