@@ -2,9 +2,19 @@ function createRateLimiter({ windowMs = 60_000, max = 120 } = {}) {
   const hits = new Map();
 
   return (req, res, next) => {
-    const key = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const firstForwardedIp = typeof forwardedFor === 'string'
+      ? forwardedFor.split(',')[0].trim()
+      : '';
+    const key = req.ip || firstForwardedIp || 'unknown';
     const now = Date.now();
     const entry = hits.get(key);
+
+    if (hits.size > 10_000) {
+      for (const [k, v] of hits.entries()) {
+        if (now > v.resetAt) hits.delete(k);
+      }
+    }
 
     if (!entry || now > entry.resetAt) {
       hits.set(key, { count: 1, resetAt: now + windowMs });

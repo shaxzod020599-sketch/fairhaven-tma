@@ -43,9 +43,9 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   credentials: true,
 }));
-app.use(createRateLimiter({ windowMs: 60_000, max: 180 }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(createRateLimiter({ windowMs: 60_000, max: 180 }));
 
 // Request logger (dev)
 app.use((req, _res, next) => {
@@ -163,7 +163,7 @@ async function start() {
       await bot.launch();
       console.log('🤖 Telegram bot launched');
     } catch (botErr) {
-      console.warn('⚠️  Bot launch failed (non-critical):', botErr.message);
+      console.warn('⚠️  Bot launch failed (API remains available, bot features disabled):', botErr.message);
     }
 
     // Graceful shutdown
