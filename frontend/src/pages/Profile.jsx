@@ -1,69 +1,106 @@
 import React from 'react';
 import { getTelegramUser } from '../utils/telegram';
-import { formatPrice } from '../utils/helpers';
+import { hapticFeedback } from '../utils/telegram';
 
-const MENU_ITEMS = [
-  { icon: '📦', label: 'Мои покупки', key: 'purchases' },
-  { icon: '🔄', label: 'Возврат / Обмен', key: 'returns' },
-  { icon: '❤️', label: 'Избранное', key: 'favorites' },
-  { icon: '⭐', label: 'Мои отзывы', key: 'reviews' },
-  { icon: '👤', label: 'Мои данные', key: 'data' },
-  { icon: '📍', label: 'Сохранённые адреса', key: 'addresses' },
-  { icon: '💰', label: 'Накопительный баланс', key: 'balance' },
-  { icon: '🌐', label: 'Язык приложения', key: 'language' },
+const GROUPS = [
+  {
+    title: 'Заказы',
+    items: [
+      { glyph: '📦', label: 'Мои покупки', key: 'purchases', meta: '4' },
+      { glyph: '↻', label: 'Возврат и обмен', key: 'returns' },
+      { glyph: '☆', label: 'Отзывы', key: 'reviews' },
+    ],
+  },
+  {
+    title: 'Профиль',
+    items: [
+      { glyph: '♡', label: 'Избранное', key: 'favorites', meta: '12' },
+      { glyph: '◎', label: 'Адреса доставки', key: 'addresses' },
+      { glyph: '✎', label: 'Личные данные', key: 'data' },
+    ],
+  },
+  {
+    title: 'Приложение',
+    items: [
+      { glyph: '◐', label: 'Язык', key: 'language', meta: 'RU' },
+      { glyph: '?', label: 'Поддержка', key: 'support' },
+      { glyph: '§', label: 'Условия сервиса', key: 'terms' },
+    ],
+  },
 ];
 
 export default function Profile() {
   const user = getTelegramUser();
-  const displayName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Пользователь';
+  const displayName =
+    `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Гость FairHaven';
+
+  const handleMenu = (key) => {
+    hapticFeedback('light');
+    console.log('Navigate to:', key);
+  };
 
   return (
     <div className="page" id="page-profile">
-      {/* Profile Header */}
-      <div className="profile-header">
-        <div className="profile-avatar">
-          {user.photo_url ? (
-            <img src={user.photo_url} alt={displayName} />
-          ) : (
-            '👤'
-          )}
+      {/* Hero card */}
+      <section className="profile-hero">
+        <div className="profile-row">
+          <div className="profile-avatar">
+            {user.photo_url ? (
+              <img src={user.photo_url} alt={displayName} />
+            ) : (
+              <span aria-hidden="true">◉</span>
+            )}
+          </div>
+          <div className="profile-text">
+            <div className="profile-eyebrow">Участник · Член клуба</div>
+            <div className="profile-name">{displayName}</div>
+            {user.username && (
+              <div className="profile-handle">@{user.username}</div>
+            )}
+          </div>
         </div>
-        <div className="profile-name">{displayName}</div>
-        {user.username && (
-          <div className="profile-phone">@{user.username}</div>
-        )}
-        <div className="profile-balance">
-          💎 {formatPrice(0)}
+
+        <div className="profile-stats">
+          <div className="profile-stat">
+            <div className="stat-val">4</div>
+            <div className="stat-label">Заказа</div>
+          </div>
+          <div className="profile-stat">
+            <div className="stat-val">12</div>
+            <div className="stat-label">Избранных</div>
+          </div>
+          <div className="profile-stat">
+            <div className="stat-val">1 450</div>
+            <div className="stat-label">Баллов</div>
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Menu Items */}
-      <div className="profile-menu">
-        {MENU_ITEMS.map((item) => (
-          <button
-            key={item.key}
-            className="profile-menu-item"
-            id={`profile-${item.key}`}
-            onClick={() => {
-              // Placeholder — each will navigate to sub-pages in future
-              console.log('Navigate to:', item.key);
-            }}
-          >
-            <div className="menu-icon">{item.icon}</div>
-            <span className="menu-label">{item.label}</span>
-            <span className="menu-arrow">›</span>
-          </button>
-        ))}
-      </div>
+      {/* Menu groups */}
+      {GROUPS.map((group) => (
+        <React.Fragment key={group.title}>
+          <div className="profile-section">{group.title}</div>
+          <div className="profile-menu">
+            {group.items.map((item) => (
+              <button
+                key={item.key}
+                className="profile-menu-item"
+                id={`profile-${item.key}`}
+                onClick={() => handleMenu(item.key)}
+              >
+                <div className="menu-glyph" aria-hidden="true">{item.glyph}</div>
+                <span className="menu-label">{item.label}</span>
+                {item.meta && <span className="menu-meta">{item.meta}</span>}
+                <span className="menu-arrow" aria-hidden="true">›</span>
+              </button>
+            ))}
+          </div>
+        </React.Fragment>
+      ))}
 
-      {/* App Info */}
-      <div style={{
-        textAlign: 'center',
-        padding: '24px 0 16px',
-        color: 'var(--color-text-secondary)',
-        fontSize: '0.75rem',
-      }}>
-        FairHaven v1.0.0 • fairhaven.uz
+      <div className="profile-footer">
+        <div className="fh-sig">FairHaven</div>
+        <div>Apothecary · v1.0 · fairhaven.uz</div>
       </div>
     </div>
   );

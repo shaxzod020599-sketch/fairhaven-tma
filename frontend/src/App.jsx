@@ -15,7 +15,6 @@ export default function App() {
   const [cart, setCart] = useState({});
   const [toast, setToast] = useState({ message: '', visible: false });
 
-  // Initialize TMA on mount
   useEffect(() => {
     initTelegram();
     syncUser();
@@ -35,18 +34,15 @@ export default function App() {
         });
       }
     } catch (err) {
-      // Silent fail — user sync is non-critical
       console.warn('User sync failed:', err.message);
     }
   };
 
-  // Toast helper
   const showToast = useCallback((message) => {
     setToast({ message, visible: true });
     setTimeout(() => setToast({ message: '', visible: false }), 2500);
   }, []);
 
-  // Navigation
   const handleNavigate = useCallback((target, data) => {
     if (target === 'catalog' && data) {
       setCatalogCategory(data);
@@ -56,24 +52,26 @@ export default function App() {
     setPage(target);
   }, []);
 
-  // Cart operations
-  const addToCart = useCallback((product) => {
-    setCart((prev) => {
-      const existing = prev[product._id];
-      if (existing) {
+  const addToCart = useCallback(
+    (product) => {
+      setCart((prev) => {
+        const existing = prev[product._id];
+        if (existing) {
+          return {
+            ...prev,
+            [product._id]: { ...existing, quantity: existing.quantity + 1 },
+          };
+        }
         return {
           ...prev,
-          [product._id]: { ...existing, quantity: existing.quantity + 1 },
+          [product._id]: { ...product, quantity: 1 },
         };
-      }
-      return {
-        ...prev,
-        [product._id]: { ...product, quantity: 1 },
-      };
-    });
-    hapticNotification('success');
-    showToast(`✓ ${product.name} добавлен`);
-  }, [showToast]);
+      });
+      hapticNotification('success');
+      showToast(`${product.name} — в корзине`);
+    },
+    [showToast]
+  );
 
   const updateCartQty = useCallback((productId, quantity) => {
     setCart((prev) => {
@@ -97,9 +95,11 @@ export default function App() {
     });
   }, []);
 
-  const cartCount = Object.values(cart).reduce((sum, item) => sum + item.quantity, 0);
+  const cartCount = Object.values(cart).reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
 
-  // Render current page
   const renderPage = () => {
     switch (page) {
       case 'home':
@@ -117,6 +117,7 @@ export default function App() {
             cart={cart}
             onUpdateQty={updateCartQty}
             onRemove={removeFromCart}
+            onNavigate={handleNavigate}
           />
         );
       case 'profile':
@@ -128,7 +129,10 @@ export default function App() {
 
   return (
     <div className="app-container" id="app-root">
-      <Header />
+      <Header
+        onOpenSearch={() => handleNavigate('catalog')}
+        onOpenNotifications={() => showToast('Новых уведомлений нет')}
+      />
       {renderPage()}
       <BottomNav
         active={page}

@@ -17,8 +17,8 @@ export function initTelegram() {
   tg.ready();
   tg.expand();
   tg.disableVerticalSwipes();
-  tg.setHeaderColor('#DC143C');
-  tg.setBackgroundColor('#FFFFFF');
+  tg.setHeaderColor('#F6F1E6');
+  tg.setBackgroundColor('#F6F1E6');
   return tg;
 }
 
@@ -54,8 +54,8 @@ export function showMainButton(text, callback) {
     return;
   }
   tg.MainButton.setText(text);
-  tg.MainButton.color = '#DC143C';
-  tg.MainButton.textColor = '#FFFFFF';
+  tg.MainButton.color = '#0E2B1F';
+  tg.MainButton.textColor = '#F6F1E6';
   tg.MainButton.show();
   tg.MainButton.onClick(callback);
 }

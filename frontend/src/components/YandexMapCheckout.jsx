@@ -11,13 +11,11 @@ export default function YandexMapCheckout({ onConfirm, onClose }) {
   const [loading, setLoading] = useState(true);
   const [scriptLoaded, setScriptLoaded] = useState(false);
 
-  // Load Yandex Maps script
   useEffect(() => {
     if (window.ymaps) {
       setScriptLoaded(true);
       return;
     }
-
     const script = document.createElement('script');
     script.src = `https://api-maps.yandex.ru/2.1/?apikey=${YANDEX_API_KEY}&lang=ru_RU`;
     script.async = true;
@@ -27,13 +25,8 @@ export default function YandexMapCheckout({ onConfirm, onClose }) {
       setLoading(false);
     };
     document.head.appendChild(script);
-
-    return () => {
-      // Don't remove script on unmount — it's cached
-    };
   }, []);
 
-  // Initialize map once script is loaded
   useEffect(() => {
     if (!scriptLoaded || !window.ymaps) return;
 
@@ -49,14 +42,12 @@ export default function YandexMapCheckout({ onConfirm, onClose }) {
       mapInstance.current = map;
       setLoading(false);
 
-      // Reverse geocode center on every move
       map.events.add('actionend', () => {
         const center = map.getCenter();
         setCoords({ lat: center[0], lng: center[1] });
         reverseGeocode(center[0], center[1]);
       });
 
-      // Initial geocode
       const center = map.getCenter();
       setCoords({ lat: center[0], lng: center[1] });
       reverseGeocode(center[0], center[1]);
@@ -72,55 +63,72 @@ export default function YandexMapCheckout({ onConfirm, onClose }) {
 
   const reverseGeocode = useCallback((lat, lng) => {
     if (!window.ymaps) return;
-
-    window.ymaps.geocode([lat, lng], { results: 1 }).then((res) => {
-      const firstGeoObject = res.geoObjects.get(0);
-      if (firstGeoObject) {
-        const addr = firstGeoObject.getAddressLine() || 'Адрес не определён';
-        setAddress(addr);
-      }
-    }).catch(() => {
-      setAddress('Не удалось определить адрес');
-    });
+    window.ymaps
+      .geocode([lat, lng], { results: 1 })
+      .then((res) => {
+        const first = res.geoObjects.get(0);
+        if (first) setAddress(first.getAddressLine() || 'Адрес не определён');
+      })
+      .catch(() => setAddress('Не удалось определить адрес'));
   }, []);
 
   const handleConfirm = () => {
     if (!coords || !address) return;
-    onConfirm({
-      lat: coords.lat,
-      lng: coords.lng,
-      address: address,
-    });
+    onConfirm({ lat: coords.lat, lng: coords.lng, address });
   };
 
   return (
     <div className="map-overlay" id="map-overlay">
       <div className="map-header">
-        <button className="map-back-btn" onClick={onClose} id="map-back-btn">
-          ← 
+        <button
+          className="map-back-btn"
+          onClick={onClose}
+          id="map-back-btn"
+          aria-label="Назад"
+        >
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path
+              d="M12 4 6 10l6 6"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </button>
-        <h3>Выберите адрес доставки</h3>
-        <div style={{ width: 28 }}></div>
+        <div className="map-title">Выберите адрес доставки</div>
+        <div style={{ width: 38 }} />
       </div>
 
       <div className="map-container">
-        <div id="yandex-map" ref={mapRef} style={{ width: '100%', height: '100%' }}></div>
-        <div className="map-pin-center">📍</div>
+        <div
+          id="yandex-map"
+          ref={mapRef}
+          style={{ width: '100%', height: '100%' }}
+        />
+        <div className="map-pin-center" aria-hidden="true">📍</div>
         {loading && (
-          <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'var(--color-card)',
-          }}>
-            <div className="spinner"></div>
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--paper-soft)',
+            }}
+          >
+            <div className="spinner" />
           </div>
         )}
       </div>
 
       <div className="map-address-bar">
-        <div className="map-address-label">📍 Адрес доставки</div>
+        <div className="map-address-label">
+          <span aria-hidden="true">◎</span> Адрес доставки
+        </div>
         <div className="map-address-text">
-          {address || 'Переместите карту для выбора адреса...'}
+          {address || 'Переместите карту для выбора адреса…'}
         </div>
         <button
           className="map-confirm-btn"
@@ -128,7 +136,16 @@ export default function YandexMapCheckout({ onConfirm, onClose }) {
           disabled={!coords || !address}
           id="map-confirm-btn"
         >
-          ✓ Подтвердить адрес
+          Подтвердить адрес
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path
+              d="m5 10 4 4 6-8"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </button>
       </div>
     </div>
