@@ -7,12 +7,11 @@ import {
   hapticNotification,
   getTelegramUser,
 } from '../utils/telegram';
-import { createOrder, fetchOrder } from '../utils/api';
+import { createOrder } from '../utils/api';
 import YandexMapCheckout from '../components/YandexMapCheckout';
 
 const DELIVERY_THRESHOLD = 500000;
 const DELIVERY_FEE = 25000;
-const STATUS_POLL_MS = 3000;
 
 function CartThumb({ src, alt, category }) {
   const [errored, setErrored] = useState(false);
@@ -24,12 +23,14 @@ function CartThumb({ src, alt, category }) {
 
 /**
  * Steps
- *   'cart'    — items + promo + summary + "choose address"
- *   'map'     — Yandex map → pick address
- *   'review'  — editable phone, payment method, comment, final confirm
- *   'success' — live status tracking: pending → confirmed / cancelled
+ *   'cart'   — items + promo + summary + "choose address"
+ *   'map'    — Yandex map → pick address
+ *   'review' — editable phone, payment method, comment, final confirm
+ *
+ * After a successful submit, we navigate the app to the orderDetail page
+ * so the state survives reloads (backend is the source of truth).
  */
-export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate, dbUser }) {
+export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate, onOrderSubmitted, dbUser }) {
   const [step, setStep] = useState('cart');
   const [address, setAddress] = useState(null);
   const [phone, setPhone] = useState('');
@@ -37,17 +38,14 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(null); // { orderFullId, shortId, status }
   const [promo, setPromo] = useState('');
   const [promoApplied, setPromoApplied] = useState(null);
 
-  // Ref-level submit guard — protects against double-tap races where the
-  // `submitting` state update hasn't flushed before the second click reads it.
+  // Ref guard against rapid double-tap.
   const submittingRef = useRef(false);
 
   const items = Object.values(cart);
 
-  // Pre-fill phone + name from the registered user whenever dbUser arrives.
   useEffect(() => {
     if (dbUser?.phone && !phone) setPhone(dbUser.phone);
     const full = [dbUser?.firstName, dbUser?.lastName].filter(Boolean).join(' ').trim();
@@ -67,7 +65,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
     setStep('map');
   }, [items.length]);
 
-  // Main button
   useEffect(() => {
     if (step === 'cart' && items.length > 0) {
       showMainButton(`Оформить — ${formatPrice(total)}`, goToMap);
@@ -116,7 +113,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
     items.length > 0 && !!address && isPhoneValid && !submitting;
 
   async function handleSubmit() {
-    // Guard against rapid double-tap — ref flips synchronously.
     if (submittingRef.current) return;
     if (!canSubmit) {
       hapticNotification('error');
@@ -151,13 +147,14 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
       const res = await createOrder(payload);
       if (!res?.success) throw new Error(res?.error || 'Ошибка заказа');
       hapticNotification('success');
-      setSubmitted({
-        orderFullId: res.data._id,
-        shortId: res.data._id.slice(-6).toUpperCase(),
-        status: res.data.status || 'pending',
-      });
-      setStep('success');
+      // Hand off to App → navigates to OrderDetail (survives reload).
       onClear?.();
+      setAddress(null);
+      setComment('');
+      setPromoApplied(null);
+      setPromo('');
+      setStep('cart');
+      onOrderSubmitted?.(res.data._id);
     } catch (err) {
       console.error(err);
       hapticNotification('error');
@@ -174,27 +171,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
       <YandexMapCheckout
         onConfirm={handleMapConfirm}
         onClose={() => setStep('cart')}
-      />
-    );
-  }
-
-  // ─── SUCCESS STEP (with live status polling) ───────────────────────────────
-  if (step === 'success') {
-    return (
-      <SuccessScreen
-        order={submitted}
-        onUpdateStatus={(status) =>
-          setSubmitted((s) => (s ? { ...s, status } : s))
-        }
-        onReturnHome={() => {
-          setStep('cart');
-          setSubmitted(null);
-          setAddress(null);
-          setComment('');
-          setPromoApplied(null);
-          setPromo('');
-          onNavigate?.('home');
-        }}
       />
     );
   }
@@ -541,116 +517,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
         Выбрать адрес и оформить
         <span className="arrow" aria-hidden="true">→</span>
       </button>
-    </div>
-  );
-}
-
-// =============================================================================
-// Success screen — tracks the order until the operator confirms or rejects it.
-// =============================================================================
-function SuccessScreen({ order, onUpdateStatus, onReturnHome }) {
-  const status = order?.status || 'pending';
-  const shortId = order?.shortId || '—';
-  const orderFullId = order?.orderFullId;
-  const stoppedRef = useRef(false);
-
-  // Poll for status updates every 3s until confirmed/cancelled.
-  useEffect(() => {
-    if (!orderFullId) return;
-    if (status === 'confirmed' || status === 'cancelled') return;
-
-    let cancelled = false;
-    const tick = async () => {
-      if (cancelled || stoppedRef.current) return;
-      try {
-        const res = await fetchOrder(orderFullId);
-        const next = res?.data?.status;
-        if (next && next !== status) {
-          if (next === 'confirmed') hapticNotification('success');
-          if (next === 'cancelled') hapticNotification('error');
-          onUpdateStatus(next);
-          if (next === 'confirmed' || next === 'cancelled') {
-            stoppedRef.current = true;
-            return;
-          }
-        }
-      } catch (_) {
-        /* transient error — keep polling */
-      }
-    };
-    const id = setInterval(tick, STATUS_POLL_MS);
-    tick(); // immediate first probe
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [orderFullId, status, onUpdateStatus]);
-
-  const ui = {
-    pending: {
-      tone: 'pending',
-      art: '⏳',
-      title: 'Заказ отправлен',
-      kicker: 'В обработке',
-      message:
-        'Оператор FairHaven Health получил ваш заказ и проверяет детали. Обычно это занимает до 15 минут в рабочее время. Когда заказ будет подтверждён, вы увидите это здесь и получите сообщение от бота.',
-    },
-    confirmed: {
-      tone: 'confirmed',
-      art: '✓',
-      title: 'Заказ подтверждён',
-      kicker: 'Принят в работу',
-      message:
-        'Ваш заказ принят! Мы доставим его в ближайшее время. Курьер свяжется с вами по указанному номеру.',
-    },
-    cancelled: {
-      tone: 'cancelled',
-      art: '×',
-      title: 'Заказ отклонён',
-      kicker: 'Не принят',
-      message:
-        'К сожалению, оператор не смог принять этот заказ. Свяжитесь с контакт-центром — мы поможем разобраться.',
-    },
-  }[status] || null;
-
-  if (!ui) return null;
-
-  return (
-    <div className="page" id="page-cart">
-      <div className={`order-status order-status-${ui.tone}`} role="status" aria-live="polite">
-        <div className="order-status-art" aria-hidden="true">
-          {status === 'pending' ? (
-            <span className="order-status-spinner">{ui.art}</span>
-          ) : (
-            ui.art
-          )}
-        </div>
-        <div className="order-status-kicker">{ui.kicker}</div>
-        <h2 className="order-status-title">{ui.title}</h2>
-
-        <div className="order-success-id">
-          <span>Номер заказа</span>
-          <strong>#{shortId}</strong>
-        </div>
-
-        <p className="order-status-msg">{ui.message}</p>
-
-        {status === 'pending' && (
-          <div className="order-status-live">
-            <span className="order-status-live-dot" />
-            Живое обновление · проверяем статус каждые 3 секунды
-          </div>
-        )}
-
-        <button
-          className="checkout-btn"
-          onClick={onReturnHome}
-          id="order-success-done"
-        >
-          На главную
-          <span className="arrow" aria-hidden="true">→</span>
-        </button>
-      </div>
     </div>
   );
 }

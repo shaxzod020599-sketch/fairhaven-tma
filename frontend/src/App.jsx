@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { initTelegram, getTelegramUser, hapticNotification } from './utils/telegram';
-import { upsertUser, fetchUser } from './utils/api';
+import { upsertUser, fetchUser, fetchOrdersByUser } from './utils/api';
+import { isActive } from './utils/orderStatus';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import Toast from './components/Toast';
@@ -10,12 +11,9 @@ import Home from './pages/Home';
 import Catalog from './pages/Catalog';
 import Cart from './pages/Cart';
 import Profile from './pages/Profile';
+import Orders from './pages/Orders';
+import OrderDetail from './pages/OrderDetail';
 
-// Auth states
-//   'loading'        → fetching profile
-//   'not_started'    → user not in DB — hasn't /start'd the bot
-//   'incomplete'     → user exists, registration wizard not finished
-//   'ready'          → registered, can use the app
 const AUTH = {
   LOADING: 'loading',
   NOT_STARTED: 'not_started',
@@ -23,12 +21,17 @@ const AUTH = {
   READY: 'ready',
 };
 
+// Keep the set of pages that should show the top header + bottom nav.
+const CHROME_PAGES = new Set(['home', 'catalog', 'cart', 'profile', 'orders']);
+
 export default function App() {
   const [page, setPage] = useState('home');
+  const [activeOrderId, setActiveOrderId] = useState(null);
   const [cart, setCart] = useState({});
   const [toast, setToast] = useState({ message: '', visible: false });
   const [dbUser, setDbUser] = useState(null);
   const [authStatus, setAuthStatus] = useState(AUTH.LOADING);
+  const [orders, setOrders] = useState([]);
 
   useEffect(() => {
     initTelegram();
@@ -38,15 +41,11 @@ export default function App() {
   const syncUser = async () => {
     try {
       const tgUser = getTelegramUser();
-
-      // No Telegram user at all (e.g. opened outside Telegram) — block.
       if (!tgUser.id) {
         setAuthStatus(AUTH.NOT_STARTED);
         return;
       }
 
-      // Keep Telegram-native fields fresh; do NOT create a record —
-      // registration happens only through the bot wizard.
       try {
         await upsertUser({
           telegramId: tgUser.id,
@@ -54,16 +53,12 @@ export default function App() {
           photoUrl: tgUser.photo_url || '',
           languageCode: tgUser.language_code || 'ru',
         });
-      } catch (_) {
-        /* non-fatal */
-      }
+      } catch (_) { /* non-fatal */ }
 
-      // Load the full DB profile.
       let res = null;
       try {
         res = await fetchUser(tgUser.id);
-      } catch (err) {
-        // 404 = user hasn't /start'd the bot.
+      } catch (_) {
         setAuthStatus(AUTH.NOT_STARTED);
         return;
       }
@@ -78,18 +73,42 @@ export default function App() {
       const registered =
         user.registrationStep === 'done' && user.consentAccepted === true;
       setAuthStatus(registered ? AUTH.READY : AUTH.INCOMPLETE);
+
+      if (registered) {
+        refreshOrders(tgUser.id);
+      }
     } catch (err) {
       console.warn('User sync failed:', err.message);
       setAuthStatus(AUTH.NOT_STARTED);
     }
   };
 
+  const refreshOrders = useCallback(async (tgId) => {
+    try {
+      const id = tgId || getTelegramUser()?.id;
+      if (!id) return;
+      const res = await fetchOrdersByUser(id);
+      setOrders(res?.data || []);
+    } catch (err) {
+      console.warn('refreshOrders:', err.message);
+    }
+  }, []);
+
+  // Light background refresh whenever authenticated — keeps the home banner
+  // and the profile count in sync without forcing users onto the orders tab.
+  useEffect(() => {
+    if (authStatus !== AUTH.READY) return;
+    const id = setInterval(() => refreshOrders(), 15_000);
+    return () => clearInterval(id);
+  }, [authStatus, refreshOrders]);
+
   const showToast = useCallback((message) => {
     setToast({ message, visible: true });
     setTimeout(() => setToast({ message: '', visible: false }), 2500);
   }, []);
 
-  const handleNavigate = useCallback((target) => {
+  const handleNavigate = useCallback((target, data) => {
+    if (target === 'orderDetail') setActiveOrderId(data);
     setPage(target);
   }, []);
 
@@ -138,10 +157,21 @@ export default function App() {
 
   const clearCart = useCallback(() => setCart({}), []);
 
+  const handleOrderSubmitted = useCallback(
+    async (orderId) => {
+      clearCart();
+      await refreshOrders();
+      handleNavigate('orderDetail', orderId);
+    },
+    [clearCart, handleNavigate, refreshOrders]
+  );
+
   const cartCount = Object.values(cart).reduce(
     (sum, item) => sum + item.quantity,
     0
   );
+
+  const activeOrders = orders.filter((o) => isActive(o.status));
 
   // ─── Gate: block the entire app until registration is complete ──────────
   if (authStatus === AUTH.LOADING) {
@@ -151,7 +181,6 @@ export default function App() {
       </div>
     );
   }
-
   if (authStatus !== AUTH.READY) {
     return (
       <div className="app-container" id="app-root">
@@ -160,11 +189,18 @@ export default function App() {
     );
   }
 
-  // ─── Full app (registered users only) ────────────────────────────────────
+  const showChrome = CHROME_PAGES.has(page);
+
   const renderPage = () => {
     switch (page) {
       case 'home':
-        return <Home onNavigate={handleNavigate} onAddToCart={addToCart} />;
+        return (
+          <Home
+            onNavigate={handleNavigate}
+            onAddToCart={addToCart}
+            activeOrders={activeOrders}
+          />
+        );
       case 'catalog':
         return <Catalog onAddToCart={addToCart} />;
       case 'cart':
@@ -175,28 +211,61 @@ export default function App() {
             onRemove={removeFromCart}
             onClear={clearCart}
             onNavigate={handleNavigate}
+            onOrderSubmitted={handleOrderSubmitted}
             dbUser={dbUser}
           />
         );
+      case 'orders':
+        return (
+          <Orders
+            onNavigate={handleNavigate}
+            onOpenOrder={(orderId) => handleNavigate('orderDetail', orderId)}
+          />
+        );
+      case 'orderDetail':
+        return (
+          <OrderDetail
+            orderId={activeOrderId}
+            onNavigate={handleNavigate}
+          />
+        );
       case 'profile':
-        return <Profile dbUser={dbUser} />;
+        return (
+          <Profile
+            dbUser={dbUser}
+            ordersCount={orders.length}
+            activeOrdersCount={activeOrders.length}
+            onNavigate={handleNavigate}
+          />
+        );
       default:
-        return <Home onNavigate={handleNavigate} />;
+        return (
+          <Home
+            onNavigate={handleNavigate}
+            onAddToCart={addToCart}
+            activeOrders={activeOrders}
+          />
+        );
     }
   };
 
   return (
     <div className="app-container" id="app-root">
-      <Header
-        onOpenSearch={() => handleNavigate('catalog')}
-        onOpenNotifications={() => showToast('Новых уведомлений нет')}
-      />
+      {showChrome && (
+        <Header
+          onOpenSearch={() => handleNavigate('catalog')}
+          onOpenNotifications={() => showToast('Новых уведомлений нет')}
+        />
+      )}
       {renderPage()}
-      <BottomNav
-        active={page}
-        onNavigate={handleNavigate}
-        cartCount={cartCount}
-      />
+      {showChrome && (
+        <BottomNav
+          active={page}
+          onNavigate={handleNavigate}
+          cartCount={cartCount}
+          activeOrdersCount={activeOrders.length}
+        />
+      )}
       <Toast message={toast.message} visible={toast.visible} />
     </div>
   );

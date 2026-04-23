@@ -57,6 +57,13 @@ export function fetchOrdersByUser(telegramId) {
   return request(`/orders/user/${telegramId}`);
 }
 
+export function cancelOrder(orderId, telegramId) {
+  return request(`/orders/${orderId}/cancel`, {
+    method: 'POST',
+    body: { telegramId },
+  });
+}
+
 // Users
 export function upsertUser(userData) {
   return request('/users', { method: 'POST', body: userData });

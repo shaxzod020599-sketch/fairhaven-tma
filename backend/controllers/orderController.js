@@ -123,3 +123,48 @@ exports.getByUser = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+/**
+ * Customer-initiated cancellation. Only allowed while status === 'pending'.
+ * The caller must provide their telegramId; we verify ownership before
+ * touching the record. On success the channel message is edited to strip
+ * the approve/reject buttons and append a "cancelled by customer" verdict.
+ */
+exports.cancelByCustomer = async (req, res) => {
+  try {
+    const telegramId = Number(req.body?.telegramId || req.query?.telegramId);
+    if (!telegramId) {
+      return res.status(400).json({ success: false, error: 'telegramId required' });
+    }
+
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+    if (order.telegramId !== telegramId) {
+      return res.status(403).json({ success: false, error: 'Not your order' });
+    }
+    if (order.status !== 'pending') {
+      return res.status(409).json({
+        success: false,
+        error: 'already_processed',
+        status: order.status,
+      });
+    }
+
+    order.status = 'cancelled';
+    await order.save();
+
+    // Best-effort: update the channel card.
+    const bot = req.app.locals.bot;
+    if (bot && typeof bot.markOrderCancelledByCustomer === 'function') {
+      bot.markOrderCancelledByCustomer(order).catch((err) =>
+        console.warn('[order.cancel] channel edit failed:', err.message)
+      );
+    }
+
+    res.json({ success: true, data: order });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};

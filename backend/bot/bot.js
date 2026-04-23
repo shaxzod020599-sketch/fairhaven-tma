@@ -236,6 +236,38 @@ function createBot(token, frontendUrl) {
   // Attach the channel forwarder so orderController can call it.
   bot.forwardOrderToChannel = (order) => forwardOrderToChannel(bot, order);
 
+  // Attach a helper for customer-initiated cancellations — edits the existing
+  // channel card to strip the approve/reject buttons and append a verdict.
+  bot.markOrderCancelledByCustomer = async (order) => {
+    if (!ORDERS_CHANNEL_ID || !order.channelMessageId) return;
+    const verdict = `\n\n❌ <b>Отменён клиентом</b>`;
+    try {
+      await bot.telegram.editMessageText(
+        ORDERS_CHANNEL_ID,
+        order.channelMessageId,
+        null,
+        formatOrderReceipt(order) + verdict,
+        {
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: { inline_keyboard: [] },
+        }
+      );
+    } catch (err) {
+      // If the text edit fails (e.g. "message is not modified"), at least
+      // try to strip the buttons so operators don't tap a stale action.
+      try {
+        await bot.telegram.editMessageReplyMarkup(
+          ORDERS_CHANNEL_ID,
+          order.channelMessageId,
+          null,
+          { inline_keyboard: [] }
+        );
+      } catch (_) { /* swallow */ }
+      throw err;
+    }
+  };
+
   // ---------------------------------------------------------------------------
   // /start — start or resume registration
   // ---------------------------------------------------------------------------

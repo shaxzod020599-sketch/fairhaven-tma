@@ -40,6 +40,20 @@ const BagIcon = () => (
   </svg>
 );
 
+const ReceiptIcon = ({ active }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path
+      d="M6 3h10a1 1 0 0 1 1 1v17l-2.5-2-2 2-2-2-2 2-2.5-2V4a1 1 0 0 1 1-1Z"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+      fill={active ? 'currentColor' : 'none'}
+      fillOpacity={active ? 0.15 : 0}
+    />
+    <path d="M9 8h5M9 12h5M9 16h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
 const UserIcon = ({ active }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
     <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.6" fill={active ? 'currentColor' : 'none'} fillOpacity={active ? 0.15 : 0} />
@@ -56,10 +70,11 @@ const TABS = [
   { key: 'home', label: 'Главная', Icon: HomeIcon },
   { key: 'catalog', label: 'Каталог', Icon: GridIcon },
   { key: 'cart', label: 'Корзина', Icon: BagIcon },
+  { key: 'orders', label: 'Заказы', Icon: ReceiptIcon },
   { key: 'profile', label: 'Профиль', Icon: UserIcon },
 ];
 
-export default function BottomNav({ active, onNavigate, cartCount }) {
+export default function BottomNav({ active, onNavigate, cartCount, activeOrdersCount }) {
   const handleTap = (key) => {
     hapticFeedback('light');
     onNavigate(key);
@@ -69,6 +84,10 @@ export default function BottomNav({ active, onNavigate, cartCount }) {
     <nav className="bottom-nav" id="bottom-nav">
       {TABS.map((tab) => {
         const isActive = active === tab.key;
+        const badge =
+          tab.key === 'cart' ? cartCount :
+          tab.key === 'orders' ? activeOrdersCount :
+          0;
         return (
           <button
             key={tab.key}
@@ -81,8 +100,8 @@ export default function BottomNav({ active, onNavigate, cartCount }) {
               <tab.Icon active={isActive} />
             </span>
             <span className="nav-label">{tab.label}</span>
-            {tab.key === 'cart' && cartCount > 0 && (
-              <span className="nav-badge">{cartCount > 99 ? '99+' : cartCount}</span>
+            {badge > 0 && (
+              <span className="nav-badge">{badge > 99 ? '99+' : badge}</span>
             )}
           </button>
         );

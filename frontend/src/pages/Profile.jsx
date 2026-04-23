@@ -17,10 +17,9 @@ function initials(firstName, lastName) {
   return (a + b) || '◉';
 }
 
-export default function Profile({ dbUser }) {
+export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0, onNavigate }) {
   const tg = getTelegramUser();
 
-  // Prefer backend-registered data; fall back to Telegram-native data only when empty.
   const firstName = dbUser?.firstName || tg.first_name || '';
   const lastName = dbUser?.lastName || tg.last_name || '';
   const fullName = [firstName, lastName].filter(Boolean).join(' ') || 'Гость';
@@ -50,6 +49,11 @@ export default function Profile({ dbUser }) {
     window.open('/legal/oferta-ru', '_blank');
   };
 
+  const openOrders = () => {
+    hapticFeedback('light');
+    onNavigate?.('orders');
+  };
+
   return (
     <div className="page" id="page-profile">
       {/* Hero card */}
@@ -72,7 +76,24 @@ export default function Profile({ dbUser }) {
         </div>
       </section>
 
-      {/* Personal data — real registration fields only */}
+      {/* Orders card — big CTA */}
+      <button className="profile-orders-card" onClick={openOrders} id="profile-orders-card">
+        <div className="profile-orders-glyph" aria-hidden="true">📦</div>
+        <div className="profile-orders-body">
+          <div className="profile-orders-title">Мои заказы</div>
+          <div className="profile-orders-desc">
+            {ordersCount === 0
+              ? 'История пока пуста'
+              : `Всего ${ordersCount}${activeOrdersCount > 0 ? ` · активных ${activeOrdersCount}` : ''}`}
+          </div>
+        </div>
+        {activeOrdersCount > 0 && (
+          <span className="profile-orders-badge">{activeOrdersCount}</span>
+        )}
+        <span className="profile-orders-arrow" aria-hidden="true">→</span>
+      </button>
+
+      {/* Personal data */}
       <div className="profile-section">Личные данные</div>
       <div className="profile-data">
         <div className="profile-data-row">
@@ -101,7 +122,7 @@ export default function Profile({ dbUser }) {
         </div>
       </div>
 
-      {/* Consent status */}
+      {/* Documents */}
       <div className="profile-section">Документы</div>
       <div className="profile-menu">
         <button
@@ -118,7 +139,7 @@ export default function Profile({ dbUser }) {
         </button>
       </div>
 
-      {/* Big contact centre — mirrors the Home block */}
+      {/* Big contact centre */}
       <section className="contact-centre" id="profile-contact-centre" aria-label="Контакт-центр">
         <div className="contact-leaf" aria-hidden="true">☎</div>
         <div className="contact-eyebrow">КОНТАКТ-ЦЕНТР · 24/7</div>

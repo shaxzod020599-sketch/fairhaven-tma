@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { hapticFeedback } from '../utils/telegram';
 import { fetchPopularProducts } from '../utils/api';
+import { statusMeta, shortId, formatDate } from '../utils/orderStatus';
+import { formatPrice } from '../utils/helpers';
 import ProductCard from '../components/ProductCard';
 import ProductDetail from '../components/ProductDetail';
 
@@ -52,7 +54,7 @@ const TRUST = [
   },
 ];
 
-export default function Home({ onNavigate, onAddToCart }) {
+export default function Home({ onNavigate, onAddToCart, activeOrders = [] }) {
   const [popular, setPopular] = useState([]);
   const [popularLoading, setPopularLoading] = useState(true);
   const [detailProduct, setDetailProduct] = useState(null);
@@ -60,15 +62,9 @@ export default function Home({ onNavigate, onAddToCart }) {
   useEffect(() => {
     let mounted = true;
     fetchPopularProducts(3)
-      .then((res) => {
-        if (mounted) setPopular(res?.data || []);
-      })
-      .catch(() => {
-        if (mounted) setPopular([]);
-      })
-      .finally(() => {
-        if (mounted) setPopularLoading(false);
-      });
+      .then((res) => { if (mounted) setPopular(res?.data || []); })
+      .catch(() => { if (mounted) setPopular([]); })
+      .finally(() => { if (mounted) setPopularLoading(false); });
     return () => { mounted = false; };
   }, []);
 
@@ -84,6 +80,30 @@ export default function Home({ onNavigate, onAddToCart }) {
 
   return (
     <div className="page" id="page-home">
+      {/* Active order banner(s) — survives reload because it reads from DB */}
+      {activeOrders.length > 0 && (
+        <section className="active-orders-band" aria-label="Активные заказы">
+          <div className="active-orders-head">
+            <span className="active-orders-eyebrow">ТЕКУЩИЙ ЗАКАЗ</span>
+            {activeOrders.length > 1 && (
+              <button
+                className="active-orders-see-all"
+                onClick={() => go('orders')}
+              >
+                Все ({activeOrders.length}) →
+              </button>
+            )}
+          </div>
+          {activeOrders.slice(0, 2).map((order) => (
+            <ActiveOrderCard
+              key={order._id}
+              order={order}
+              onClick={() => go('orderDetail', order._id)}
+            />
+          ))}
+        </section>
+      )}
+
       {/* Editorial hero */}
       <section className="hero" aria-label="Приветствие">
         <span className="hero-leaf one" aria-hidden="true">🌿</span>
@@ -241,5 +261,30 @@ export default function Home({ onNavigate, onAddToCart }) {
         />
       )}
     </div>
+  );
+}
+
+function ActiveOrderCard({ order, onClick }) {
+  const meta = statusMeta(order.status);
+  const itemCount = order.items.reduce((s, i) => s + i.quantity, 0);
+  return (
+    <button
+      className={`active-order-card ${meta.tone}`}
+      onClick={onClick}
+      id={`active-order-${order._id}`}
+      type="button"
+    >
+      <div className="active-order-glyph" aria-hidden="true">{meta.glyph}</div>
+      <div className="active-order-body">
+        <div className="active-order-status">{meta.label}</div>
+        <div className="active-order-title">
+          Заказ #{shortId(order)} · {itemCount} {itemCount === 1 ? 'товар' : 'товаров'}
+        </div>
+        <div className="active-order-meta">
+          {formatDate(order.createdAt)} · {formatPrice(order.totalAmount)}
+        </div>
+      </div>
+      <div className="active-order-arrow" aria-hidden="true">→</div>
+    </button>
   );
 }

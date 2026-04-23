@@ -6,6 +6,7 @@ router.get('/', ctrl.getAll);
 router.get('/:id', ctrl.getById);
 router.get('/user/:telegramId', ctrl.getByUser);
 router.post('/', ctrl.create);
+router.post('/:id/cancel', ctrl.cancelByCustomer);
 router.patch('/:id/status', ctrl.updateStatus);
 
 module.exports = router;
