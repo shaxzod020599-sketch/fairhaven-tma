@@ -3,8 +3,6 @@ import { cancelOrder, fetchOrder } from '../utils/api';
 import { getTelegramUser, hapticFeedback, hapticNotification, showConfirm } from '../utils/telegram';
 import { formatPrice, getProductIcon } from '../utils/helpers';
 import {
-  STATUS_META,
-  TIMELINE_STEPS,
   canCancel,
   formatDate,
   isActive,
@@ -140,10 +138,10 @@ export default function OrderDetail({ orderId, onNavigate }) {
         title={`Заказ #${shortId(order)}`}
       />
 
-      {/* Status hero */}
+      {/* Status hero — the only status indicator; no timeline */}
       <section className={`order-status order-status-${meta.tone}`} role="status" aria-live="polite">
         <div className="order-status-art" aria-hidden="true">
-          {order.status === 'pending' ? (
+          {isActive(order.status) ? (
             <span className="order-status-spinner">{meta.glyph}</span>
           ) : (
             meta.glyph
@@ -159,11 +157,6 @@ export default function OrderDetail({ orderId, onNavigate }) {
           </div>
         )}
       </section>
-
-      {/* Timeline */}
-      {order.status !== 'cancelled' && (
-        <Timeline status={order.status} />
-      )}
 
       {/* Cancel button (only while pending) */}
       {canCancel(order.status) && (
@@ -302,28 +295,3 @@ function Row({ label, value, mono, wrap }) {
   );
 }
 
-function Timeline({ status }) {
-  const activeIdx = TIMELINE_STEPS.indexOf(status);
-  return (
-    <div className="order-timeline" aria-label="Прогресс заказа">
-      {TIMELINE_STEPS.map((step, idx) => {
-        const meta = STATUS_META[step];
-        const reached = idx <= activeIdx;
-        const isCurrent = idx === activeIdx;
-        return (
-          <React.Fragment key={step}>
-            <div className={`timeline-step ${reached ? 'reached' : ''} ${isCurrent ? 'current' : ''}`}>
-              <div className="timeline-dot" aria-hidden="true">
-                {reached ? meta.glyph : idx + 1}
-              </div>
-              <div className="timeline-label">{meta.short}</div>
-            </div>
-            {idx < TIMELINE_STEPS.length - 1 && (
-              <div className={`timeline-bar ${idx < activeIdx ? 'reached' : ''}`} aria-hidden="true" />
-            )}
-          </React.Fragment>
-        );
-      })}
-    </div>
-  );
-}

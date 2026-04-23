@@ -1,65 +1,52 @@
 /**
- * Order status helpers — shared between Orders list, detail, timeline,
- * and the Home active-order banner. Single source of truth for labels,
- * tone colors and the forward progression.
+ * Order status helpers — the customer-facing surface uses only three
+ * states: pending (в обработке), confirmed (принят) and cancelled
+ * (отклонён). Internal pipeline statuses like preparing/delivering/
+ * delivered exist in the schema but are folded into "confirmed" here —
+ * the customer doesn't need to track those steps.
+ *
+ *   active (shown on Home banner) → pending only
+ *   history (list archive)        → confirmed / cancelled (and folded)
  */
+
+const CONFIRMED_MAP = ['confirmed', 'preparing', 'delivering', 'delivered'];
 
 export const STATUS_META = {
   pending: {
     label: 'В обработке',
-    short: 'Ожидает',
+    short: 'В обработке',
     tone: 'pending',
     glyph: '⏳',
-    desc: 'Оператор FairHaven Health проверяет заказ',
+    desc: 'Оператор FairHaven Health проверяет ваш заказ',
   },
   confirmed: {
-    label: 'Подтверждён',
+    label: 'Заказ принят',
     short: 'Принят',
     tone: 'confirmed',
     glyph: '✓',
-    desc: 'Заказ принят — готовим к доставке',
-  },
-  preparing: {
-    label: 'Готовится',
-    short: 'Готовится',
-    tone: 'confirmed',
-    glyph: '🌿',
-    desc: 'Собираем ваш заказ',
-  },
-  delivering: {
-    label: 'В пути',
-    short: 'Доставляется',
-    tone: 'confirmed',
-    glyph: '🚚',
-    desc: 'Курьер уже везёт заказ',
-  },
-  delivered: {
-    label: 'Доставлен',
-    short: 'Доставлен',
-    tone: 'delivered',
-    glyph: '🎉',
-    desc: 'Заказ доставлен. Спасибо!',
+    desc: 'Ваш заказ принят — мы доставим его в ближайшее время',
   },
   cancelled: {
-    label: 'Отменён',
-    short: 'Отменён',
+    label: 'Отклонён',
+    short: 'Отклонён',
     tone: 'cancelled',
     glyph: '×',
-    desc: 'Заказ отменён',
+    desc: 'Заказ отклонён',
   },
 };
 
-// Forward progression — timeline steps the order passes through.
-export const TIMELINE_STEPS = [
-  'pending',
-  'confirmed',
-  'preparing',
-  'delivering',
-  'delivered',
-];
+/**
+ * Normalise any backend status into one of the three customer-facing
+ * values. preparing/delivering/delivered all collapse into 'confirmed'.
+ */
+export function normalizeStatus(status) {
+  if (CONFIRMED_MAP.includes(status)) return 'confirmed';
+  if (status === 'cancelled') return 'cancelled';
+  return 'pending';
+}
 
 export function statusMeta(status) {
-  return STATUS_META[status] || STATUS_META.pending;
+  return STATUS_META[normalizeStatus(status)];
 }
 
 export function shortId(order) {
@@ -80,9 +67,9 @@ export function formatDate(iso) {
   });
 }
 
+/** Only still-pending orders surface on the Home banner / bottom-nav badge. */
 export function isActive(status) {
-  // An order the customer still cares about (not closed out).
-  return ['pending', 'confirmed', 'preparing', 'delivering'].includes(status);
+  return normalizeStatus(status) === 'pending';
 }
 
 export function canCancel(status) {

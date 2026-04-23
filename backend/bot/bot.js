@@ -337,25 +337,21 @@ function createBot(token, frontendUrl) {
         );
       }
 
-      const statusEmoji = {
-        pending: '⏳', confirmed: '✅', preparing: '🔧',
-        delivering: '🚚', delivered: '✅', cancelled: '❌',
-      };
-      const statusText = {
-        pending: 'Kutilmoqda / Ожидает',
-        confirmed: 'Tasdiqlandi / Подтверждён',
-        preparing: 'Tayyorlanmoqda / Готовится',
-        delivering: 'Yetkazilmoqda / Доставляется',
-        delivered: 'Yetkazildi / Доставлен',
-        cancelled: 'Bekor qilindi / Отменён',
+      // Customer-facing view: collapse every post-approval state
+      // (preparing/delivering/delivered) into a single «принят» bucket.
+      const stateOf = (s) => {
+        if (s === 'pending') return { emoji: '⏳', label: 'В обработке' };
+        if (s === 'cancelled') return { emoji: '❌', label: 'Отклонён' };
+        return { emoji: '✅', label: 'Принят' };
       };
 
-      let text = '📦 <b>Oxirgi buyurtmalar / Последние заказы:</b>\n\n';
+      let text = '📦 <b>Последние заказы:</b>\n\n';
       for (const order of orders) {
         const id = shortOrderId(order);
         const total = order.totalAmount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
         const date = new Date(order.createdAt).toLocaleDateString('ru-RU');
-        text += `${statusEmoji[order.status] || '📦'} <b>#${id}</b> — ${statusText[order.status] || order.status}\n`;
+        const s = stateOf(order.status);
+        text += `${s.emoji} <b>#${id}</b> — ${s.label}\n`;
         text += `   💰 ${total} UZS · 📅 ${date}\n\n`;
       }
       ctx.replyWithHTML(text);

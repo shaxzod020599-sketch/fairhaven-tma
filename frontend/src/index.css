@@ -2733,96 +2733,6 @@ ul, ol {
   50%      { box-shadow: 0 0 0 6px rgba(111, 138, 106, 0); }
 }
 
-.order-status-delivered .order-status-art {
-  background: var(--butter);
-  color: var(--ink);
-  box-shadow:
-    inset 0 0 0 8px rgba(242, 223, 181, 0.5),
-    0 12px 28px rgba(242, 223, 181, 0.45);
-}
-.order-status-delivered .order-status-kicker { color: var(--terracotta); }
-
-/* ==========================================================================
-   order timeline — horizontal progress bar on OrderDetail
-   ========================================================================== */
-.order-timeline {
-  display: flex;
-  align-items: center;
-  margin: 0 -4px 22px;
-  padding: 16px 8px 14px;
-  background: var(--paper-warm);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.order-timeline::-webkit-scrollbar { display: none; }
-
-.timeline-step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  min-width: 52px;
-  flex-shrink: 0;
-}
-
-.timeline-dot {
-  width: 30px;
-  height: 30px;
-  border-radius: var(--r-pill);
-  background: var(--paper);
-  border: 1.5px solid var(--line);
-  color: var(--ink-faint);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.78rem;
-  font-weight: 600;
-  transition: var(--t-fast);
-}
-
-.timeline-step.reached .timeline-dot {
-  background: var(--sage-wash);
-  border-color: var(--sage);
-  color: var(--sage);
-  font-size: 0.88rem;
-}
-
-.timeline-step.current .timeline-dot {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--butter);
-  box-shadow: 0 0 0 4px rgba(14, 43, 31, 0.08);
-  transform: scale(1.08);
-}
-
-.timeline-label {
-  font-size: 0.66rem;
-  color: var(--ink-faint);
-  font-weight: 500;
-  text-align: center;
-  max-width: 60px;
-  line-height: 1.15;
-  letter-spacing: -0.005em;
-}
-.timeline-step.reached .timeline-label { color: var(--ink-soft); }
-.timeline-step.current .timeline-label {
-  color: var(--ink);
-  font-weight: 700;
-}
-
-.timeline-bar {
-  flex: 1;
-  min-width: 8px;
-  height: 2px;
-  background: var(--line);
-  margin: 0 -2px;
-  margin-bottom: 20px;
-  transition: var(--t-fast);
-}
-.timeline-bar.reached { background: var(--sage); }
-
 /* ==========================================================================
    order cancel button
    ========================================================================== */
@@ -3029,7 +2939,6 @@ ul, ol {
 }
 .order-card-status.pending   { background: var(--butter); color: var(--ink); }
 .order-card-status.confirmed { background: var(--sage-wash); color: var(--sage); }
-.order-card-status.delivered { background: var(--sage-wash); color: var(--sage); }
 .order-card-status.cancelled { background: rgba(155, 44, 54, 0.12); color: var(--ruby); }
 
 .order-card-status-glyph {
@@ -3191,12 +3100,6 @@ ul, ol {
 .active-order-card:last-child { margin-bottom: 0; }
 
 .active-order-card.pending { border-color: var(--clay); }
-.active-order-card.confirmed,
-.active-order-card.delivered {
-  border-color: var(--sage);
-  box-shadow: 0 4px 14px rgba(111, 138, 106, 0.1);
-}
-.active-order-card.cancelled { border-color: rgba(155, 44, 54, 0.4); }
 
 .active-order-glyph {
   width: 42px;
@@ -3208,12 +3111,6 @@ ul, ol {
   align-items: center;
   justify-content: center;
   font-size: 1.3rem;
-}
-.active-order-card.confirmed .active-order-glyph,
-.active-order-card.delivered .active-order-glyph { background: var(--sage-wash); }
-.active-order-card.cancelled .active-order-glyph {
-  background: rgba(155, 44, 54, 0.1);
-  color: var(--ruby);
 }
 
 .active-order-body {
@@ -3229,9 +3126,6 @@ ul, ol {
   color: var(--terracotta);
   margin-bottom: 2px;
 }
-.active-order-card.confirmed .active-order-status,
-.active-order-card.delivered .active-order-status { color: var(--sage); }
-.active-order-card.cancelled .active-order-status { color: var(--ruby); }
 
 .active-order-title {
   font-size: 0.9rem;
