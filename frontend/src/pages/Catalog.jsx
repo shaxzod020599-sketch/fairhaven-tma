@@ -1,16 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { fetchProducts } from '../utils/api';
-import { CATEGORIES, debounce } from '../utils/helpers';
-import { DEMO_PRODUCTS } from '../utils/demoProducts';
+import { debounce } from '../utils/helpers';
 import ProductCard from '../components/ProductCard';
 import ProductDetail from '../components/ProductDetail';
 import { hapticFeedback } from '../utils/telegram';
 
 const SORTS = [
-  { key: 'popular', label: 'Популярные' },
+  { key: 'popular', label: 'По наличию' },
   { key: 'price_asc', label: 'Сначала дешевле' },
   { key: 'price_desc', label: 'Сначала дороже' },
-  { key: 'new', label: 'Новинки' },
+  { key: 'name', label: 'По алфавиту' },
 ];
 
 function Skeleton() {
@@ -28,11 +27,10 @@ function Skeleton() {
   );
 }
 
-export default function Catalog({ initialCategory, onAddToCart }) {
+export default function Catalog({ onAddToCart }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState(initialCategory || null);
   const [sort, setSort] = useState('popular');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [detailProduct, setDetailProduct] = useState(null);
@@ -42,19 +40,15 @@ export default function Catalog({ initialCategory, onAddToCart }) {
     loadProducts();
   }, []);
 
-  useEffect(() => {
-    if (initialCategory) setActiveCategory(initialCategory);
-  }, [initialCategory]);
-
   const loadProducts = async () => {
     try {
       setLoading(true);
       const res = await fetchProducts();
       const items = res?.data || [];
-      setProducts(items.length > 0 ? items : DEMO_PRODUCTS);
+      setProducts(items);
     } catch (err) {
-      console.warn('API unreachable, using demo catalog:', err.message);
-      setProducts(DEMO_PRODUCTS);
+      console.warn('Failed to load catalog:', err.message);
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -73,15 +67,14 @@ export default function Catalog({ initialCategory, onAddToCart }) {
   const filtered = useMemo(() => {
     let items = [...products];
 
-    if (activeCategory) items = items.filter((p) => p.category === activeCategory);
-
     if (search.trim()) {
       const q = search.toLowerCase();
       items = items.filter(
         (p) =>
           p.name.toLowerCase().includes(q) ||
           (p.brand && p.brand.toLowerCase().includes(q)) ||
-          (p.description && p.description.toLowerCase().includes(q))
+          (p.description && p.description.toLowerCase().includes(q)) ||
+          (p.tags && p.tags.some((t) => t.toLowerCase().includes(q)))
       );
     }
 
@@ -92,12 +85,15 @@ export default function Catalog({ initialCategory, onAddToCart }) {
       case 'price_desc':
         items.sort((a, b) => (b.price || 0) - (a.price || 0));
         break;
-      case 'new':
-        items.sort((a, b) => (b.isNew === true) - (a.isNew === true));
+      case 'name':
+        items.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'));
         break;
       default:
+        // popular = available first, then alphabetical
         items.sort((a, b) => {
-          if (a.isAvailable === b.isAvailable) return 0;
+          if (a.isAvailable === b.isAvailable) {
+            return (a.name || '').localeCompare(b.name || '', 'ru');
+          }
           return a.isAvailable ? -1 : 1;
         });
     }
@@ -107,23 +103,14 @@ export default function Catalog({ initialCategory, onAddToCart }) {
       if (a.isAvailable === b.isAvailable) return 0;
       return a.isAvailable ? -1 : 1;
     });
-  }, [products, activeCategory, search, sort]);
-
-  const handleCategoryToggle = (key) => {
-    hapticFeedback('light');
-    setActiveCategory((prev) => (prev === key ? null : key));
-  };
+  }, [products, search, sort]);
 
   const activeSortLabel = SORTS.find((s) => s.key === sort)?.label || 'Сортировка';
 
   return (
     <div className="page" id="page-catalog">
       <h1 className="page-title">Каталог</h1>
-      <p className="page-subtitle">
-        {activeCategory
-          ? CATEGORIES.find((c) => c.key === activeCategory)?.label
-          : 'Все категории'}
-      </p>
+      <p className="page-subtitle">FairHaven Health · полный ассортимент</p>
 
       {/* Search */}
       <div className="search-bar">
@@ -136,7 +123,7 @@ export default function Catalog({ initialCategory, onAddToCart }) {
         <input
           ref={inputRef}
           type="text"
-          placeholder="Витамины, бренд или состав…"
+          placeholder="Название, бренд, состав…"
           onChange={(e) => handleSearchInput(e.target.value)}
           id="catalog-search"
         />
@@ -145,29 +132,6 @@ export default function Catalog({ initialCategory, onAddToCart }) {
             ×
           </button>
         )}
-      </div>
-
-      {/* Category rail */}
-      <div className="category-rail" role="tablist" id="catalog-categories">
-        <button
-          className={`category-pill ${!activeCategory ? 'active' : ''}`}
-          onClick={() => setActiveCategory(null)}
-          id="cat-pill-all"
-        >
-          <span className="pg" aria-hidden="true">✦</span>
-          Все
-        </button>
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat.key}
-            className={`category-pill ${activeCategory === cat.key ? 'active' : ''}`}
-            onClick={() => handleCategoryToggle(cat.key)}
-            id={`cat-pill-${cat.key}`}
-          >
-            <span className="pg" aria-hidden="true">{cat.icon}</span>
-            {cat.label}
-          </button>
-        ))}
       </div>
 
       {/* Toolbar */}
@@ -241,7 +205,11 @@ export default function Catalog({ initialCategory, onAddToCart }) {
       ) : filtered.length === 0 ? (
         <div className="empty-generic">
           <div className="art" aria-hidden="true">🌾</div>
-          <p>Ничего не найдено. Попробуйте изменить запрос.</p>
+          <p>
+            {search
+              ? 'Ничего не найдено. Попробуйте другой запрос.'
+              : 'Каталог загружается — обновите страницу через минуту.'}
+          </p>
         </div>
       ) : (
         <div className="product-grid">

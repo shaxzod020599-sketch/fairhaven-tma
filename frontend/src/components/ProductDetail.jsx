@@ -1,6 +1,14 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getProductIcon, getCategoryInfo } from '../utils/helpers';
 import { hapticFeedback, hapticNotification } from '../utils/telegram';
+
+function HeroImage({ src, alt, category }) {
+  const [errored, setErrored] = useState(false);
+  if (!src || errored) {
+    return <span aria-hidden="true">{getProductIcon(category)}</span>;
+  }
+  return <img src={src} alt={alt} onError={() => setErrored(true)} />;
+}
 
 function splitPrice(price) {
   if (price === null || price === undefined) return { value: '0', unit: 'UZS' };
@@ -41,11 +49,7 @@ export default function ProductDetail({ product, onClose, onAdd }) {
         <div className="sheet-handle" />
 
         <div className="sheet-media">
-          {product.imageUrl ? (
-            <img src={product.imageUrl} alt={product.name} />
-          ) : (
-            <span aria-hidden="true">{getProductIcon(product.category)}</span>
-          )}
+          <HeroImage src={product.imageUrl} alt={product.name} category={product.category} />
         </div>
 
         {product.brand && <div className="sheet-brand">{product.brand}</div>}

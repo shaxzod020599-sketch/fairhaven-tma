@@ -1,31 +1,30 @@
 import React from 'react';
-import { CATEGORIES } from '../utils/helpers';
 import { hapticFeedback } from '../utils/telegram';
+
+const SUPPORT_PHONE = '+998 78 150 04 40';
+const SUPPORT_PHONE_TEL = '+998781500440';
 
 const FEATURED = [
   {
     tone: 'terracotta',
-    eyebrow: 'Сезон',
-    title: 'Иммунитет и энергия',
-    desc: 'Витамин D, цинк, магний',
-    art: '🍋',
-    cat: 'vitamins',
+    eyebrow: 'Для неё',
+    title: 'Женская фертильность',
+    desc: 'OvaBoost · FertilAid · FertiliTea',
+    art: '🌸',
   },
   {
     tone: 'ink',
-    eyebrow: 'Новинка',
-    title: 'Ботанические экстракты',
-    desc: 'Адаптогены премиум-качества',
+    eyebrow: 'Для него',
+    title: 'Мужская фертильность',
+    desc: 'FertilAid · Motility · Count Boost',
     art: '🌿',
-    cat: 'supplements',
   },
   {
     tone: 'default',
-    eyebrow: 'Уход',
-    title: 'Косметика без парабенов',
-    desc: 'Натуральные формулы',
-    art: '🌸',
-    cat: 'cosmetics',
+    eyebrow: 'Материнство',
+    title: 'Беременность и лактация',
+    desc: 'PeaPod · Nursing Blend · Fenugreek',
+    art: '🤱',
   },
 ];
 
@@ -34,19 +33,19 @@ const TRUST = [
     glyph: '🚚',
     tone: 'terracotta',
     title: 'Доставка за 2 часа',
-    desc: 'По всему Ташкенту, бесплатно от 200 000 UZS',
+    desc: 'По всему Ташкенту, бесплатно от 500 000 UZS',
   },
   {
     glyph: '✓',
     tone: 'sage',
-    title: 'Сертифицированные бренды',
-    desc: 'Оригинальная продукция с гарантией качества',
+    title: 'Официальный дилер',
+    desc: 'Оригинальная продукция FairHaven Health из США',
   },
   {
     glyph: '✦',
     tone: 'butter',
-    title: 'Баланс лояльности',
-    desc: 'Возвращаем до 5% от каждой покупки',
+    title: 'Консультация',
+    desc: 'Бесплатный подбор — каждый рабочий день',
   },
 ];
 
@@ -56,6 +55,11 @@ export default function Home({ onNavigate }) {
     onNavigate(target, data);
   };
 
+  const callSupport = () => {
+    hapticFeedback('medium');
+    window.location.href = `tel:${SUPPORT_PHONE_TEL}`;
+  };
+
   return (
     <div className="page" id="page-home">
       {/* Editorial hero */}
@@ -63,13 +67,14 @@ export default function Home({ onNavigate }) {
         <span className="hero-leaf one" aria-hidden="true">🌿</span>
         <span className="hero-leaf two" aria-hidden="true">🌱</span>
 
-        <div className="hero-eyebrow">FAIRHAVEN · APOTHECARY</div>
+        <div className="hero-eyebrow">FAIRHAVEN HEALTH · USA</div>
         <h1 className="hero-title">
-          Здоровье —<br />
-          в <em>каждой</em> капсуле
+          Репродуктивное —<br />
+          <em>здоровье</em> семьи
         </h1>
         <p className="hero-desc">
-          Премиальные витамины, добавки и уход с доставкой в Ташкенте.
+          Официальный дилер FairHaven Health в Узбекистане.
+          Фертильность, беременность, лактация.
         </p>
         <div className="hero-bottom">
           <button className="hero-cta" onClick={() => go('catalog')} id="hero-cta">
@@ -79,36 +84,16 @@ export default function Home({ onNavigate }) {
 
           <div className="hero-stats" aria-hidden="true">
             <div className="stat">
-              <strong>240+</strong>
-              товаров
+              <strong>22</strong>
+              продукта
             </div>
             <div className="stat">
-              <strong>4.9</strong>
-              рейтинг
+              <strong>100%</strong>
+              оригинал
             </div>
           </div>
         </div>
       </section>
-
-      {/* Categories */}
-      <div className="section-title">
-        Категории
-        <span className="eyebrow">6 разделов</span>
-      </div>
-      <div className="category-grid">
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat.key}
-            className="category-tile"
-            onClick={() => go('catalog', cat.key)}
-            id={`home-cat-${cat.key}`}
-          >
-            <span className="cat-glyph" aria-hidden="true">{cat.icon}</span>
-            <span className="cat-label">{cat.label}</span>
-            <span className="cat-arrow" aria-hidden="true">↗</span>
-          </button>
-        ))}
-      </div>
 
       {/* Featured collections */}
       <div className="section-title" style={{ marginBottom: 8 }}>
@@ -126,7 +111,7 @@ export default function Home({ onNavigate }) {
           <button
             key={i}
             className={`featured-card ${f.tone}`}
-            onClick={() => go('catalog', f.cat)}
+            onClick={() => go('catalog')}
             id={`featured-${i}`}
           >
             <span className="featured-art" aria-hidden="true">{f.art}</span>
@@ -141,18 +126,8 @@ export default function Home({ onNavigate }) {
         ))}
       </div>
 
-      {/* Promo */}
-      <div className="promo-banner" role="note">
-        <span className="promo-art" aria-hidden="true">✦</span>
-        <div className="promo-text">
-          <div className="promo-eyebrow">Первый заказ</div>
-          <div className="promo-title">Скидка 10% по промокоду</div>
-        </div>
-        <div className="promo-code">FAIR10</div>
-      </div>
-
       {/* Trust / features */}
-      <div className="section-title">Почему FairHaven</div>
+      <div className="section-title">Почему мы</div>
       <div className="info-stack">
         {TRUST.map((t, i) => (
           <div key={i} className="info-card">
@@ -164,6 +139,32 @@ export default function Home({ onNavigate }) {
           </div>
         ))}
       </div>
+
+      {/* Contact Centre — big primary block at the bottom of Home */}
+      <section className="contact-centre" id="home-contact-centre" aria-label="Контакт-центр">
+        <div className="contact-leaf" aria-hidden="true">🌿</div>
+        <div className="contact-eyebrow">24/7 · КОНТАКТ-ЦЕНТР</div>
+        <div className="contact-title">
+          Нужна <em>консультация?</em>
+        </div>
+        <div className="contact-desc">
+          Наш специалист поможет подобрать продукт под ваш запрос,
+          ответит на вопросы о приёме и доставке.
+        </div>
+        <a
+          href={`tel:${SUPPORT_PHONE_TEL}`}
+          className="contact-phone"
+          onClick={callSupport}
+          id="home-contact-phone"
+        >
+          <span className="contact-phone-icon" aria-hidden="true">☎</span>
+          <span className="contact-phone-number">{SUPPORT_PHONE}</span>
+          <span className="contact-phone-arrow" aria-hidden="true">→</span>
+        </a>
+        <div className="contact-meta">
+          Ежедневно · 9:00 – 21:00 (Asia/Tashkent)
+        </div>
+      </section>
 
       <div style={{ height: 24 }} />
     </div>

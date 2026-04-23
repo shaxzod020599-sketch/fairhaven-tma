@@ -14,13 +14,41 @@ const userSchema = new mongoose.Schema({
     unique: true,
     index: true,
   },
-  firstName: { type: String, default: '' },
-  lastName: { type: String, default: '' },
+  // Telegram-native fields (captured on /start)
   username: { type: String, default: '' },
-  phone: { type: String, default: '' },
   photoUrl: { type: String, default: '' },
   languageCode: { type: String, default: 'ru' },
-  balance: { type: Number, default: 0 },
+
+  // Registration wizard fields
+  firstName: { type: String, default: '' },
+  lastName: { type: String, default: '' },
+  birthYear: { type: Number, default: null },
+  gender: {
+    type: String,
+    enum: ['male', 'female', ''],
+    default: '',
+  },
+  phone: { type: String, default: '' },
+
+  // Consent
+  consentAccepted: { type: Boolean, default: false },
+  consentAcceptedAt: { type: Date, default: null },
+
+  // Wizard state (null when finished)
+  registrationStep: {
+    type: String,
+    enum: [
+      'awaiting_name',
+      'awaiting_surname',
+      'awaiting_year',
+      'awaiting_gender',
+      'awaiting_phone',
+      'awaiting_consent',
+      'done',
+    ],
+    default: 'awaiting_name',
+  },
+
   savedAddresses: [addressSchema],
   favorites: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
   role: {
@@ -31,6 +59,10 @@ const userSchema = new mongoose.Schema({
 }, {
   timestamps: true,
 });
+
+userSchema.methods.isRegistered = function () {
+  return this.registrationStep === 'done' && this.consentAccepted;
+};
 
 userSchema.methods.isAdmin = function () {
   return this.role === 'admin';

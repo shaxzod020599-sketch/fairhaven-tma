@@ -51,7 +51,15 @@ const orderSchema = new mongoose.Schema({
   },
   customerName: { type: String, default: '' },
   customerPhone: { type: String, default: '' },
+  paymentMethod: {
+    type: String,
+    enum: ['cash', 'card'],
+    default: 'cash',
+  },
   notes: { type: String, default: '' },
+
+  // Channel message tracking (for editing on approve/reject)
+  channelMessageId: { type: Number, default: null },
 }, {
   timestamps: true,
 });

@@ -7,6 +7,8 @@ const { createBot } = require('./bot/bot');
 const productRoutes = require('./routes/productRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const userRoutes = require('./routes/userRoutes');
+const oferta = require('./legal/oferta');
+const { FAIRHAVEN_PRODUCTS } = require('./seed/products');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,6 +32,19 @@ app.use((req, _res, next) => {
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
+
+// Legal (public oferta)
+app.get('/legal/oferta-ru', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.type('html').send(oferta.render('ru'));
+});
+app.get('/legal/oferta-uz', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.type('html').send(oferta.render('uz'));
+});
+app.get('/legal/oferta', (_req, res) => {
+  res.redirect('/legal/oferta-ru');
+});
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -67,8 +82,8 @@ app.use(
 );
 
 // SPA fallback — serve index.html for non-API routes with no-cache
-app.get('*', (req, res, _next) => {
-  if (req.path.startsWith('/api')) {
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/legal')) {
     return res.status(404).json({ success: false, error: 'Route not found' });
   }
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
@@ -83,38 +98,18 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ success: false, error: 'Internal server error' });
 });
 
-// Auto-seed products if empty
+// Auto-seed products if empty — also overwrites if SEED_REFRESH=true
 async function autoSeed() {
   const Product = require('./models/Product');
   const count = await Product.countDocuments();
-  if (count === 0) {
-    console.log('📦 Seeding products...');
-    const products = [
-      { name: 'Vitamin D3 2000 IU', price: 89000, category: 'vitamins', description: 'Витамин D3 для иммунитета и костей. 60 капсул.', brand: 'Solgar', isAvailable: true },
-      { name: 'Vitamin C 1000mg', price: 65000, category: 'vitamins', description: 'Витамин С с шиповником. 100 таблеток.', brand: 'Now Foods', isAvailable: true },
-      { name: 'B-Complex 50', price: 120000, category: 'vitamins', description: 'Комплекс витаминов группы B. 100 капсул.', brand: "Nature's Way", isAvailable: true },
-      { name: 'Vitamin E 400 IU', price: 95000, category: 'vitamins', description: 'Натуральный витамин Е. 100 капсул.', brand: 'Solgar', isAvailable: true },
-      { name: 'Мультивитамины для женщин', price: 185000, category: 'vitamins', description: 'Комплекс для женщин. 90 таблеток.', brand: 'Garden of Life', isAvailable: true },
-      { name: 'Omega-3 Fish Oil', price: 145000, category: 'supplements', description: 'Рыбий жир Омега-3. 120 капсул.', brand: 'Nordic Naturals', isAvailable: true },
-      { name: 'Magnesium Glycinate 400mg', price: 110000, category: 'supplements', description: 'Магний для нервной системы. 120 капсул.', brand: "Doctor's Best", isAvailable: true },
-      { name: 'Zinc 50mg', price: 45000, category: 'supplements', description: 'Цинк для иммунитета. 100 таблеток.', brand: 'Now Foods', isAvailable: true },
-      { name: 'Коллаген Type I & III', price: 195000, category: 'supplements', description: 'Коллаген для кожи и суставов. 300г.', brand: 'Sports Research', isAvailable: true },
-      { name: 'Пробиотик 50 млрд', price: 165000, category: 'supplements', description: '14 штаммов пробиотиков. 30 капсул.', brand: 'Garden of Life', isAvailable: false },
-      { name: 'Гиалуроновая сыворотка', price: 230000, category: 'cosmetics', description: 'Увлажняющая сыворотка. 30мл.', brand: 'The Ordinary', isAvailable: true },
-      { name: 'Крем SPF 50+', price: 175000, category: 'cosmetics', description: 'Солнцезащитный крем. 50мл.', brand: 'La Roche-Posay', isAvailable: true },
-      { name: 'Ретинол 0.5%', price: 280000, category: 'cosmetics', description: 'Сыворотка с ретинолом. 30мл.', brand: 'SkinCeuticals', isAvailable: true },
-      { name: 'Термометр цифровой', price: 55000, category: 'parapharmaceuticals', description: 'Электронный термометр. ±0.1°C.', brand: 'Omron', isAvailable: true },
-      { name: 'Тонометр автоматический', price: 450000, category: 'parapharmaceuticals', description: 'Тонометр на плечо. 60 измерений.', brand: 'Omron', isAvailable: true },
-      { name: 'Ингалятор компрессорный', price: 380000, category: 'parapharmaceuticals', description: 'Небулайзер для ингаляций.', brand: 'B.Well', isAvailable: false },
-      { name: 'Зубная паста отбеливающая', price: 42000, category: 'hygiene', description: 'Отбеливающая паста. 100мл.', brand: 'Sensodyne', isAvailable: true },
-      { name: 'Антисептик для рук', price: 25000, category: 'hygiene', description: 'Антисептический гель. 250мл.', brand: 'Sanitelle', isAvailable: true },
-      { name: 'Мицеллярная вода', price: 135000, category: 'hygiene', description: 'Для чувствительной кожи. 400мл.', brand: 'Bioderma', isAvailable: true },
-      { name: 'Протеиновый коктейль', price: 295000, category: 'drinks', description: 'Протеин шоколадный. 900г.', brand: 'Optimum Nutrition', isAvailable: true },
-      { name: 'Коллагеновый напиток', price: 155000, category: 'drinks', description: 'Жидкий коллаген. 500мл.', brand: 'Applied Nutrition', isAvailable: true },
-      { name: 'Электролиты без сахара', price: 75000, category: 'drinks', description: 'Порошок электролитов. 30 порций.', brand: 'LMNT', isAvailable: true },
-    ];
-    await Product.insertMany(products);
-    console.log(`✅ Seeded ${products.length} products`);
+  if (count === 0 || process.env.SEED_REFRESH === 'true') {
+    if (count > 0) {
+      console.log('🗑  Clearing existing products for refresh...');
+      await Product.deleteMany({});
+    }
+    console.log('📦 Seeding FairHaven products...');
+    await Product.insertMany(FAIRHAVEN_PRODUCTS);
+    console.log(`✅ Seeded ${FAIRHAVEN_PRODUCTS.length} products`);
   }
 }
 
@@ -123,7 +118,6 @@ async function start() {
   try {
     let mongoUri = process.env.MONGO_URI;
 
-    // Try real MongoDB first, fall back to in-memory
     try {
       await mongoose.connect(mongoUri, { dbName: 'fairhaven', serverSelectionTimeoutMS: 3000 });
       console.log('✅ MongoDB connected (external)');
@@ -134,30 +128,30 @@ async function start() {
       mongoUri = mongod.getUri();
       await mongoose.connect(mongoUri, { dbName: 'fairhaven' });
       console.log('✅ MongoDB connected (in-memory)');
-
-      // Store for shutdown
       process._mongod = mongod;
     }
 
-    // Auto-seed
     await autoSeed();
 
-    // Start Express
     app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
     });
 
-    // Start Telegram Bot
+    // Start Telegram Bot & expose to controllers via app.locals.
     let bot = null;
     try {
-      bot = createBot(process.env.TELEGRAM_BOT_TOKEN, process.env.FRONTEND_URL);
-      bot.launch();
-      console.log('🤖 Telegram bot launched');
+      if (!process.env.TELEGRAM_BOT_TOKEN) {
+        console.warn('⚠️  TELEGRAM_BOT_TOKEN missing — bot disabled.');
+      } else {
+        bot = createBot(process.env.TELEGRAM_BOT_TOKEN, process.env.FRONTEND_URL);
+        app.locals.bot = bot;
+        bot.launch();
+        console.log('🤖 Telegram bot launched');
+      }
     } catch (botErr) {
       console.warn('⚠️  Bot launch failed (non-critical):', botErr.message);
     }
 
-    // Graceful shutdown
     const shutdown = async (signal) => {
       console.log(`\n${signal} received. Shutting down gracefully...`);
       if (bot) bot.stop(signal);

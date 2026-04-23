@@ -3,61 +3,284 @@ const User = require('../models/User');
 const Order = require('../models/Order');
 const { formatOrderReceipt } = require('../utils/helpers');
 
-const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || null;
+// FairHaven channel — orders are sent here for operator approval.
+// Override via ORDERS_CHANNEL_ID env var if needed.
+const ORDERS_CHANNEL_ID = process.env.ORDERS_CHANNEL_ID || '-1003939788373';
 
+const MIN_YEAR = 1930;
+const MAX_YEAR = new Date().getFullYear() - 14; // minimum 14 y.o.
+
+// -----------------------------------------------------------------------------
+// Copy (bilingual: RU + UZ)
+// -----------------------------------------------------------------------------
+const T = {
+  welcome: (name) =>
+    `🌿 <b>Assalomu alaykum, ${name}!</b>\n` +
+    `🌿 <b>Здравствуйте, ${name}!</b>\n\n` +
+    `<b>FairHaven</b> — O‘zbekistondagi rasmiy diler. Vitaminlar, BAQlar va sog‘liq mahsulotlarini yetkazib beramiz.\n` +
+    `<i>Официальный дилер FairHaven в Узбекистане. Витамины, добавки и средства для здоровья с доставкой.</i>\n\n` +
+    `Do‘konga kirish uchun qisqa ro‘yxatdan o‘ting.\n` +
+    `Чтобы открыть магазин — короткая регистрация.`,
+
+  askName:
+    `1️⃣ <b>Ismingizni kiriting / Введите имя</b>\n\n` +
+    `<i>Masalan: Javlon / Например: Александр</i>`,
+
+  askSurname:
+    `2️⃣ <b>Familiyangizni kiriting / Введите фамилию</b>\n\n` +
+    `<i>Masalan: Karimov / Например: Петров</i>`,
+
+  askYear:
+    `3️⃣ <b>Tug‘ilgan yilingizni yozing / Укажите год рождения</b>\n\n` +
+    `<i>Masalan: 1995 / Например: 1990</i>\n` +
+    `<i>4 ta raqam / 4 цифры</i>`,
+
+  invalidName:
+    `⚠️ Iltimos, ismingizni to‘g‘ri kiriting (faqat harflar).\n` +
+    `⚠️ Введите корректное имя (только буквы).`,
+
+  invalidYear: (min, max) =>
+    `⚠️ Yil ${min}–${max} oralig‘ida bo‘lishi kerak.\n` +
+    `⚠️ Год должен быть в диапазоне ${min}–${max}.`,
+
+  askGender:
+    `4️⃣ <b>Jinsingiz / Ваш пол</b>`,
+
+  askPhone:
+    `5️⃣ <b>Telefon raqamingizni yuboring / Отправьте номер телефона</b>\n\n` +
+    `Pastdagi tugmani bosing — raqam avtomatik yuboriladi.\n` +
+    `Нажмите кнопку ниже — номер отправится автоматически.`,
+
+  askConsent: (frontendUrl, brandName) =>
+    `6️⃣ <b>Shaxsga doir ma’lumotlarga rozilik / Согласие на обработку данных</b>\n\n` +
+    `${brandName} buyurtmalaringizni qayta ishlash uchun ma’lumotlaringizdan foydalanadi.\n` +
+    `${brandName} использует ваши данные для обработки заказов.\n\n` +
+    `Quyidagi ommaviy oferta bilan tanishing:\n` +
+    `Ознакомьтесь с публичной офертой:\n\n` +
+    `🇺🇿 ${frontendUrl}/legal/oferta-uz\n` +
+    `🇷🇺 ${frontendUrl}/legal/oferta-ru\n\n` +
+    `Davom etish uchun tasdiqlang / Для продолжения — подтвердите.`,
+
+  registered: (name) =>
+    `✅ <b>Tabriklaymiz, ${name}!</b> Ro‘yxatdan o‘tdingiz.\n` +
+    `✅ <b>Готово, ${name}!</b> Регистрация завершена.\n\n` +
+    `Endi do‘konni ochishingiz mumkin 👇\n` +
+    `Теперь магазин доступен 👇`,
+
+  alreadyRegistered: (name) =>
+    `🌿 <b>Xush kelibsiz, ${name}!</b>\n` +
+    `🌿 <b>С возвращением, ${name}!</b>\n\n` +
+    `Do‘konni oching / Откройте магазин 👇`,
+
+  openShop: '🛒 Do‘konni ochish / Открыть магазин',
+  sendPhone: '📞 Raqamni yuborish / Отправить номер',
+  readOferta: '📄 Oferta bilan tanishish / Прочитать оферту',
+  acceptConsent: '✅ Roziman / Согласен с условиями',
+  male: '👨 Erkak / Мужской',
+  female: '👩 Ayol / Женский',
+
+  orderApproved: (shortId) =>
+    `✅ <b>Buyurtmangiz tasdiqlandi!</b>\n` +
+    `✅ <b>Ваш заказ подтверждён!</b>\n\n` +
+    `📋 #${shortId}\n\n` +
+    `Tez orada kuryerimiz siz bilan bog‘lanadi.\n` +
+    `Скоро курьер свяжется с вами для доставки. 🌿`,
+
+  orderRejected: (shortId) =>
+    `❌ <b>Buyurtma bekor qilindi</b>\n` +
+    `❌ <b>Заказ отменён</b>\n\n` +
+    `📋 #${shortId}\n\n` +
+    `Batafsil ma’lumot uchun qo‘llab-quvvatlash xizmatiga murojaat qiling.\n` +
+    `Для деталей обратитесь в поддержку.`,
+};
+
+function cleanText(s) {
+  return (s || '').toString().trim().replace(/\s+/g, ' ');
+}
+
+function shortOrderId(order) {
+  return order._id.toString().slice(-6).toUpperCase();
+}
+
+// -----------------------------------------------------------------------------
+// Send a step prompt to a user, honouring their current registrationStep
+// -----------------------------------------------------------------------------
+async function sendStep(ctx, user, frontendUrl) {
+  switch (user.registrationStep) {
+    case 'awaiting_name':
+      return ctx.replyWithHTML(T.askName, Markup.removeKeyboard());
+
+    case 'awaiting_surname':
+      return ctx.replyWithHTML(T.askSurname, Markup.removeKeyboard());
+
+    case 'awaiting_year':
+      return ctx.replyWithHTML(T.askYear, Markup.removeKeyboard());
+
+    case 'awaiting_gender':
+      return ctx.replyWithHTML(
+        T.askGender,
+        Markup.inlineKeyboard([
+          [
+            Markup.button.callback(T.male, 'gender:male'),
+            Markup.button.callback(T.female, 'gender:female'),
+          ],
+        ])
+      );
+
+    case 'awaiting_phone':
+      return ctx.replyWithHTML(T.askPhone, {
+        reply_markup: {
+          keyboard: [[{ text: T.sendPhone, request_contact: true }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        },
+      });
+
+    case 'awaiting_consent':
+      return ctx.replyWithHTML(
+        T.askConsent(frontendUrl || '', 'FairHaven'),
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: T.readOferta, url: `${frontendUrl}/legal/oferta-ru` },
+              ],
+              [
+                Markup.button.callback(T.acceptConsent, 'consent:accept'),
+              ],
+            ],
+          },
+        }
+      );
+
+    case 'done':
+    default:
+      return sendOpenShop(ctx, user, frontendUrl);
+  }
+}
+
+async function sendOpenShop(ctx, user, frontendUrl) {
+  const firstName = user.firstName || ctx.from.first_name || '';
+  const greeting = user.isRegistered()
+    ? T.alreadyRegistered(firstName)
+    : T.registered(firstName);
+
+  return ctx.replyWithHTML(greeting, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: T.openShop, web_app: { url: frontendUrl } }],
+      ],
+    },
+  });
+}
+
+// -----------------------------------------------------------------------------
+// Order receipt for the channel (bilingual header)
+// -----------------------------------------------------------------------------
+function buildChannelKeyboard(orderId, status) {
+  if (status === 'pending') {
+    return {
+      inline_keyboard: [
+        [
+          { text: '✅ Tasdiqlash / Подтвердить', callback_data: `order:approve:${orderId}` },
+          { text: '❌ Rad etish / Отклонить',   callback_data: `order:reject:${orderId}` },
+        ],
+      ],
+    };
+  }
+  // Finalised — no buttons.
+  return { inline_keyboard: [] };
+}
+
+// -----------------------------------------------------------------------------
+// Post an order to the orders channel
+// Returns message_id on success, null on failure (non-fatal).
+// -----------------------------------------------------------------------------
+async function forwardOrderToChannel(bot, order) {
+  if (!ORDERS_CHANNEL_ID) return null;
+  try {
+    const text = formatOrderReceipt(order);
+    const sent = await bot.telegram.sendMessage(ORDERS_CHANNEL_ID, text, {
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup: buildChannelKeyboard(order._id.toString(), 'pending'),
+    });
+    return sent.message_id;
+  } catch (err) {
+    console.error('[bot] Failed to forward order to channel:', err.message);
+    return null;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Factory
+// -----------------------------------------------------------------------------
 function createBot(token, frontendUrl) {
+  if (!token) throw new Error('TELEGRAM_BOT_TOKEN is required');
   const bot = new Telegraf(token);
+  const FRONTEND = (frontendUrl || '').replace(/\/+$/, '') ||
+    `https://${process.env.FRONTEND_URL || 'localhost'}`;
 
-  // /start command
+  // Attach the channel forwarder so orderController can call it.
+  bot.forwardOrderToChannel = (order) => forwardOrderToChannel(bot, order);
+
+  // ---------------------------------------------------------------------------
+  // /start — start or resume registration
+  // ---------------------------------------------------------------------------
   bot.start(async (ctx) => {
-    const tgUser = ctx.from;
-
-    // Upsert user in DB
-    try {
-      let user = await User.findOne({ telegramId: tgUser.id });
-      if (!user) {
-        user = await User.create({
-          telegramId: tgUser.id,
-          firstName: tgUser.first_name || '',
-          lastName: tgUser.last_name || '',
-          username: tgUser.username || '',
-          languageCode: tgUser.language_code || 'ru',
-        });
-      }
-    } catch (err) {
-      console.error('Error upserting user on /start:', err.message);
+    const tg = ctx.from;
+    let user = await User.findOne({ telegramId: tg.id });
+    if (!user) {
+      user = await User.create({
+        telegramId: tg.id,
+        username: tg.username || '',
+        languageCode: tg.language_code || 'ru',
+        registrationStep: 'awaiting_name',
+      });
+    } else {
+      // Keep username/language fresh.
+      user.username = tg.username || user.username;
+      user.languageCode = tg.language_code || user.languageCode;
+      await user.save();
     }
 
-    const welcomeText =
-      `🌿 <b>Добро пожаловать в FairHaven!</b>\n\n` +
-      `Витамины, добавки и средства для здоровья — всё в одном месте.\n\n` +
-      `Нажмите кнопку ниже, чтобы открыть магазин 👇`;
+    const firstName = user.firstName || tg.first_name || 'друг';
+    await ctx.replyWithHTML(T.welcome(firstName));
 
-    await ctx.replyWithHTML(welcomeText, {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: '🛒 Открыть магазин',
-              web_app: { url: frontendUrl },
-            },
-          ],
-        ],
-      },
-    });
+    if (user.isRegistered()) {
+      return sendOpenShop(ctx, user, FRONTEND);
+    }
+    return sendStep(ctx, user, FRONTEND);
   });
 
-  // /help command
+  // ---------------------------------------------------------------------------
+  // /help
+  // ---------------------------------------------------------------------------
   bot.help((ctx) => {
     ctx.replyWithHTML(
-      `ℹ️ <b>Помощь — FairHaven</b>\n\n` +
-      `🛒 /start — Открыть магазин\n` +
-      `📦 /myorders — Мои заказы\n` +
-      `📞 Поддержка: @fairhaven_support`
+      `ℹ️ <b>FairHaven — yordam / помощь</b>\n\n` +
+      `🛒 /start — do‘konni ochish / открыть магазин\n` +
+      `📦 /myorders — buyurtmalarim / мои заказы\n` +
+      `📄 /oferta — ommaviy oferta / публичная оферта\n\n` +
+      `📞 ${process.env.SUPPORT_PHONE || '+998 00 000 00 00'}`
     );
   });
 
-  // /myorders command
+  // ---------------------------------------------------------------------------
+  // /oferta
+  // ---------------------------------------------------------------------------
+  bot.command('oferta', (ctx) => {
+    ctx.replyWithHTML(
+      `📄 <b>Ommaviy oferta / Публичная оферта</b>\n\n` +
+      `🇺🇿 ${FRONTEND}/legal/oferta-uz\n` +
+      `🇷🇺 ${FRONTEND}/legal/oferta-ru`,
+      { disable_web_page_preview: true }
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  // /myorders
+  // ---------------------------------------------------------------------------
   bot.command('myorders', async (ctx) => {
     try {
       const orders = await Order.find({ telegramId: ctx.from.id })
@@ -65,107 +288,257 @@ function createBot(token, frontendUrl) {
         .limit(5);
 
       if (!orders.length) {
-        return ctx.reply('📦 У вас пока нет заказов. Откройте магазин и сделайте первый заказ!');
+        return ctx.reply(
+          '📦 Hali buyurtmalaringiz yo‘q.\n📦 У вас пока нет заказов.'
+        );
       }
 
       const statusEmoji = {
-        pending: '⏳',
-        confirmed: '✅',
-        preparing: '🔧',
-        delivering: '🚚',
-        delivered: '✅',
-        cancelled: '❌',
+        pending: '⏳', confirmed: '✅', preparing: '🔧',
+        delivering: '🚚', delivered: '✅', cancelled: '❌',
       };
-
       const statusText = {
-        pending: 'Ожидает',
-        confirmed: 'Подтверждён',
-        preparing: 'Готовится',
-        delivering: 'Доставляется',
-        delivered: 'Доставлен',
-        cancelled: 'Отменён',
+        pending: 'Kutilmoqda / Ожидает',
+        confirmed: 'Tasdiqlandi / Подтверждён',
+        preparing: 'Tayyorlanmoqda / Готовится',
+        delivering: 'Yetkazilmoqda / Доставляется',
+        delivered: 'Yetkazildi / Доставлен',
+        cancelled: 'Bekor qilindi / Отменён',
       };
 
-      let text = '📦 <b>Ваши последние заказы:</b>\n\n';
+      let text = '📦 <b>Oxirgi buyurtmalar / Последние заказы:</b>\n\n';
       for (const order of orders) {
-        const id = order._id.toString().slice(-6).toUpperCase();
-        const emoji = statusEmoji[order.status] || '📦';
-        const status = statusText[order.status] || order.status;
+        const id = shortOrderId(order);
         const total = order.totalAmount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
         const date = new Date(order.createdAt).toLocaleDateString('ru-RU');
-        text += `${emoji} <b>#${id}</b> — ${status}\n   💰 ${total} UZS | 📅 ${date}\n\n`;
+        text += `${statusEmoji[order.status] || '📦'} <b>#${id}</b> — ${statusText[order.status] || order.status}\n`;
+        text += `   💰 ${total} UZS · 📅 ${date}\n\n`;
       }
-
       ctx.replyWithHTML(text);
     } catch (err) {
       console.error('Error fetching orders:', err.message);
-      ctx.reply('Произошла ошибка при получении заказов.');
+      ctx.reply('❌ Xatolik / Ошибка');
     }
   });
 
-  // Handle web_app_data from sendData
-  bot.on('message', async (ctx) => {
-    if (!ctx.message.web_app_data) return;
-
+  // ---------------------------------------------------------------------------
+  // Callback: gender selection
+  // ---------------------------------------------------------------------------
+  bot.action(/^gender:(male|female)$/, async (ctx) => {
+    const gender = ctx.match[1];
     try {
-      const data = JSON.parse(ctx.message.web_app_data.data);
-      const tgUser = ctx.from;
+      const user = await User.findOne({ telegramId: ctx.from.id });
+      if (!user) return ctx.answerCbQuery();
+      if (user.registrationStep !== 'awaiting_gender') {
+        return ctx.answerCbQuery();
+      }
+      user.gender = gender;
+      user.registrationStep = 'awaiting_phone';
+      await user.save();
+      await ctx.answerCbQuery(gender === 'male' ? '👨' : '👩');
+      try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (_) {}
+      return sendStep(ctx, user, FRONTEND);
+    } catch (err) {
+      console.error('gender callback:', err.message);
+      return ctx.answerCbQuery('Ошибка');
+    }
+  });
 
-      // Upsert user
-      let user = await User.findOne({ telegramId: tgUser.id });
-      if (!user) {
-        user = await User.create({
-          telegramId: tgUser.id,
-          firstName: tgUser.first_name || '',
-          lastName: tgUser.last_name || '',
-          username: tgUser.username || '',
-        });
+  // ---------------------------------------------------------------------------
+  // Callback: consent accept
+  // ---------------------------------------------------------------------------
+  bot.action('consent:accept', async (ctx) => {
+    try {
+      const user = await User.findOne({ telegramId: ctx.from.id });
+      if (!user) return ctx.answerCbQuery();
+      if (user.registrationStep !== 'awaiting_consent') {
+        return ctx.answerCbQuery();
+      }
+      user.consentAccepted = true;
+      user.consentAcceptedAt = new Date();
+      user.registrationStep = 'done';
+      await user.save();
+      await ctx.answerCbQuery('✅');
+      try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (_) {}
+      return sendOpenShop(ctx, user, FRONTEND);
+    } catch (err) {
+      console.error('consent callback:', err.message);
+      return ctx.answerCbQuery('Ошибка');
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Callback: order approval / rejection (from channel)
+  // ---------------------------------------------------------------------------
+  bot.action(/^order:(approve|reject):([a-fA-F0-9]{24})$/, async (ctx) => {
+    const [, action, orderId] = ctx.match;
+    try {
+      const order = await Order.findById(orderId);
+      if (!order) {
+        return ctx.answerCbQuery('Buyurtma topilmadi / Заказ не найден');
+      }
+      if (order.status !== 'pending') {
+        return ctx.answerCbQuery(`Allaqachon: ${order.status}`);
       }
 
-      // Create order
-      const order = await Order.create({
-        userId: user._id,
-        telegramId: tgUser.id,
-        items: data.items,
-        totalAmount: data.total,
-        location: data.location,
-        customerName: data.user?.name || `${tgUser.first_name || ''} ${tgUser.last_name || ''}`.trim(),
-        customerPhone: data.user?.phone || user.phone || '',
-        notes: data.notes || '',
-      });
+      const newStatus = action === 'approve' ? 'confirmed' : 'cancelled';
+      order.status = newStatus;
+      await order.save();
 
-      // Confirm to user
-      await ctx.replyWithHTML(
-        `✅ <b>Заказ оформлен!</b>\n\n` +
-        `📋 Номер: <b>#${order._id.toString().slice(-6).toUpperCase()}</b>\n` +
-        `💰 Сумма: <b>${data.total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} UZS</b>\n\n` +
-        `Мы свяжемся с вами для подтверждения. Спасибо! 🌿`
-      );
+      const shortId = shortOrderId(order);
+      const actorName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ')
+        || (ctx.from.username ? `@${ctx.from.username}` : 'operator');
+      const verdict = action === 'approve'
+        ? `\n\n✅ <b>Tasdiqlandi / Подтверждено</b> — ${actorName}`
+        : `\n\n❌ <b>Rad etildi / Отклонено</b> — ${actorName}`;
 
-      // Forward receipt to admin
-      const receipt = formatOrderReceipt(order);
-      if (ADMIN_CHAT_ID) {
-        await bot.telegram.sendMessage(ADMIN_CHAT_ID, receipt, {
-          parse_mode: 'HTML',
-          disable_web_page_preview: true,
-        });
-      } else {
-        // If no admin chat configured, log receipt
-        console.log('📋 New order received (no ADMIN_CHAT_ID set):');
-        console.log(receipt.replace(/<[^>]*>/g, ''));
+      // Edit channel message — append verdict, strip buttons.
+      try {
+        await ctx.editMessageText(
+          formatOrderReceipt(order) + verdict,
+          {
+            parse_mode: 'HTML',
+            disable_web_page_preview: true,
+            reply_markup: { inline_keyboard: [] },
+          }
+        );
+      } catch (editErr) {
+        // Fallback: just remove buttons if edit fails.
+        try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (_) {}
+      }
+
+      await ctx.answerCbQuery(action === 'approve' ? '✅ Подтверждено' : '❌ Отклонено');
+
+      // Notify the customer
+      try {
+        await bot.telegram.sendMessage(
+          order.telegramId,
+          action === 'approve' ? T.orderApproved(shortId) : T.orderRejected(shortId),
+          { parse_mode: 'HTML' }
+        );
+      } catch (notifyErr) {
+        console.warn('[bot] Could not notify customer:', notifyErr.message);
       }
     } catch (err) {
-      console.error('Error processing web_app_data:', err);
-      await ctx.reply('❌ Произошла ошибка при оформлении заказа. Попробуйте ещё раз.');
+      console.error('order action:', err);
+      return ctx.answerCbQuery('Ошибка');
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // Contact (phone) submission
+  // ---------------------------------------------------------------------------
+  bot.on('contact', async (ctx) => {
+    try {
+      const user = await User.findOne({ telegramId: ctx.from.id });
+      if (!user) return;
+      if (user.registrationStep !== 'awaiting_phone') return;
+
+      const contact = ctx.message.contact;
+      if (!contact || String(contact.user_id) !== String(ctx.from.id)) {
+        return ctx.replyWithHTML(
+          '⚠️ Iltimos, o‘zingizning raqamingizni yuboring.\n⚠️ Отправьте ваш собственный номер.'
+        );
+      }
+
+      user.phone = contact.phone_number.startsWith('+')
+        ? contact.phone_number
+        : `+${contact.phone_number}`;
+      user.registrationStep = 'awaiting_consent';
+      await user.save();
+
+      // Remove the contact keyboard.
+      await ctx.reply('📞 ' + user.phone, {
+        reply_markup: { remove_keyboard: true },
+      });
+      return sendStep(ctx, user, FRONTEND);
+    } catch (err) {
+      console.error('contact handler:', err.message);
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Text input — routes to the current registration step
+  // ---------------------------------------------------------------------------
+  bot.on('text', async (ctx) => {
+    // Ignore commands (start/help/oferta/myorders already handled above).
+    if (ctx.message.text.startsWith('/')) return;
+
+    // Ignore web-app data events — these are sent via the separate channel.
+    if (ctx.message.web_app_data) return;
+
+    try {
+      const user = await User.findOne({ telegramId: ctx.from.id });
+      if (!user) {
+        return ctx.reply('/start');
+      }
+
+      if (user.registrationStep === 'done') {
+        // Already registered — nudge back to the shop.
+        return sendOpenShop(ctx, user, FRONTEND);
+      }
+
+      const value = cleanText(ctx.message.text);
+
+      if (user.registrationStep === 'awaiting_name') {
+        if (!/^[A-Za-zА-Яа-яЎўҚқҒғҲҳӯӢӣ’'\- ]{2,40}$/.test(value)) {
+          return ctx.replyWithHTML(T.invalidName);
+        }
+        user.firstName = value;
+        user.registrationStep = 'awaiting_surname';
+        await user.save();
+        return sendStep(ctx, user, FRONTEND);
+      }
+
+      if (user.registrationStep === 'awaiting_surname') {
+        if (!/^[A-Za-zА-Яа-яЎўҚқҒғҲҳӯӢӣ’'\- ]{2,40}$/.test(value)) {
+          return ctx.replyWithHTML(T.invalidName);
+        }
+        user.lastName = value;
+        user.registrationStep = 'awaiting_year';
+        await user.save();
+        return sendStep(ctx, user, FRONTEND);
+      }
+
+      if (user.registrationStep === 'awaiting_year') {
+        const year = parseInt(value.replace(/\D/g, ''), 10);
+        if (!year || year < MIN_YEAR || year > MAX_YEAR) {
+          return ctx.replyWithHTML(T.invalidYear(MIN_YEAR, MAX_YEAR));
+        }
+        user.birthYear = year;
+        user.registrationStep = 'awaiting_gender';
+        await user.save();
+        return sendStep(ctx, user, FRONTEND);
+      }
+
+      if (user.registrationStep === 'awaiting_gender') {
+        return sendStep(ctx, user, FRONTEND);
+      }
+
+      if (user.registrationStep === 'awaiting_phone') {
+        return sendStep(ctx, user, FRONTEND);
+      }
+
+      if (user.registrationStep === 'awaiting_consent') {
+        return sendStep(ctx, user, FRONTEND);
+      }
+    } catch (err) {
+      console.error('text handler:', err.message);
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   // Error handler
+  // ---------------------------------------------------------------------------
   bot.catch((err, ctx) => {
-    console.error(`Bot error for ${ctx.updateType}:`, err);
+    console.error(`[bot] error in ${ctx.updateType}:`, err);
   });
 
   return bot;
 }
 
-module.exports = { createBot };
+module.exports = {
+  createBot,
+  ORDERS_CHANNEL_ID,
+  forwardOrderToChannel,
+};

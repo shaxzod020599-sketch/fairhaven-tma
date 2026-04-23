@@ -2,6 +2,21 @@ import React, { useState } from 'react';
 import { formatPrice, getProductIcon } from '../utils/helpers';
 import { hapticFeedback } from '../utils/telegram';
 
+function Thumb({ src, alt, category }) {
+  const [errored, setErrored] = useState(false);
+  if (!src || errored) {
+    return <span aria-hidden="true">{getProductIcon(category)}</span>;
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      onError={() => setErrored(true)}
+    />
+  );
+}
+
 function splitPrice(price) {
   if (price === null || price === undefined) return { value: '0', unit: 'UZS' };
   const formatted = price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
@@ -66,11 +81,7 @@ export default function ProductCard({ product, onAdd, onOpen, favorite, onToggle
           </svg>
         </button>
 
-        {product.imageUrl ? (
-          <img src={product.imageUrl} alt={product.name} loading="lazy" />
-        ) : (
-          <span aria-hidden="true">{getProductIcon(product.category)}</span>
-        )}
+        <Thumb src={product.imageUrl} alt={product.name} category={product.category} />
 
         {isAvailable && (
           <button
