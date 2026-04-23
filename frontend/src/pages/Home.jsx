@@ -1,34 +1,42 @@
 import React, { useEffect, useState } from 'react';
 import { hapticFeedback } from '../utils/telegram';
-import { fetchPopularProducts } from '../utils/api';
+import {
+  fetchPopularProducts,
+  fetchPublicCollections,
+  fetchPublicSettings,
+} from '../utils/api';
 import { statusMeta, shortId, formatDate } from '../utils/orderStatus';
 import { formatPrice } from '../utils/helpers';
 import ProductCard from '../components/ProductCard';
 import ProductDetail from '../components/ProductDetail';
 
-const SUPPORT_PHONE = '+998 78 150 04 40';
-const SUPPORT_PHONE_TEL = '+998781500440';
+const DEFAULT_PHONE = '+998 78 150 04 40';
+const DEFAULT_PHONE_TEL = '+998781500440';
+const DEFAULT_HOURS = 'Ежедневно · 9:00 – 21:00 (Asia/Tashkent)';
 
-const FEATURED = [
+const FEATURED_FALLBACK = [
   {
+    _id: 'fb-1',
     tone: 'terracotta',
     eyebrow: 'Для неё',
-    title: 'Женская фертильность',
-    desc: 'OvaBoost · FertilAid · FertiliTea',
+    name: 'Женская фертильность',
+    description: 'OvaBoost · FertilAid · FertiliTea',
     art: '🌸',
   },
   {
+    _id: 'fb-2',
     tone: 'ink',
     eyebrow: 'Для него',
-    title: 'Мужская фертильность',
-    desc: 'FertilAid · Motility · Count Boost',
+    name: 'Мужская фертильность',
+    description: 'FertilAid · Motility · Count Boost',
     art: '🌿',
   },
   {
+    _id: 'fb-3',
     tone: 'default',
     eyebrow: 'Материнство',
-    title: 'Беременность и лактация',
-    desc: 'PeaPod · Nursing Blend · Fenugreek',
+    name: 'Беременность и лактация',
+    description: 'PeaPod · Nursing Blend · Fenugreek',
     art: '🤱',
   },
 ];
@@ -58,6 +66,11 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [] }) {
   const [popular, setPopular] = useState([]);
   const [popularLoading, setPopularLoading] = useState(true);
   const [detailProduct, setDetailProduct] = useState(null);
+  const [collections, setCollections] = useState(FEATURED_FALLBACK);
+  const [activeCollection, setActiveCollection] = useState(null);
+  const [supportPhone, setSupportPhone] = useState(DEFAULT_PHONE);
+  const [supportPhoneTel, setSupportPhoneTel] = useState(DEFAULT_PHONE_TEL);
+  const [supportHours, setSupportHours] = useState(DEFAULT_HOURS);
 
   useEffect(() => {
     let mounted = true;
@@ -65,6 +78,25 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [] }) {
       .then((res) => { if (mounted) setPopular(res?.data || []); })
       .catch(() => { if (mounted) setPopular([]); })
       .finally(() => { if (mounted) setPopularLoading(false); });
+
+    fetchPublicCollections()
+      .then((res) => {
+        if (!mounted) return;
+        const list = res?.data || [];
+        if (list.length) setCollections(list);
+      })
+      .catch(() => {});
+
+    fetchPublicSettings()
+      .then((res) => {
+        if (!mounted) return;
+        const s = res?.data || {};
+        if (s.support_phone) setSupportPhone(s.support_phone);
+        if (s.support_phone_tel) setSupportPhoneTel(s.support_phone_tel);
+        if (s.support_hours) setSupportHours(s.support_hours);
+      })
+      .catch(() => {});
+
     return () => { mounted = false; };
   }, []);
 
@@ -75,7 +107,16 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [] }) {
 
   const callSupport = () => {
     hapticFeedback('medium');
-    window.location.href = `tel:${SUPPORT_PHONE_TEL}`;
+    window.location.href = `tel:${supportPhoneTel}`;
+  };
+
+  const openCollection = (col) => {
+    hapticFeedback('light');
+    if (col && col._id && !col._id.startsWith('fb-')) {
+      setActiveCollection(col);
+    } else {
+      onNavigate('catalog');
+    }
   };
 
   return (
@@ -181,35 +222,49 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [] }) {
       )}
 
       {/* Featured collections */}
-      <div className="section-title" style={{ marginBottom: 8 }}>
-        Подборки
-        <button
-          className="link-see-all"
-          onClick={() => go('catalog')}
-          id="featured-see-all"
-        >
-          Все →
-        </button>
-      </div>
-      <div className="featured-rail">
-        {FEATURED.map((f, i) => (
-          <button
-            key={i}
-            className={`featured-card ${f.tone}`}
-            onClick={() => go('catalog')}
-            id={`featured-${i}`}
-          >
-            <span className="featured-art" aria-hidden="true">{f.art}</span>
-            <div className="featured-eyebrow">{f.eyebrow}</div>
-            <div className="featured-title">{f.title}</div>
-            <div className="featured-desc">{f.desc}</div>
-            <span className="featured-cta">
-              Смотреть
-              <span aria-hidden="true">→</span>
-            </span>
-          </button>
-        ))}
-      </div>
+      {collections.length > 0 && (
+        <>
+          <div className="section-title" style={{ marginBottom: 8 }}>
+            Подборки
+            <button
+              className="link-see-all"
+              onClick={() => go('catalog')}
+              id="featured-see-all"
+            >
+              Все →
+            </button>
+          </div>
+          <div className="featured-rail">
+            {collections.map((f, i) => (
+              <button
+                key={f._id || i}
+                className={`featured-card ${f.tone || 'default'}`}
+                onClick={() => openCollection(f)}
+                id={`featured-${i}`}
+                style={f.imageUrl ? {
+                  backgroundImage: `linear-gradient(155deg, rgba(14,43,31,0.45), rgba(14,43,31,0.15)), url(${f.imageUrl})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  color: 'var(--paper)',
+                } : undefined}
+              >
+                {!f.imageUrl && (
+                  <span className="featured-art" aria-hidden="true">{f.art || '✦'}</span>
+                )}
+                <div className="featured-eyebrow">{f.eyebrow || 'Подборка'}</div>
+                <div className="featured-title">{f.name || f.title}</div>
+                {(f.description || f.desc) && (
+                  <div className="featured-desc">{f.description || f.desc}</div>
+                )}
+                <span className="featured-cta">
+                  Смотреть
+                  <span aria-hidden="true">→</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Trust / features */}
       <div className="section-title">Почему мы</div>
@@ -237,17 +292,17 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [] }) {
           ответит на вопросы о приёме и доставке.
         </div>
         <a
-          href={`tel:${SUPPORT_PHONE_TEL}`}
+          href={`tel:${supportPhoneTel}`}
           className="contact-phone"
           onClick={callSupport}
           id="home-contact-phone"
         >
           <span className="contact-phone-icon" aria-hidden="true">☎</span>
-          <span className="contact-phone-number">{SUPPORT_PHONE}</span>
+          <span className="contact-phone-number">{supportPhone}</span>
           <span className="contact-phone-arrow" aria-hidden="true">→</span>
         </a>
         <div className="contact-meta">
-          Ежедневно · 9:00 – 21:00 (Asia/Tashkent)
+          {supportHours}
         </div>
       </section>
 
@@ -260,6 +315,52 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [] }) {
           onAdd={onAddToCart}
         />
       )}
+
+      {activeCollection && (
+        <CollectionView
+          collection={activeCollection}
+          onClose={() => setActiveCollection(null)}
+          onAdd={onAddToCart}
+          onOpenProduct={(p) => { setActiveCollection(null); setDetailProduct(p); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function CollectionView({ collection, onClose, onAdd, onOpenProduct }) {
+  const products = collection.productIds || [];
+  return (
+    <div className="collection-overlay" onClick={onClose}>
+      <div className="collection-sheet" onClick={(e) => e.stopPropagation()}>
+        <button className="collection-close" onClick={onClose} aria-label="Закрыть">×</button>
+        <div className={`collection-hero ${collection.tone || 'default'}`} style={
+          collection.imageUrl ? {
+            backgroundImage: `linear-gradient(155deg, rgba(14,43,31,0.55), rgba(14,43,31,0.1)), url(${collection.imageUrl})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            color: 'var(--paper)',
+          } : undefined
+        }>
+          {collection.eyebrow && <div className="collection-eyebrow">{collection.eyebrow}</div>}
+          <h2 className="collection-title">{collection.name}</h2>
+          {collection.description && <p className="collection-desc">{collection.description}</p>}
+        </div>
+        {products.length === 0 ? (
+          <div className="empty-generic"><div className="art">🌾</div><p>В этой подборке пока нет товаров</p></div>
+        ) : (
+          <div className="product-grid" style={{ marginTop: 18 }}>
+            {products.map((p) => (
+              <ProductCard
+                key={p._id}
+                product={p}
+                onAdd={onAdd}
+                onOpen={onOpenProduct}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

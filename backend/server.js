@@ -12,8 +12,16 @@ const { createBot } = require('./bot/bot');
 const productRoutes = require('./routes/productRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const userRoutes = require('./routes/userRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const publicRoutes = require('./routes/publicRoutes');
 const oferta = require('./legal/oferta');
 const { FAIRHAVEN_PRODUCTS } = require('./seed/products');
+const {
+  seedDefaultSettings,
+  promoteAdminsFromEnv,
+  ensureAtLeastOneAdmin,
+} = require('./seed/bootstrap');
+const { UPLOAD_DIR } = require('./controllers/uploadController');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -37,6 +45,19 @@ app.use((req, _res, next) => {
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/public', publicRoutes);
+
+// Uploaded images (admin-added product photos) — served publicly.
+app.use(
+  '/uploads',
+  express.static(UPLOAD_DIR, {
+    maxAge: '7d',
+    setHeaders: (res) => {
+      res.set('Cache-Control', 'public, max-age=604800');
+    },
+  })
+);
 
 // Legal (public oferta)
 app.get('/legal/oferta-ru', (_req, res) => {
@@ -88,7 +109,11 @@ app.use(
 
 // SPA fallback — serve index.html for non-API routes with no-cache
 app.get('*', (req, res) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/legal')) {
+  if (
+    req.path.startsWith('/api') ||
+    req.path.startsWith('/legal') ||
+    req.path.startsWith('/uploads')
+  ) {
     return res.status(404).json({ success: false, error: 'Route not found' });
   }
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
@@ -137,6 +162,9 @@ async function start() {
     }
 
     await autoSeed();
+    await seedDefaultSettings();
+    await promoteAdminsFromEnv();
+    await ensureAtLeastOneAdmin();
 
     app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);

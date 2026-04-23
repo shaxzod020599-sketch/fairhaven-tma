@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { getTelegramUser, hapticFeedback } from '../utils/telegram';
+import { fetchPublicSettings } from '../utils/api';
 
-const SUPPORT_PHONE = '+998 78 150 04 40';
-const SUPPORT_PHONE_TEL = '+998781500440';
+const DEFAULT_SUPPORT_PHONE = '+998 78 150 04 40';
+const DEFAULT_SUPPORT_PHONE_TEL = '+998781500440';
+const DEFAULT_SUPPORT_HOURS = 'Ежедневно · 9:00 – 21:00 (Asia/Tashkent)';
 const SUPPORT_TG = 'fairhaven_support';
 
 function genderLabel(g) {
@@ -17,8 +19,22 @@ function initials(firstName, lastName) {
   return (a + b) || '◉';
 }
 
-export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0, onNavigate }) {
+export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0, onNavigate, onOpenAdmin }) {
   const tg = getTelegramUser();
+  const [supportPhone, setSupportPhone] = useState(DEFAULT_SUPPORT_PHONE);
+  const [supportPhoneTel, setSupportPhoneTel] = useState(DEFAULT_SUPPORT_PHONE_TEL);
+  const [supportHours, setSupportHours] = useState(DEFAULT_SUPPORT_HOURS);
+
+  useEffect(() => {
+    fetchPublicSettings()
+      .then((res) => {
+        const s = res?.data || {};
+        if (s.support_phone) setSupportPhone(s.support_phone);
+        if (s.support_phone_tel) setSupportPhoneTel(s.support_phone_tel);
+        if (s.support_hours) setSupportHours(s.support_hours);
+      })
+      .catch(() => {});
+  }, []);
 
   const firstName = dbUser?.firstName || tg.first_name || '';
   const lastName = dbUser?.lastName || tg.last_name || '';
@@ -36,7 +52,7 @@ export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0
 
   const callSupport = () => {
     hapticFeedback('medium');
-    window.location.href = `tel:${SUPPORT_PHONE_TEL}`;
+    window.location.href = `tel:${supportPhoneTel}`;
   };
 
   const openTgSupport = () => {
@@ -53,6 +69,13 @@ export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0
     hapticFeedback('light');
     onNavigate?.('orders');
   };
+
+  const openAdmin = () => {
+    hapticFeedback('medium');
+    onOpenAdmin?.();
+  };
+
+  const isAdmin = dbUser?.role === 'admin';
 
   return (
     <div className="page" id="page-profile">
@@ -75,6 +98,26 @@ export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0
           </div>
         </div>
       </section>
+
+      {/* Admin panel — only for admins */}
+      {isAdmin && (
+        <button
+          className="profile-admin-card"
+          onClick={openAdmin}
+          id="profile-admin-card"
+          type="button"
+        >
+          <div className="profile-admin-leaf" aria-hidden="true">👑</div>
+          <div className="profile-admin-body">
+            <div className="profile-admin-eyebrow">ПАНЕЛЬ УПРАВЛЕНИЯ</div>
+            <div className="profile-admin-title">Админ-панель</div>
+            <div className="profile-admin-desc">
+              Заказы · товары · подборки · настройки
+            </div>
+          </div>
+          <div className="profile-admin-arrow" aria-hidden="true">→</div>
+        </button>
+      )}
 
       {/* Orders card — big CTA */}
       <button className="profile-orders-card" onClick={openOrders} id="profile-orders-card">
@@ -151,13 +194,13 @@ export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0
           ответит по телефону или в Telegram.
         </div>
         <a
-          href={`tel:${SUPPORT_PHONE_TEL}`}
+          href={`tel:${supportPhoneTel}`}
           className="contact-phone"
           onClick={callSupport}
           id="profile-contact-phone"
         >
           <span className="contact-phone-icon" aria-hidden="true">☎</span>
-          <span className="contact-phone-number">{SUPPORT_PHONE}</span>
+          <span className="contact-phone-number">{supportPhone}</span>
           <span className="contact-phone-arrow" aria-hidden="true">→</span>
         </a>
         <button
@@ -169,7 +212,7 @@ export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0
           Написать в Telegram · @{SUPPORT_TG}
         </button>
         <div className="contact-meta">
-          Ежедневно · 9:00 – 21:00 (Asia/Tashkent)
+          {supportHours}
         </div>
       </section>
 

@@ -76,3 +76,16 @@ export function fetchUser(telegramId) {
 export function updateUser(telegramId, data) {
   return request(`/users/${telegramId}`, { method: 'PUT', body: data });
 }
+
+// Public — collections & settings managed by the admin panel
+export function fetchPublicCollections() {
+  return request('/public/collections');
+}
+
+export function fetchPublicCollection(id) {
+  return request(`/public/collections/${id}`);
+}
+
+export function fetchPublicSettings() {
+  return request('/public/settings');
+}

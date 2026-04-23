@@ -3149,6 +3149,100 @@ ul, ol {
 }
 
 /* ==========================================================================
+   profile admin CTA (only visible to admins)
+   ========================================================================== */
+.profile-admin-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  margin: 14px 0 0;
+  background: linear-gradient(135deg, #C96F3E 0%, #A8562B 100%);
+  color: var(--paper-warm);
+  border-radius: var(--r-lg);
+  text-align: left;
+  position: relative;
+  transition: var(--t-fast);
+  box-shadow: 0 10px 24px rgba(168, 86, 43, 0.28);
+  overflow: hidden;
+}
+.profile-admin-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 85% 20%, rgba(242, 223, 181, 0.22), transparent 60%),
+    radial-gradient(ellipse 40% 50% at 10% 90%, rgba(14, 43, 31, 0.15), transparent 60%);
+  pointer-events: none;
+}
+.profile-admin-card:active {
+  transform: scale(0.99);
+  box-shadow: 0 4px 12px rgba(168, 86, 43, 0.2);
+}
+
+.profile-admin-leaf {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: var(--r-pill);
+  background: rgba(246, 241, 230, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  position: relative;
+  z-index: 1;
+}
+
+.profile-admin-body {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.profile-admin-eyebrow {
+  font-size: 0.58rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--butter);
+  margin-bottom: 4px;
+}
+
+.profile-admin-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.3rem;
+  letter-spacing: -0.015em;
+  line-height: 1.05;
+  font-variation-settings: 'opsz' 32, 'SOFT' 100;
+  margin-bottom: 4px;
+}
+
+.profile-admin-desc {
+  font-size: 0.78rem;
+  color: rgba(246, 241, 230, 0.82);
+  letter-spacing: 0.005em;
+}
+
+.profile-admin-arrow {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--r-pill);
+  background: rgba(14, 43, 31, 0.22);
+  color: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  position: relative;
+  z-index: 1;
+}
+
+/* ==========================================================================
    profile orders CTA card
    ========================================================================== */
 .profile-orders-card {
@@ -3439,3 +3533,85 @@ ul, ol {
   border-radius: var(--r-pill);
   border: 1px dashed var(--line);
 }
+
+/* ==========================================================================
+   collection overlay (tap a podborka on home → see its products)
+   ========================================================================== */
+.collection-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(14, 43, 31, 0.55);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 180ms var(--ease-out);
+}
+
+.collection-sheet {
+  background: var(--paper);
+  width: 100%;
+  max-width: 480px;
+  max-height: 92vh;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  overflow-y: auto;
+  padding: 18px 20px 40px;
+  position: relative;
+  animation: slideUp 220ms var(--ease-out);
+}
+
+.collection-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-pill);
+  background: var(--paper-soft);
+  color: var(--ink);
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.collection-hero {
+  padding: 32px 22px 22px;
+  border-radius: var(--r-lg);
+  background: linear-gradient(135deg, var(--sage-wash), var(--paper-soft));
+  margin-bottom: 10px;
+  position: relative;
+  overflow: hidden;
+}
+.collection-hero.terracotta { background: linear-gradient(135deg, var(--terracotta-wash), var(--butter)); }
+.collection-hero.ink { background: linear-gradient(135deg, var(--ink), #143a2a); color: var(--paper); }
+.collection-hero.sage { background: linear-gradient(135deg, var(--sage-wash), var(--paper-warm)); }
+.collection-hero.butter { background: linear-gradient(135deg, var(--butter), var(--paper-warm)); }
+
+.collection-eyebrow {
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--terracotta);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.collection-hero.ink .collection-eyebrow { color: var(--butter); }
+
+.collection-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.7rem;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin-bottom: 8px;
+  font-variation-settings: 'opsz' 48, 'SOFT' 100;
+}
+
+.collection-desc {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+.collection-hero.ink .collection-desc { color: rgba(246, 241, 230, 0.78); }

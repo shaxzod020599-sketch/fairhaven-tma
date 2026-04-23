@@ -13,6 +13,8 @@ import Cart from './pages/Cart';
 import Profile from './pages/Profile';
 import Orders from './pages/Orders';
 import OrderDetail from './pages/OrderDetail';
+import AdminApp from './admin/AdminApp';
+import './admin/admin.css';
 
 const AUTH = {
   LOADING: 'loading',
@@ -32,6 +34,7 @@ export default function App() {
   const [dbUser, setDbUser] = useState(null);
   const [authStatus, setAuthStatus] = useState(AUTH.LOADING);
   const [orders, setOrders] = useState([]);
+  const [adminMode, setAdminMode] = useState(false);
 
   useEffect(() => {
     initTelegram();
@@ -189,6 +192,10 @@ export default function App() {
     );
   }
 
+  if (adminMode && dbUser?.role === 'admin') {
+    return <AdminApp onExit={() => setAdminMode(false)} embedded />;
+  }
+
   const showChrome = CHROME_PAGES.has(page);
 
   const renderPage = () => {
@@ -236,6 +243,7 @@ export default function App() {
             ordersCount={orders.length}
             activeOrdersCount={activeOrders.length}
             onNavigate={handleNavigate}
+            onOpenAdmin={() => setAdminMode(true)}
           />
         );
       default:
