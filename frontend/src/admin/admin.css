@@ -673,10 +673,13 @@ body:has(.ap-shell.embedded) { padding-bottom: 0; }
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 300;
   padding: 24px;
   animation: fadeIn 180ms var(--ease-out);
 }
+/* When a modal is open, hide the bottom nav so the modal's sticky footer
+   buttons (Save / Cancel / Confirm) are never covered by the tab bar. */
+body:has(.ap-modal-backdrop) .ap-bottom-nav { display: none !important; }
 .ap-modal {
   background: var(--paper-warm);
   border-radius: var(--r-lg);
@@ -1048,16 +1051,41 @@ body:has(.ap-shell.embedded) { padding-bottom: 0; }
   .ap-modal-backdrop { padding: 0; align-items: flex-end; }
   .ap-modal {
     border-radius: var(--r-xl) var(--r-xl) 0 0;
-    max-height: 92vh;
+    max-height: min(92vh, 92svh);
     animation: slideUp 240ms var(--ease-out);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
-  .ap-modal-head { padding: 14px 16px; }
-  .ap-modal-body { padding: 14px 16px calc(80px + var(--safe-bottom)); }
+  /* Head + foot pinned; only body scrolls. Guarantees footer is always
+     visible no matter how long the form is. */
+  .ap-modal-head {
+    padding: 14px 16px;
+    position: sticky;
+    top: 0;
+    flex-shrink: 0;
+  }
+  .ap-modal-body {
+    padding: 14px 16px 20px;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
   .ap-modal-foot {
     padding: 10px 14px calc(10px + var(--safe-bottom));
     flex-wrap: wrap;
+    gap: 8px;
+    position: sticky;
+    bottom: 0;
+    flex-shrink: 0;
+    box-shadow: 0 -4px 12px rgba(14, 43, 31, 0.06);
   }
-  .ap-modal-foot .ap-btn { flex: 1; min-width: 0; }
+  .ap-modal-foot .ap-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+  }
+  .ap-modal-foot .ap-btn-ghost { flex-basis: 100px; }
   .ap-detail-grid { grid-template-columns: 1fr; }
   .ap-form-grid { grid-template-columns: 1fr; }
 }
