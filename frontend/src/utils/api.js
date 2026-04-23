@@ -27,6 +27,10 @@ export function fetchProducts(params = {}) {
   return request(`/products${query ? `?${query}` : ''}`);
 }
 
+export function fetchPopularProducts(limit = 3) {
+  return request(`/products/popular?limit=${limit}`);
+}
+
 export function fetchProductById(id) {
   return request(`/products/${id}`);
 }
@@ -38,6 +42,10 @@ export function fetchCategories() {
 // Orders
 export function createOrder(orderData) {
   return request('/orders', { method: 'POST', body: orderData });
+}
+
+export function fetchOrder(orderId) {
+  return request(`/orders/${orderId}`);
 }
 
 export function fetchOrders(params = {}) {

@@ -17,8 +17,8 @@ const T = {
   welcome: (name) =>
     `🌿 <b>Assalomu alaykum, ${name}!</b>\n` +
     `🌿 <b>Здравствуйте, ${name}!</b>\n\n` +
-    `<b>FairHaven</b> — O‘zbekistondagi rasmiy diler. Vitaminlar, BAQlar va sog‘liq mahsulotlarini yetkazib beramiz.\n` +
-    `<i>Официальный дилер FairHaven в Узбекистане. Витамины, добавки и средства для здоровья с доставкой.</i>\n\n` +
+    `<b>FairHaven Health</b> — O‘zbekistondagi rasmiy diler. Fertillik, homiladorlik va emizish uchun AQSh mahsulotlari.\n` +
+    `<i>Официальный дилер FairHaven Health в Узбекистане. Фертильность, беременность, лактация — оригинальная продукция из США.</i>\n\n` +
     `Do‘konga kirish uchun qisqa ro‘yxatdan o‘ting.\n` +
     `Чтобы открыть магазин — короткая регистрация.`,
 
@@ -80,18 +80,18 @@ const T = {
   female: '👩 Ayol / Женский',
 
   orderApproved: (shortId) =>
-    `✅ <b>Buyurtmangiz tasdiqlandi!</b>\n` +
-    `✅ <b>Ваш заказ подтверждён!</b>\n\n` +
-    `📋 #${shortId}\n\n` +
-    `Tez orada kuryerimiz siz bilan bog‘lanadi.\n` +
-    `Скоро курьер свяжется с вами для доставки. 🌿`,
+    `✅ <b>Ваш заказ принят!</b>\n\n` +
+    `📋 Номер заказа: <b>#${shortId}</b>\n\n` +
+    `Мы приняли ваш заказ и скоро доставим его вам. ` +
+    `Курьер свяжется с вами по указанному номеру телефона.\n\n` +
+    `Спасибо, что выбрали FairHaven Health. 🌿`,
 
   orderRejected: (shortId) =>
-    `❌ <b>Buyurtma bekor qilindi</b>\n` +
     `❌ <b>Заказ отменён</b>\n\n` +
-    `📋 #${shortId}\n\n` +
-    `Batafsil ma’lumot uchun qo‘llab-quvvatlash xizmatiga murojaat qiling.\n` +
-    `Для деталей обратитесь в поддержку.`,
+    `📋 Номер заказа: <b>#${shortId}</b>\n\n` +
+    `К сожалению, оператор не смог принять этот заказ. ` +
+    `Для уточнения деталей обратитесь в наш контакт-центр:\n` +
+    `📞 ${process.env.SUPPORT_PHONE || '+998 78 150 04 40'}`,
 };
 
 function cleanText(s) {
@@ -138,7 +138,7 @@ async function sendStep(ctx, user, frontendUrl) {
 
     case 'awaiting_consent':
       return ctx.replyWithHTML(
-        T.askConsent(frontendUrl || '', 'FairHaven'),
+        T.askConsent(frontendUrl || '', 'FairHaven Health'),
         {
           reply_markup: {
             inline_keyboard: [
@@ -197,7 +197,10 @@ function buildChannelKeyboard(orderId, status) {
 // Returns message_id on success, null on failure (non-fatal).
 // -----------------------------------------------------------------------------
 async function forwardOrderToChannel(bot, order) {
-  if (!ORDERS_CHANNEL_ID) return null;
+  if (!ORDERS_CHANNEL_ID) {
+    console.warn('[bot] ORDERS_CHANNEL_ID not set — skipping channel post');
+    return null;
+  }
   try {
     const text = formatOrderReceipt(order);
     const sent = await bot.telegram.sendMessage(ORDERS_CHANNEL_ID, text, {
@@ -205,9 +208,18 @@ async function forwardOrderToChannel(bot, order) {
       disable_web_page_preview: true,
       reply_markup: buildChannelKeyboard(order._id.toString(), 'pending'),
     });
+    console.log(`[bot] Order #${order._id.toString().slice(-6).toUpperCase()} → channel ${ORDERS_CHANNEL_ID}, msg ${sent.message_id}`);
     return sent.message_id;
   } catch (err) {
-    console.error('[bot] Failed to forward order to channel:', err.message);
+    // node-fetch/Telegraf error shapes vary. Log every bit we can get.
+    const details = [
+      err.message,
+      err.code,
+      err.cause?.code,
+      err.response?.description,
+      err.description,
+    ].filter(Boolean).join(' | ');
+    console.error('[bot] channel forward failed — channel=%s err=%s', ORDERS_CHANNEL_ID, details);
     return null;
   }
 }
@@ -258,7 +270,7 @@ function createBot(token, frontendUrl) {
   // ---------------------------------------------------------------------------
   bot.help((ctx) => {
     ctx.replyWithHTML(
-      `ℹ️ <b>FairHaven — yordam / помощь</b>\n\n` +
+      `ℹ️ <b>FairHaven Health — yordam / помощь</b>\n\n` +
       `🛒 /start — do‘konni ochish / открыть магазин\n` +
       `📦 /myorders — buyurtmalarim / мои заказы\n` +
       `📄 /oferta — ommaviy oferta / публичная оферта\n\n` +

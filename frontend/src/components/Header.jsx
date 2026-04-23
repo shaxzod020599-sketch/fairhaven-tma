@@ -6,8 +6,8 @@ export default function Header({ onOpenSearch, onOpenNotifications }) {
       <div className="brand">
         <div className="brand-mark" aria-hidden="true">Fh</div>
         <div className="brand-text">
-          <div className="brand-name">FairHaven</div>
-          <div className="brand-tag">Apothecary · Ташкент</div>
+          <div className="brand-name">FairHaven Health</div>
+          <div className="brand-tag">Officially in Uzbekistan</div>
         </div>
       </div>
 

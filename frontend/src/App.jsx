@@ -164,7 +164,7 @@ export default function App() {
   const renderPage = () => {
     switch (page) {
       case 'home':
-        return <Home onNavigate={handleNavigate} />;
+        return <Home onNavigate={handleNavigate} onAddToCart={addToCart} />;
       case 'catalog':
         return <Catalog onAddToCart={addToCart} />;
       case 'cart':

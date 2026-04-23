@@ -1,6 +1,6 @@
 /**
  * Публичная оферта / Ommaviy oferta
- * FairHaven — витамины и добавки
+ * FairHaven Health — витамины и добавки
  * Ташкент, Республика Узбекистан
  *
  * Based on:
@@ -10,7 +10,7 @@
  * - Закон «Об электронной коммерции» от 22.05.2015 № ЗРУ-385
  */
 
-const BRAND = 'FairHaven';
+const BRAND = 'FairHaven Health';
 const CITY = 'г. Ташкент';
 const SUPPORT_PHONE = '+998 (00) 000-00-00';
 const SUPPORT_EMAIL = 'support@fairhaven.uz';

@@ -1,5 +1,10 @@
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 
+// Some VPS hosts (e.g. this one) advertise IPv6 for api.telegram.org but
+// have no working IPv6 egress, which makes node-fetch hang until ETIMEDOUT.
+// Force IPv4 first for all outbound DNS lookups in this process.
+require('dns').setDefaultResultOrder('ipv4first');
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');

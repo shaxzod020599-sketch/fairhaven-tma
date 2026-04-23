@@ -1,5 +1,18 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatPrice, getProductIcon } from '../utils/helpers';
+import {
+  showMainButton,
+  hideMainButton,
+  hapticFeedback,
+  hapticNotification,
+  getTelegramUser,
+} from '../utils/telegram';
+import { createOrder, fetchOrder } from '../utils/api';
+import YandexMapCheckout from '../components/YandexMapCheckout';
+
+const DELIVERY_THRESHOLD = 500000;
+const DELIVERY_FEE = 25000;
+const STATUS_POLL_MS = 3000;
 
 function CartThumb({ src, alt, category }) {
   const [errored, setErrored] = useState(false);
@@ -9,25 +22,12 @@ function CartThumb({ src, alt, category }) {
   return <img src={src} alt={alt} onError={() => setErrored(true)} />;
 }
 
-import {
-  showMainButton,
-  hideMainButton,
-  hapticFeedback,
-  hapticNotification,
-  getTelegramUser,
-} from '../utils/telegram';
-import { createOrder } from '../utils/api';
-import YandexMapCheckout from '../components/YandexMapCheckout';
-
-const DELIVERY_THRESHOLD = 500000;
-const DELIVERY_FEE = 25000;
-
 /**
  * Steps
  *   'cart'    — items + promo + summary + "choose address"
  *   'map'     — Yandex map → pick address
  *   'review'  — editable phone, payment method, comment, final confirm
- *   'success' — waiting for channel approval
+ *   'success' — live status tracking: pending → confirmed / cancelled
  */
 export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate, dbUser }) {
   const [step, setStep] = useState('cart');
@@ -37,9 +37,13 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(null); // { orderId }
+  const [submitted, setSubmitted] = useState(null); // { orderFullId, shortId, status }
   const [promo, setPromo] = useState('');
   const [promoApplied, setPromoApplied] = useState(null);
+
+  // Ref-level submit guard — protects against double-tap races where the
+  // `submitting` state update hasn't flushed before the second click reads it.
+  const submittingRef = useRef(false);
 
   const items = Object.values(cart);
 
@@ -57,6 +61,12 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
   const deliveryFee = isFreeDelivery || subtotal === 0 ? 0 : DELIVERY_FEE;
   const total = Math.max(0, subtotal - discount + deliveryFee);
 
+  const goToMap = useCallback(() => {
+    if (items.length === 0) return;
+    hapticFeedback('medium');
+    setStep('map');
+  }, [items.length]);
+
   // Main button
   useEffect(() => {
     if (step === 'cart' && items.length > 0) {
@@ -69,12 +79,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
     return () => hideMainButton();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, total, items.length, phone, paymentMethod, address, comment]);
-
-  const goToMap = useCallback(() => {
-    if (items.length === 0) return;
-    hapticFeedback('medium');
-    setStep('map');
-  }, [items.length]);
 
   const handleMapConfirm = useCallback((loc) => {
     setAddress(loc);
@@ -108,13 +112,17 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
     return digits.length >= 9 && digits.length <= 15;
   }, [phone]);
 
-  const canSubmit = items.length > 0 && !!address && isPhoneValid && !submitting;
+  const canSubmit =
+    items.length > 0 && !!address && isPhoneValid && !submitting;
 
   async function handleSubmit() {
+    // Guard against rapid double-tap — ref flips synchronously.
+    if (submittingRef.current) return;
     if (!canSubmit) {
       hapticNotification('error');
       return;
     }
+    submittingRef.current = true;
     setSubmitting(true);
     hapticFeedback('medium');
     try {
@@ -133,7 +141,9 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
           lng: address.lng,
           addressString: address.address || address.addressString || '',
         },
-        customerName: name || [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' '),
+        customerName:
+          name ||
+          [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' '),
         customerPhone: phone,
         paymentMethod,
         notes: comment,
@@ -141,7 +151,11 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
       const res = await createOrder(payload);
       if (!res?.success) throw new Error(res?.error || 'Ошибка заказа');
       hapticNotification('success');
-      setSubmitted({ orderId: res.data._id.slice(-6).toUpperCase() });
+      setSubmitted({
+        orderFullId: res.data._id,
+        shortId: res.data._id.slice(-6).toUpperCase(),
+        status: res.data.status || 'pending',
+      });
       setStep('success');
       onClear?.();
     } catch (err) {
@@ -149,6 +163,7 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
       hapticNotification('error');
       alert('Не удалось отправить заказ: ' + err.message);
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -163,40 +178,24 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
     );
   }
 
-  // ─── SUCCESS STEP ──────────────────────────────────────────────────────────
+  // ─── SUCCESS STEP (with live status polling) ───────────────────────────────
   if (step === 'success') {
     return (
-      <div className="page" id="page-cart">
-        <div className="order-success" role="status">
-          <div className="order-success-art" aria-hidden="true">✓</div>
-          <h2>Заказ отправлен!</h2>
-          <div className="order-success-id">
-            <span>Номер заказа</span>
-            <strong>#{submitted?.orderId}</strong>
-          </div>
-          <p>
-            Мы передали заказ в FairHaven. Как только оператор подтвердит его,
-            вы получите сообщение в Telegram — обычно это занимает до 15 минут
-            в рабочее время.
-          </p>
-          <button
-            className="checkout-btn"
-            onClick={() => {
-              setStep('cart');
-              setSubmitted(null);
-              setAddress(null);
-              setComment('');
-              setPromoApplied(null);
-              setPromo('');
-              onNavigate?.('home');
-            }}
-            id="order-success-done"
-          >
-            На главную
-            <span className="arrow" aria-hidden="true">→</span>
-          </button>
-        </div>
-      </div>
+      <SuccessScreen
+        order={submitted}
+        onUpdateStatus={(status) =>
+          setSubmitted((s) => (s ? { ...s, status } : s))
+        }
+        onReturnHome={() => {
+          setStep('cart');
+          setSubmitted(null);
+          setAddress(null);
+          setComment('');
+          setPromoApplied(null);
+          setPromo('');
+          onNavigate?.('home');
+        }}
+      />
     );
   }
 
@@ -219,7 +218,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
         </div>
         <p className="page-subtitle">Проверьте детали перед отправкой</p>
 
-        {/* Delivery address */}
         <div className="review-block">
           <div className="review-block-head">
             <span className="review-block-eyebrow">📍 Адрес доставки</span>
@@ -236,7 +234,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
           </div>
         </div>
 
-        {/* Contact */}
         <div className="review-block">
           <div className="review-block-head">
             <span className="review-block-eyebrow">👤 Получатель</span>
@@ -267,7 +264,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
           </label>
         </div>
 
-        {/* Payment */}
         <div className="review-block">
           <div className="review-block-head">
             <span className="review-block-eyebrow">💳 Способ оплаты</span>
@@ -302,7 +298,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
           </div>
         </div>
 
-        {/* Comment */}
         <div className="review-block">
           <div className="review-block-head">
             <span className="review-block-eyebrow">📝 Комментарий курьеру</span>
@@ -318,7 +313,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
           />
         </div>
 
-        {/* Items summary */}
         <div className="review-block">
           <div className="review-block-head">
             <span className="review-block-eyebrow">
@@ -339,7 +333,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
           </div>
         </div>
 
-        {/* Totals */}
         <div className="cart-summary">
           <div className="cart-summary-row">
             <span>Подытог</span>
@@ -391,7 +384,7 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
         <div className="cart-empty">
           <div className="empty-art" aria-hidden="true">🧺</div>
           <h3>Пока пусто</h3>
-          <p>Выберите продукты из каталога FairHaven — доставим в течение 2 часов по Ташкенту.</p>
+          <p>Выберите продукты из каталога FairHaven Health — доставим в течение 2 часов по Ташкенту.</p>
           <button
             className="ghost-btn"
             id="cart-empty-cta"
@@ -419,7 +412,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
         </span>
       </div>
 
-      {/* Delivery progress */}
       {!isFreeDelivery && (
         <div
           style={{
@@ -460,7 +452,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
         </div>
       )}
 
-      {/* Items */}
       <div className="cart-items">
         {items.map((item) => (
           <div className="cart-item" key={item._id} id={`cart-item-${item._id}`}>
@@ -497,7 +488,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
         ))}
       </div>
 
-      {/* Promo */}
       <div className="promo-input-row">
         <input
           type="text"
@@ -521,7 +511,6 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
         </div>
       )}
 
-      {/* Summary */}
       <div className="cart-summary">
         <div className="cart-summary-row">
           <span>Подытог</span>
@@ -552,6 +541,116 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
         Выбрать адрес и оформить
         <span className="arrow" aria-hidden="true">→</span>
       </button>
+    </div>
+  );
+}
+
+// =============================================================================
+// Success screen — tracks the order until the operator confirms or rejects it.
+// =============================================================================
+function SuccessScreen({ order, onUpdateStatus, onReturnHome }) {
+  const status = order?.status || 'pending';
+  const shortId = order?.shortId || '—';
+  const orderFullId = order?.orderFullId;
+  const stoppedRef = useRef(false);
+
+  // Poll for status updates every 3s until confirmed/cancelled.
+  useEffect(() => {
+    if (!orderFullId) return;
+    if (status === 'confirmed' || status === 'cancelled') return;
+
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled || stoppedRef.current) return;
+      try {
+        const res = await fetchOrder(orderFullId);
+        const next = res?.data?.status;
+        if (next && next !== status) {
+          if (next === 'confirmed') hapticNotification('success');
+          if (next === 'cancelled') hapticNotification('error');
+          onUpdateStatus(next);
+          if (next === 'confirmed' || next === 'cancelled') {
+            stoppedRef.current = true;
+            return;
+          }
+        }
+      } catch (_) {
+        /* transient error — keep polling */
+      }
+    };
+    const id = setInterval(tick, STATUS_POLL_MS);
+    tick(); // immediate first probe
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [orderFullId, status, onUpdateStatus]);
+
+  const ui = {
+    pending: {
+      tone: 'pending',
+      art: '⏳',
+      title: 'Заказ отправлен',
+      kicker: 'В обработке',
+      message:
+        'Оператор FairHaven Health получил ваш заказ и проверяет детали. Обычно это занимает до 15 минут в рабочее время. Когда заказ будет подтверждён, вы увидите это здесь и получите сообщение от бота.',
+    },
+    confirmed: {
+      tone: 'confirmed',
+      art: '✓',
+      title: 'Заказ подтверждён',
+      kicker: 'Принят в работу',
+      message:
+        'Ваш заказ принят! Мы доставим его в ближайшее время. Курьер свяжется с вами по указанному номеру.',
+    },
+    cancelled: {
+      tone: 'cancelled',
+      art: '×',
+      title: 'Заказ отклонён',
+      kicker: 'Не принят',
+      message:
+        'К сожалению, оператор не смог принять этот заказ. Свяжитесь с контакт-центром — мы поможем разобраться.',
+    },
+  }[status] || null;
+
+  if (!ui) return null;
+
+  return (
+    <div className="page" id="page-cart">
+      <div className={`order-status order-status-${ui.tone}`} role="status" aria-live="polite">
+        <div className="order-status-art" aria-hidden="true">
+          {status === 'pending' ? (
+            <span className="order-status-spinner">{ui.art}</span>
+          ) : (
+            ui.art
+          )}
+        </div>
+        <div className="order-status-kicker">{ui.kicker}</div>
+        <h2 className="order-status-title">{ui.title}</h2>
+
+        <div className="order-success-id">
+          <span>Номер заказа</span>
+          <strong>#{shortId}</strong>
+        </div>
+
+        <p className="order-status-msg">{ui.message}</p>
+
+        {status === 'pending' && (
+          <div className="order-status-live">
+            <span className="order-status-live-dot" />
+            Живое обновление · проверяем статус каждые 3 секунды
+          </div>
+        )}
+
+        <button
+          className="checkout-btn"
+          onClick={onReturnHome}
+          id="order-success-done"
+        >
+          На главную
+          <span className="arrow" aria-hidden="true">→</span>
+        </button>
+      </div>
     </div>
   );
 }

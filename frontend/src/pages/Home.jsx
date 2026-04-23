@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { hapticFeedback } from '../utils/telegram';
+import { fetchPopularProducts } from '../utils/api';
+import ProductCard from '../components/ProductCard';
+import ProductDetail from '../components/ProductDetail';
 
 const SUPPORT_PHONE = '+998 78 150 04 40';
 const SUPPORT_PHONE_TEL = '+998781500440';
@@ -49,7 +52,26 @@ const TRUST = [
   },
 ];
 
-export default function Home({ onNavigate }) {
+export default function Home({ onNavigate, onAddToCart }) {
+  const [popular, setPopular] = useState([]);
+  const [popularLoading, setPopularLoading] = useState(true);
+  const [detailProduct, setDetailProduct] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchPopularProducts(3)
+      .then((res) => {
+        if (mounted) setPopular(res?.data || []);
+      })
+      .catch(() => {
+        if (mounted) setPopular([]);
+      })
+      .finally(() => {
+        if (mounted) setPopularLoading(false);
+      });
+    return () => { mounted = false; };
+  }, []);
+
   const go = (target, data) => {
     hapticFeedback('light');
     onNavigate(target, data);
@@ -94,6 +116,49 @@ export default function Home({ onNavigate }) {
           </div>
         </div>
       </section>
+
+      {/* Популярные — top-3 most ordered */}
+      <div className="section-title" style={{ marginBottom: 10 }}>
+        Популярные
+        <button
+          className="link-see-all"
+          onClick={() => go('catalog')}
+          id="popular-see-all"
+        >
+          Все →
+        </button>
+      </div>
+      {popularLoading ? (
+        <div className="popular-rail-skeleton" aria-hidden="true">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="skeleton-card">
+              <div className="skeleton-media" />
+              <div className="skeleton-line short" />
+              <div className="skeleton-line long" />
+              <div className="skeleton-line mid" />
+            </div>
+          ))}
+        </div>
+      ) : popular.length === 0 ? (
+        <div className="popular-empty">
+          Скоро здесь появятся лидеры продаж FairHaven Health.
+        </div>
+      ) : (
+        <div className="popular-grid">
+          {popular.map((product, idx) => (
+            <div className="popular-card-wrap" key={product._id}>
+              <div className="popular-rank" aria-hidden="true">
+                {idx + 1}
+              </div>
+              <ProductCard
+                product={product}
+                onAdd={onAddToCart}
+                onOpen={setDetailProduct}
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Featured collections */}
       <div className="section-title" style={{ marginBottom: 8 }}>
@@ -140,7 +205,7 @@ export default function Home({ onNavigate }) {
         ))}
       </div>
 
-      {/* Contact Centre — big primary block at the bottom of Home */}
+      {/* Contact Centre */}
       <section className="contact-centre" id="home-contact-centre" aria-label="Контакт-центр">
         <div className="contact-leaf" aria-hidden="true">🌿</div>
         <div className="contact-eyebrow">24/7 · КОНТАКТ-ЦЕНТР</div>
@@ -148,7 +213,7 @@ export default function Home({ onNavigate }) {
           Нужна <em>консультация?</em>
         </div>
         <div className="contact-desc">
-          Наш специалист поможет подобрать продукт под ваш запрос,
+          Специалист FairHaven Health поможет подобрать продукт под ваш запрос,
           ответит на вопросы о приёме и доставке.
         </div>
         <a
@@ -167,6 +232,14 @@ export default function Home({ onNavigate }) {
       </section>
 
       <div style={{ height: 24 }} />
+
+      {detailProduct && (
+        <ProductDetail
+          product={detailProduct}
+          onClose={() => setDetailProduct(null)}
+          onAdd={onAddToCart}
+        />
+      )}
     </div>
   );
 }

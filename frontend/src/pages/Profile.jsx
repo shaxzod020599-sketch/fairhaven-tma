@@ -64,7 +64,7 @@ export default function Profile({ dbUser }) {
           </div>
           <div className="profile-text">
             <div className="profile-eyebrow">
-              {registered ? 'Клиент FairHaven' : 'Гость · зарегистрируйтесь в боте'}
+              {registered ? 'Клиент FairHaven Health' : 'Гость · зарегистрируйтесь в боте'}
             </div>
             <div className="profile-name">{fullName}</div>
             {username && <div className="profile-handle">@{username}</div>}

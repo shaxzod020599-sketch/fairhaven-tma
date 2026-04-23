@@ -2543,6 +2543,197 @@ ul, ol {
 }
 
 /* ==========================================================================
+   popular rail — 3 most-ordered on home page
+   ========================================================================== */
+.popular-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  row-gap: 18px;
+  margin-bottom: 24px;
+}
+.popular-grid .popular-card-wrap:first-child {
+  grid-column: span 2;
+}
+
+.popular-card-wrap {
+  position: relative;
+  animation: slideUp 420ms var(--ease-out) both;
+}
+.popular-card-wrap:nth-child(2) { animation-delay: 60ms; }
+.popular-card-wrap:nth-child(3) { animation-delay: 120ms; }
+
+.popular-rank {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  background: var(--ink);
+  color: var(--butter);
+  border-radius: var(--r-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(14, 43, 31, 0.22);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.popular-card-wrap:first-child .popular-rank {
+  background: var(--terracotta);
+  color: var(--paper);
+}
+.popular-card-wrap:first-child .popular-rank::before {
+  content: '🔥 ';
+  font-size: 0.7rem;
+  margin-right: 2px;
+}
+
+.popular-rail-skeleton {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  row-gap: 18px;
+  margin-bottom: 24px;
+}
+.popular-rail-skeleton .skeleton-card:first-child {
+  grid-column: span 2;
+}
+
+.popular-empty {
+  padding: 18px 16px;
+  background: var(--paper-warm);
+  border: 1px dashed var(--line);
+  border-radius: var(--r-md);
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+/* ==========================================================================
+   order status screen — live polling after checkout
+   ========================================================================== */
+.order-status {
+  text-align: center;
+  padding: 52px 20px 30px;
+  animation: slideUp 380ms var(--ease-out);
+  position: relative;
+}
+
+.order-status-art {
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 22px;
+  border-radius: var(--r-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.6rem;
+  font-weight: 700;
+  animation: scaleIn 420ms var(--ease-spring);
+  position: relative;
+}
+
+.order-status-pending .order-status-art {
+  background: var(--butter);
+  color: var(--ink);
+  box-shadow:
+    inset 0 0 0 8px rgba(242, 223, 181, 0.5),
+    0 12px 28px rgba(242, 223, 181, 0.45);
+}
+.order-status-pending .order-status-art::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border: 2px dashed var(--clay);
+  border-radius: var(--r-pill);
+  opacity: 0.55;
+  animation: spin 7s linear infinite;
+  pointer-events: none;
+}
+.order-status-pending .order-status-spinner {
+  display: inline-block;
+  animation: drift 2.6s ease-in-out infinite;
+}
+
+.order-status-confirmed .order-status-art {
+  background: var(--sage-wash);
+  color: var(--sage);
+  box-shadow:
+    inset 0 0 0 8px rgba(111, 138, 106, 0.18),
+    0 12px 28px rgba(111, 138, 106, 0.26);
+}
+.order-status-cancelled .order-status-art {
+  background: rgba(155, 44, 54, 0.12);
+  color: var(--ruby);
+  box-shadow:
+    inset 0 0 0 8px rgba(155, 44, 54, 0.12),
+    0 12px 28px rgba(155, 44, 54, 0.2);
+}
+
+.order-status-kicker {
+  font-size: 0.64rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-faint);
+  margin-bottom: 8px;
+}
+.order-status-pending .order-status-kicker { color: var(--terracotta); }
+.order-status-confirmed .order-status-kicker { color: var(--sage); }
+.order-status-cancelled .order-status-kicker { color: var(--ruby); }
+
+.order-status-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.95rem;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin-bottom: 14px;
+  font-variation-settings: 'opsz' 48, 'SOFT' 100;
+}
+
+.order-status-msg {
+  max-width: 94%;
+  margin: 0 auto 20px;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.order-status-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--paper-warm);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  letter-spacing: 0.005em;
+  margin-bottom: 22px;
+}
+.order-status-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--sage);
+  box-shadow: 0 0 0 0 rgba(111, 138, 106, 0.55);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(111, 138, 106, 0.55); }
+  50%      { box-shadow: 0 0 0 6px rgba(111, 138, 106, 0); }
+}
+
+/* ==========================================================================
    registration gate — full-screen blocker until bot registration is done
    ========================================================================== */
 .gate-overlay {
