@@ -729,7 +729,23 @@ ul, ol {
   z-index: 2;
 }
 .product-badge.new { background: var(--sage); }
-.product-badge.sale { background: var(--terracotta); }
+.product-badge.sale {
+  background: linear-gradient(135deg, #C96F3E 0%, #9B2C36 100%);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 800;
+  padding: 6px 12px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  box-shadow: 0 4px 14px rgba(155, 44, 54, 0.35), 0 1px 2px rgba(0, 0, 0, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  animation: salePulse 2.6s var(--ease-out) infinite;
+  font-variation-settings: 'opsz' 14;
+}
+@keyframes salePulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.06); }
+}
 
 .product-fav {
   position: absolute;
@@ -3771,39 +3787,8 @@ ul, ol {
 }
 
 /* ==========================================================================
-   discount strike-through pricing
+   cart promo summary rows
    ========================================================================== */
-.product-price-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.product-price-old {
-  font-family: var(--font-body);
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--ink-faint);
-  text-decoration: line-through;
-  text-decoration-thickness: 1.5px;
-}
-.product-price-new {
-  font-family: var(--font-display);
-  font-weight: 600;
-  color: var(--terracotta);
-}
-.product-discount-badge {
-  display: inline-flex;
-  align-items: center;
-  background: var(--terracotta);
-  color: var(--paper);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  padding: 2px 7px;
-  border-radius: var(--r-pill);
-  text-transform: uppercase;
-}
 .cart-summary-row.discount-row {
   color: var(--terracotta);
   font-weight: 600;
@@ -3832,47 +3817,68 @@ ul, ol {
 /* ==========================================================================
    product-level discount (oldPrice → price)
    ========================================================================== */
+.product-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.product-price-old {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #9B2C36;
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: rgba(155, 44, 54, 0.7);
+  opacity: 0.85;
+}
 .product-price.product-price-new {
-  color: var(--terracotta);
+  color: #C96F3E;
+  font-weight: 700;
+  font-size: 1.1rem;
 }
 
 .sheet-discount-badge {
   display: inline-block;
-  margin-left: 8px;
-  background: var(--terracotta);
-  color: var(--paper);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 2px 8px;
+  margin-left: 10px;
+  background: linear-gradient(135deg, #C96F3E 0%, #9B2C36 100%);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 4px 12px;
   border-radius: var(--r-pill);
   vertical-align: middle;
+  box-shadow: 0 3px 10px rgba(155, 44, 54, 0.35);
 }
 .sheet-price-value.discounted {
-  color: var(--terracotta);
+  color: #C96F3E;
 }
 .sheet-price-old {
-  margin-top: 6px;
+  margin-top: 8px;
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
 .sheet-price-old .strike {
-  font-size: 0.95rem;
-  color: var(--ink-faint);
+  font-size: 1.05rem;
+  color: #9B2C36;
   text-decoration: line-through;
-  text-decoration-thickness: 1.5px;
-  font-weight: 500;
+  text-decoration-thickness: 2px;
+  text-decoration-color: rgba(155, 44, 54, 0.75);
+  font-weight: 600;
 }
 .sheet-price-old .save {
-  font-size: 0.7rem;
-  color: var(--sage);
-  font-weight: 600;
+  font-size: 0.75rem;
+  color: #2F4A2A;
+  font-weight: 700;
   letter-spacing: 0.04em;
   background: var(--sage-wash);
-  padding: 3px 9px;
+  padding: 4px 10px;
   border-radius: var(--r-pill);
+  border: 1px solid rgba(111, 138, 106, 0.4);
 }
 
 .cart-item-price-row {
@@ -3882,22 +3888,24 @@ ul, ol {
   flex-wrap: wrap;
 }
 .cart-item-price.discounted {
-  color: var(--terracotta);
-  font-weight: 600;
+  color: #C96F3E;
+  font-weight: 700;
 }
 .cart-item-price-old {
-  font-size: 0.75rem;
-  color: var(--ink-faint);
+  font-size: 0.78rem;
+  color: #9B2C36;
   text-decoration: line-through;
-  text-decoration-thickness: 1.4px;
+  text-decoration-thickness: 1.6px;
+  font-weight: 500;
 }
 .cart-item-discount-badge {
   display: inline-block;
-  background: var(--terracotta);
-  color: var(--paper);
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  padding: 2px 6px;
+  background: linear-gradient(135deg, #C96F3E 0%, #9B2C36 100%);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 3px 9px;
   border-radius: var(--r-pill);
+  box-shadow: 0 2px 6px rgba(155, 44, 54, 0.3);
 }
