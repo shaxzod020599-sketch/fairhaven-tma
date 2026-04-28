@@ -12,9 +12,9 @@ async function request(endpoint, options = {}) {
   }
 
   const response = await fetch(url, config);
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
 
-  if (!response.ok) {
+  if (!response.ok && options.allowError !== true) {
     throw new Error(data.error || 'Request failed');
   }
 
@@ -61,6 +61,14 @@ export function cancelOrder(orderId, telegramId) {
   return request(`/orders/${orderId}/cancel`, {
     method: 'POST',
     body: { telegramId },
+  });
+}
+
+export function validatePromo({ code, subtotal, telegramId }) {
+  return request('/orders/validate-promo', {
+    method: 'POST',
+    body: { code, subtotal, telegramId },
+    allowError: true,
   });
 }
 

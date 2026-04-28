@@ -27,7 +27,7 @@ function Skeleton() {
   );
 }
 
-export default function Catalog({ onAddToCart }) {
+export default function Catalog({ onAddToCart, dbUser }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -229,6 +229,7 @@ export default function Catalog({ onAddToCart }) {
           product={detailProduct}
           onClose={() => setDetailProduct(null)}
           onAdd={onAddToCart}
+          dbUser={dbUser}
         />
       )}
     </div>

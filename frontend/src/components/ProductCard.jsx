@@ -1,21 +1,8 @@
 import React, { useState } from 'react';
-import { formatPrice, getProductIcon } from '../utils/helpers';
+import { getProductIcon } from '../utils/helpers';
 import { hapticFeedback } from '../utils/telegram';
-
-function Thumb({ src, alt, category }) {
-  const [errored, setErrored] = useState(false);
-  if (!src || errored) {
-    return <span aria-hidden="true">{getProductIcon(category)}</span>;
-  }
-  return (
-    <img
-      src={src}
-      alt={alt}
-      loading="lazy"
-      onError={() => setErrored(true)}
-    />
-  );
-}
+import SmartImage from './SmartImage';
+import { primaryImage } from '../utils/productImages';
 
 function splitPrice(price) {
   if (price === null || price === undefined) return { value: '0', unit: 'UZS' };
@@ -23,10 +10,14 @@ function splitPrice(price) {
   return { value: formatted, unit: 'UZS' };
 }
 
-export default function ProductCard({ product, onAdd, onOpen, favorite, onToggleFav }) {
+export default function ProductCard({ product, onAdd, onOpen, favorite, onToggleFav, promoPreview }) {
   const [fav, setFav] = useState(Boolean(favorite));
   const isAvailable = product.isAvailable !== false;
   const { value, unit } = splitPrice(product.price);
+
+  const discountedPrice = promoPreview?.discountedUnitPrice;
+  const hasDiscount = discountedPrice && discountedPrice < product.price;
+  const newSplit = hasDiscount ? splitPrice(discountedPrice) : null;
 
   const handleAdd = (e) => {
     e.stopPropagation();
@@ -48,11 +39,15 @@ export default function ProductCard({ product, onAdd, onOpen, favorite, onToggle
     onToggleFav?.(product);
   };
 
-  const badge = product.isNew
+  const badge = hasDiscount && promoPreview?.percent
+    ? { cls: 'sale', label: `−${promoPreview.percent}%` }
+    : product.isNew
     ? { cls: 'new', label: 'Новинка' }
     : product.discount
     ? { cls: 'sale', label: `−${product.discount}%` }
     : null;
+
+  const image = primaryImage(product);
 
   return (
     <div
@@ -81,7 +76,11 @@ export default function ProductCard({ product, onAdd, onOpen, favorite, onToggle
           </svg>
         </button>
 
-        <Thumb src={product.imageUrl} alt={product.name} category={product.category} />
+        <SmartImage
+          src={image}
+          alt={product.name}
+          fallback={getProductIcon(product.category)}
+        />
 
         {isAvailable && (
           <button
@@ -101,9 +100,21 @@ export default function ProductCard({ product, onAdd, onOpen, favorite, onToggle
         {product.brand && <div className="product-brand">{product.brand}</div>}
         <div className="product-name">{product.name}</div>
         <div className="product-meta">
-          <div className="product-price">
-            {value}
-            <span className="unit">{unit}</span>
+          <div className="product-price-row">
+            {hasDiscount ? (
+              <>
+                <span className="product-price-old">{value} {unit}</span>
+                <span className="product-price product-price-new">
+                  {newSplit.value}
+                  <span className="unit">{unit}</span>
+                </span>
+              </>
+            ) : (
+              <div className="product-price">
+                {value}
+                <span className="unit">{unit}</span>
+              </div>
+            )}
           </div>
           {product.rating && (
             <div className="product-rating">

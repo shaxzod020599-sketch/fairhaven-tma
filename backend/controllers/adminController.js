@@ -3,6 +3,7 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Collection = require('../models/Collection');
 const Setting = require('../models/Setting');
+const PromoCode = require('../models/PromoCode');
 const { resolveAdmin } = require('../middleware/adminAuth');
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -196,6 +197,14 @@ exports.listProducts = async (req, res) => {
 exports.createProduct = async (req, res) => {
   try {
     const p = await Product.create(sanitizeProductBody(req.body));
+
+    const bot = req.app.locals.bot;
+    if (bot && typeof bot.broadcastNewProduct === 'function' && p.isAvailable) {
+      bot.broadcastNewProduct(p).catch((err) =>
+        console.warn('[product.create] broadcast failed:', err.message)
+      );
+    }
+
     res.status(201).json({ success: true, data: p });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
@@ -245,12 +254,16 @@ exports.toggleProductAvailability = async (req, res) => {
 function sanitizeProductBody(b = {}) {
   const out = {};
   const fields = [
-    'name', 'nameUz', 'price', 'category', 'imageUrl',
-    'description', 'descriptionUz', 'isAvailable', 'brand', 'sku', 'tags',
+    'name', 'nameUz', 'price', 'category', 'imageUrl', 'images',
+    'description', 'descriptionUz', 'descriptionUzLat',
+    'isAvailable', 'brand', 'sku', 'tags',
   ];
   for (const f of fields) if (b[f] !== undefined) out[f] = b[f];
   if (typeof out.tags === 'string') out.tags = out.tags.split(',').map((s) => s.trim()).filter(Boolean);
   if (out.price !== undefined) out.price = Number(out.price);
+  if (Array.isArray(out.images)) {
+    out.images = out.images.map((s) => String(s || '').trim()).filter(Boolean);
+  }
   return out;
 }
 
@@ -480,6 +493,97 @@ async function tryRevertChannelCard(bot, order) {
       );
     } catch (_) {}
   }
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Promo codes — full CRUD
+// ───────────────────────────────────────────────────────────────────────────
+exports.listPromos = async (_req, res) => {
+  try {
+    const items = await PromoCode.find({}).sort({ createdAt: -1 });
+    const augmented = items.map((p) => ({
+      ...p.toObject(),
+      currentlyActive: p.isCurrentlyActive(),
+    }));
+    res.json({ success: true, data: augmented });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+exports.createPromo = async (req, res) => {
+  try {
+    const body = sanitizePromoBody(req.body);
+    if (!body.code) return res.status(400).json({ success: false, error: 'code_required' });
+    if (!body.discountValue) return res.status(400).json({ success: false, error: 'discount_required' });
+    const existing = await PromoCode.findOne({ code: body.code });
+    if (existing) {
+      return res.status(409).json({ success: false, error: 'duplicate_code', message: 'Промокод с таким кодом уже существует' });
+    }
+    const p = await PromoCode.create(body);
+    res.status(201).json({ success: true, data: p });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+};
+
+exports.updatePromo = async (req, res) => {
+  try {
+    const body = sanitizePromoBody(req.body);
+    const p = await PromoCode.findByIdAndUpdate(
+      req.params.id,
+      body,
+      { new: true, runValidators: true }
+    );
+    if (!p) return res.status(404).json({ success: false, error: 'not_found' });
+    res.json({ success: true, data: p });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+};
+
+exports.deletePromo = async (req, res) => {
+  try {
+    const p = await PromoCode.findByIdAndDelete(req.params.id);
+    if (!p) return res.status(404).json({ success: false, error: 'not_found' });
+    res.json({ success: true, message: 'Удалено' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+exports.togglePromo = async (req, res) => {
+  try {
+    const p = await PromoCode.findById(req.params.id);
+    if (!p) return res.status(404).json({ success: false, error: 'not_found' });
+    p.isActive = !p.isActive;
+    await p.save();
+    res.json({ success: true, data: p });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+};
+
+function sanitizePromoBody(b = {}) {
+  const out = {};
+  const fields = [
+    'code', 'description', 'discountType', 'discountValue',
+    'minOrderAmount', 'maxDiscount', 'firstOrderOnly', 'oncePerUser',
+    'maxUses', 'isActive', 'startsAt', 'expiresAt',
+  ];
+  for (const f of fields) if (b[f] !== undefined) out[f] = b[f];
+  if (out.code) out.code = String(out.code).trim().toUpperCase();
+  ['discountValue', 'minOrderAmount', 'maxDiscount', 'maxUses'].forEach((k) => {
+    if (out[k] !== undefined) out[k] = Number(out[k]) || 0;
+  });
+  ['firstOrderOnly', 'oncePerUser', 'isActive'].forEach((k) => {
+    if (out[k] !== undefined) out[k] = !!out[k];
+  });
+  ['startsAt', 'expiresAt'].forEach((k) => {
+    if (out[k] === '' || out[k] === null) out[k] = null;
+    else if (out[k] !== undefined) out[k] = new Date(out[k]);
+  });
+  return out;
 }
 
 async function tryNotifyCustomer(bot, order, status) {

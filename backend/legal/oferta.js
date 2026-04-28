@@ -105,7 +105,7 @@ const ofertaRu = `
   <p>Цены на Товары указаны в национальной валюте Республики Узбекистан (UZS) и включают все налоги, предусмотренные законодательством. Способы оплаты: (1) наличными курьеру при получении; (2) банковской картой (в том числе Uzcard/Humo) при получении или через интеграционный платёжный сервис.</p>
 
   <h2>6. Доставка</h2>
-  <p>Доставка осуществляется по ${CITY} и пригородам силами Продавца или привлечённой курьерской службы в согласованный с Пользователем интервал времени. Стоимость и сроки доставки указываются в Мини-приложении при оформлении заказа.</p>
+  <p>Доставка осуществляется по всей территории Республики Узбекистан силами Продавца или привлечённой курьерской службы в согласованный с Пользователем интервал времени. Стоимость и сроки доставки указываются в Мини-приложении при оформлении заказа.</p>
 
   <h2>7. Возврат и обмен товара</h2>
   <p>Согласно Закону РУз «О защите прав потребителей»:</p>
@@ -185,7 +185,7 @@ const ofertaUz = `
   <p>Tovarlar narxi O‘zbekiston Respublikasi milliy valyutasida (UZS) ko‘rsatiladi va qonun hujjatlarida nazarda tutilgan barcha soliqlarni o‘z ichiga oladi. To‘lov usullari: (1) kuryerga qo‘lda naqd pul; (2) qabul paytida yoki integratsiyalangan to‘lov xizmati orqali bank kartasi (Uzcard/Humo).</p>
 
   <h2>6. Yetkazib berish</h2>
-  <p>Yetkazib berish ${CITY} va uning atroflari bo‘yicha Sotuvchi kuchlari yoki jalb qilingan kuryerlik xizmati tomonidan Foydalanuvchi bilan kelishilgan vaqt oralig‘ida amalga oshiriladi. Yetkazib berish qiymati va muddati buyurtma rasmiylashtirilayotganda Mini-ilovada ko‘rsatiladi.</p>
+  <p>Yetkazib berish O‘zbekiston Respublikasining butun hududi bo‘yicha Sotuvchi kuchlari yoki jalb qilingan kuryerlik xizmati tomonidan Foydalanuvchi bilan kelishilgan vaqt oralig‘ida amalga oshiriladi. Yetkazib berish qiymati va muddati buyurtma rasmiylashtirilayotganda Mini-ilovada ko‘rsatiladi.</p>
 
   <h2>7. Tovarni qaytarish va almashtirish</h2>
   <p>O‘zbekiston Respublikasi «Iste’molchilarning huquqlarini himoya qilish to‘g‘risida»gi Qonuniga muvofiq:</p>

@@ -24,8 +24,18 @@ const DEFAULT_SETTINGS = [
   },
   {
     key: 'delivery_city',
-    value: 'Ташкент',
-    label: 'Город доставки',
+    value: 'Узбекистан',
+    label: 'География доставки',
+  },
+  {
+    key: 'delivery_region_ru',
+    value: 'По всему Узбекистану',
+    label: 'Текст «по всему … » (рус)',
+  },
+  {
+    key: 'delivery_region_uz',
+    value: 'O‘zbekiston bo‘ylab',
+    label: 'Текст «по всему … » (uz)',
   },
   {
     key: 'brand_tagline',

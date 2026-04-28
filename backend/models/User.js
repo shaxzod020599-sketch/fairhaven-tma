@@ -14,12 +14,10 @@ const userSchema = new mongoose.Schema({
     unique: true,
     index: true,
   },
-  // Telegram-native fields (captured on /start)
   username: { type: String, default: '' },
   photoUrl: { type: String, default: '' },
   languageCode: { type: String, default: 'ru' },
 
-  // Registration wizard fields
   firstName: { type: String, default: '' },
   lastName: { type: String, default: '' },
   birthYear: { type: Number, default: null },
@@ -30,11 +28,9 @@ const userSchema = new mongoose.Schema({
   },
   phone: { type: String, default: '' },
 
-  // Consent
   consentAccepted: { type: Boolean, default: false },
   consentAcceptedAt: { type: Date, default: null },
 
-  // Wizard state (null when finished)
   registrationStep: {
     type: String,
     enum: [
@@ -56,6 +52,10 @@ const userSchema = new mongoose.Schema({
     enum: ['user', 'admin'],
     default: 'user',
   },
+
+  notificationsEnabled: { type: Boolean, default: true },
+
+  promoCodesUsed: [{ type: String }],
 }, {
   timestamps: true,
 });

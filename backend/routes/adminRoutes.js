@@ -39,6 +39,13 @@ router.get('/settings', admin.listSettings);
 router.put('/settings', admin.upsertSetting);
 router.delete('/settings/:key', admin.deleteSetting);
 
+// Promo codes
+router.get('/promos', admin.listPromos);
+router.post('/promos', admin.createPromo);
+router.patch('/promos/:id', admin.updatePromo);
+router.delete('/promos/:id', admin.deletePromo);
+router.patch('/promos/:id/toggle', admin.togglePromo);
+
 // Uploads
 router.post('/uploads', upload.uploadImage);
 router.get('/uploads', upload.listUploads);

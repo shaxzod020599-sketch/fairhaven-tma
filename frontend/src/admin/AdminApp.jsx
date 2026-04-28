@@ -12,6 +12,7 @@ import Admins from './pages/Admins';
 import Collections from './pages/Collections';
 import Settings from './pages/Settings';
 import Gallery from './pages/Gallery';
+import PromoCodes from './pages/PromoCodes';
 import AdminToast from './components/Toast';
 
 const NAV = [
@@ -19,6 +20,7 @@ const NAV = [
   { key: 'orders', label: 'Заказы', icon: '📦' },
   { key: 'products', label: 'Товары', icon: '🌿' },
   { key: 'collections', label: 'Подборки', icon: '✦' },
+  { key: 'promos', label: 'Промокоды', icon: '🎟' },
   { key: 'gallery', label: 'Галерея', icon: '🖼' },
   { key: 'admins', label: 'Админы', icon: '👑' },
   { key: 'settings', label: 'Настройки', icon: '⚙' },
@@ -29,7 +31,7 @@ const MOBILE_NAV = [
   { key: 'dashboard', label: 'Обзор', icon: '◉' },
   { key: 'orders', label: 'Заказы', icon: '📦' },
   { key: 'products', label: 'Товары', icon: '🌿' },
-  { key: 'collections', label: 'Подборки', icon: '✦' },
+  { key: 'promos', label: 'Промо', icon: '🎟' },
   { key: 'more', label: 'Ещё', icon: '⋯' },
 ];
 
@@ -96,6 +98,7 @@ export default function AdminApp({ onExit, embedded }) {
       case 'products': return <Products toast={toastApi} />;
       case 'admins': return <Admins me={me} toast={toastApi} />;
       case 'collections': return <Collections toast={toastApi} />;
+      case 'promos': return <PromoCodes toast={toastApi} />;
       case 'gallery': return <Gallery toast={toastApi} />;
       case 'settings': return <Settings toast={toastApi} />;
       default: return <Dashboard onNavigate={navigate} />;

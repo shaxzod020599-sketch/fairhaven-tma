@@ -206,10 +206,11 @@ export default function App() {
             onNavigate={handleNavigate}
             onAddToCart={addToCart}
             activeOrders={activeOrders}
+            dbUser={dbUser}
           />
         );
       case 'catalog':
-        return <Catalog onAddToCart={addToCart} />;
+        return <Catalog onAddToCart={addToCart} dbUser={dbUser} />;
       case 'cart':
         return (
           <Cart

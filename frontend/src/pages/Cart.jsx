@@ -7,18 +7,17 @@ import {
   hapticNotification,
   getTelegramUser,
 } from '../utils/telegram';
-import { createOrder } from '../utils/api';
+import { createOrder, validatePromo } from '../utils/api';
 import YandexMapCheckout from '../components/YandexMapCheckout';
+import SmartImage from '../components/SmartImage';
+import { primaryImage } from '../utils/productImages';
 
 const DELIVERY_THRESHOLD = 500000;
 const DELIVERY_FEE = 25000;
 
-function CartThumb({ src, alt, category }) {
-  const [errored, setErrored] = useState(false);
-  if (!src || errored) {
-    return <span aria-hidden="true">{getProductIcon(category)}</span>;
-  }
-  return <img src={src} alt={alt} onError={() => setErrored(true)} />;
+function CartThumb({ item }) {
+  const src = primaryImage(item) || item.imageUrl;
+  return <SmartImage src={src} alt={item.name} fallback={getProductIcon(item.category)} />;
 }
 
 /**
@@ -54,10 +53,17 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const discount = promoApplied ? Math.round(subtotal * (promoApplied.pct / 100)) : 0;
+  const discount = promoApplied?.discount || 0;
   const isFreeDelivery = subtotal >= DELIVERY_THRESHOLD;
   const deliveryFee = isFreeDelivery || subtotal === 0 ? 0 : DELIVERY_FEE;
   const total = Math.max(0, subtotal - discount + deliveryFee);
+
+  useEffect(() => {
+    if (promoApplied?.code && promoApplied.code !== 'invalid') {
+      revalidatePromo(promoApplied.code);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subtotal]);
 
   const goToMap = useCallback(() => {
     if (items.length === 0) return;
@@ -90,17 +96,51 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
     else onUpdateQty(item._id, newQty);
   };
 
-  const applyPromo = () => {
+  const revalidatePromo = useCallback(async (code) => {
+    try {
+      const tg = getTelegramUser();
+      const res = await validatePromo({ code, subtotal, telegramId: tg?.id });
+      if (res?.valid && res.data) {
+        setPromoApplied({
+          code: res.data.code,
+          discount: res.data.discount,
+          discountType: res.data.discountType,
+          discountValue: res.data.discountValue,
+          description: res.data.description || '',
+        });
+      } else {
+        setPromoApplied({ code: 'invalid', discount: 0, message: res?.message || 'Промокод не найден' });
+      }
+    } catch (err) {
+      setPromoApplied({ code: 'invalid', discount: 0, message: 'Не удалось проверить промокод' });
+    }
+  }, [subtotal]);
+
+  const applyPromo = async () => {
     const code = promo.trim().toUpperCase();
     if (!code) return;
     hapticFeedback('medium');
-    if (code === 'FAIR10') {
-      setPromoApplied({ code, pct: 10 });
-      hapticNotification('success');
-    } else {
+    try {
+      const tg = getTelegramUser();
+      const res = await validatePromo({ code, subtotal, telegramId: tg?.id });
+      if (res?.valid && res.data) {
+        setPromoApplied({
+          code: res.data.code,
+          discount: res.data.discount,
+          discountType: res.data.discountType,
+          discountValue: res.data.discountValue,
+          description: res.data.description || '',
+        });
+        hapticNotification('success');
+      } else {
+        hapticNotification('error');
+        setPromoApplied({ code: 'invalid', discount: 0, message: res?.message || 'Промокод не найден' });
+        setTimeout(() => setPromoApplied(null), 2400);
+      }
+    } catch (err) {
       hapticNotification('error');
-      setPromoApplied({ code: 'invalid', pct: 0 });
-      setTimeout(() => setPromoApplied(null), 1800);
+      setPromoApplied({ code: 'invalid', discount: 0, message: 'Не удалось проверить промокод' });
+      setTimeout(() => setPromoApplied(null), 2400);
     }
   };
 
@@ -132,6 +172,9 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
           quantity: i.quantity,
         })),
         totalAmount: total,
+        promoCode: promoApplied?.code && promoApplied.code !== 'invalid'
+          ? promoApplied.code
+          : '',
         location: {
           lat: address.lat,
           lng: address.lng,
@@ -315,12 +358,16 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
             <span>{formatPrice(subtotal)}</span>
           </div>
           {discount > 0 && (
-            <div className="cart-summary-row">
-              <span>Скидка ({promoApplied.code})</span>
-              <span style={{ color: 'var(--terracotta)', fontWeight: 600 }}>
-                −{formatPrice(discount)}
-              </span>
-            </div>
+            <>
+              <div className="cart-summary-row was-row">
+                <span>Без скидки</span>
+                <span>{formatPrice(subtotal + deliveryFee)}</span>
+              </div>
+              <div className="cart-summary-row discount-row">
+                <span>Скидка<span className="promo-tag">{promoApplied.code}</span></span>
+                <span>−{formatPrice(discount)}</span>
+              </div>
+            </>
           )}
           <div className="cart-summary-row">
             <span>Доставка</span>
@@ -360,7 +407,7 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
         <div className="cart-empty">
           <div className="empty-art" aria-hidden="true">🧺</div>
           <h3>Пока пусто</h3>
-          <p>Выберите продукты из каталога FairHaven Health — доставим в течение 2 часов по Ташкенту.</p>
+          <p>Выберите продукты из каталога FairHaven Health — доставим по всему Узбекистану.</p>
           <button
             className="ghost-btn"
             id="cart-empty-cta"
@@ -432,7 +479,7 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
         {items.map((item) => (
           <div className="cart-item" key={item._id} id={`cart-item-${item._id}`}>
             <div className="cart-item-thumb">
-              <CartThumb src={item.imageUrl} alt={item.name} category={item.category} />
+              <CartThumb item={item} />
             </div>
 
             <div className="cart-item-details">
@@ -476,14 +523,15 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
           Применить
         </button>
       </div>
-      {promoApplied && promoApplied.pct > 0 && (
+      {promoApplied && promoApplied.discount > 0 && (
         <div style={{ fontSize: '0.76rem', color: 'var(--sage)', fontWeight: 600, marginTop: 6, paddingLeft: 16 }}>
-          ✓ Промокод {promoApplied.code} · скидка {promoApplied.pct}%
+          ✓ {promoApplied.code} · −{formatPrice(promoApplied.discount)}
+          {promoApplied.description ? ` · ${promoApplied.description}` : ''}
         </div>
       )}
-      {promoApplied && promoApplied.pct === 0 && (
+      {promoApplied && promoApplied.code === 'invalid' && (
         <div style={{ fontSize: '0.76rem', color: 'var(--ruby)', fontWeight: 500, marginTop: 6, paddingLeft: 16 }}>
-          Промокод не найден
+          {promoApplied.message || 'Промокод не найден'}
         </div>
       )}
 
@@ -493,12 +541,16 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
           <span>{formatPrice(subtotal)}</span>
         </div>
         {discount > 0 && (
-          <div className="cart-summary-row">
-            <span>Скидка</span>
-            <span style={{ color: 'var(--terracotta)', fontWeight: 600 }}>
-              −{formatPrice(discount)}
-            </span>
-          </div>
+          <>
+            <div className="cart-summary-row was-row">
+              <span>Без скидки</span>
+              <span>{formatPrice(subtotal + deliveryFee)}</span>
+            </div>
+            <div className="cart-summary-row discount-row">
+              <span>Скидка<span className="promo-tag">{promoApplied.code}</span></span>
+              <span>−{formatPrice(discount)}</span>
+            </div>
+          </>
         )}
         <div className="cart-summary-row">
           <span>Доставка</span>

@@ -7,7 +7,7 @@ import {
   toggleProduct,
 } from '../adminApi';
 import Modal, { ConfirmDialog } from '../components/Modal';
-import ImageUpload from '../components/ImageUpload';
+import MultiImageUpload from '../components/MultiImageUpload';
 
 const CATEGORIES = [
   { key: 'vitamins', label: 'Витамины' },
@@ -204,7 +204,9 @@ function ProductEditor({ product, onClose, onSaved }) {
   const [cat, setCat] = useState(product?.category || 'supplements');
   const [description, setDescription] = useState(product?.description || '');
   const [descriptionUz, setDescriptionUz] = useState(product?.descriptionUz || '');
+  const [descriptionUzLat, setDescriptionUzLat] = useState(product?.descriptionUzLat || '');
   const [imageUrl, setImageUrl] = useState(product?.imageUrl || '');
+  const [images, setImages] = useState(Array.isArray(product?.images) ? product.images : []);
   const [isAvailable, setIsAvailable] = useState(product?.isAvailable !== false);
   const [tags, setTags] = useState((product?.tags || []).join(', '));
   const [saving, setSaving] = useState(false);
@@ -223,7 +225,9 @@ function ProductEditor({ product, onClose, onSaved }) {
       category: cat,
       description: description.trim(),
       descriptionUz: descriptionUz.trim(),
+      descriptionUzLat: descriptionUzLat.trim(),
       imageUrl,
+      images: images.filter(Boolean),
       isAvailable,
       tags: tags.split(',').map((s) => s.trim()).filter(Boolean),
     };
@@ -254,7 +258,12 @@ function ProductEditor({ product, onClose, onSaved }) {
     >
       {err && <div className="ap-error">{err}</div>}
 
-      <ImageUpload value={imageUrl} onChange={setImageUrl} />
+      <MultiImageUpload
+        primary={imageUrl}
+        extras={images}
+        onChangePrimary={setImageUrl}
+        onChangeExtras={setImages}
+      />
 
       <div className="ap-form-grid">
         <div>
@@ -299,12 +308,22 @@ function ProductEditor({ product, onClose, onSaved }) {
           />
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
-          <label className="ap-label">Tavsif (uz)</label>
+          <label className="ap-label">Tavsif (uz · кириллица)</label>
           <textarea
             className="ap-input ap-textarea"
             rows={2}
             value={descriptionUz}
             onChange={(e) => setDescriptionUz(e.target.value)}
+          />
+        </div>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <label className="ap-label">Tavsif (uz · lotin)</label>
+          <textarea
+            className="ap-input ap-textarea"
+            rows={2}
+            value={descriptionUzLat}
+            onChange={(e) => setDescriptionUzLat(e.target.value)}
+            placeholder="Mahsulot haqida lotin alifbosida tavsif…"
           />
         </div>
         <div style={{ gridColumn: '1 / -1' }}>

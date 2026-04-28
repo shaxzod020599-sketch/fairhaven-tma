@@ -27,8 +27,13 @@ const productSchema = new mongoose.Schema({
     index: true,
   },
   imageUrl: { type: String, default: '' },
+  images: {
+    type: [{ type: String }],
+    default: [],
+  },
   description: { type: String, default: '' },
   descriptionUz: { type: String, default: '' },
+  descriptionUzLat: { type: String, default: '' },
   isAvailable: {
     type: Boolean,
     default: true,
@@ -42,5 +47,19 @@ const productSchema = new mongoose.Schema({
 });
 
 productSchema.index({ name: 'text', description: 'text', brand: 'text' });
+
+productSchema.virtual('allImages').get(function () {
+  const out = [];
+  if (this.imageUrl) out.push(this.imageUrl);
+  if (Array.isArray(this.images)) {
+    for (const u of this.images) {
+      if (u && !out.includes(u)) out.push(u);
+    }
+  }
+  return out;
+});
+
+productSchema.set('toJSON', { virtuals: true });
+productSchema.set('toObject', { virtuals: true });
 
 module.exports = mongoose.model('Product', productSchema);

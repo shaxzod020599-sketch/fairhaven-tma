@@ -46,7 +46,7 @@ const TRUST = [
     glyph: '🚚',
     tone: 'terracotta',
     title: 'Доставка за 2 часа',
-    desc: 'По всему Ташкенту, бесплатно от 500 000 UZS',
+    desc: 'По всему Узбекистану, бесплатно от 500 000 UZS',
   },
   {
     glyph: '✓',
@@ -62,7 +62,7 @@ const TRUST = [
   },
 ];
 
-export default function Home({ onNavigate, onAddToCart, activeOrders = [] }) {
+export default function Home({ onNavigate, onAddToCart, activeOrders = [], dbUser }) {
   const [popular, setPopular] = useState([]);
   const [popularLoading, setPopularLoading] = useState(true);
   const [detailProduct, setDetailProduct] = useState(null);
@@ -313,6 +313,7 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [] }) {
           product={detailProduct}
           onClose={() => setDetailProduct(null)}
           onAdd={onAddToCart}
+          dbUser={dbUser}
         />
       )}
 

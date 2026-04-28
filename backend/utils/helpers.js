@@ -53,7 +53,20 @@ function formatOrderReceipt(order) {
   parts.push(`📦 <b>Mahsulotlar / Товары:</b>`);
   parts.push(itemLines || '  —');
   parts.push('');
+  if (order.subtotal && order.subtotal !== order.totalAmount) {
+    parts.push(`📊 <b>Подытог:</b> ${formatUZS(order.subtotal)}`);
+  }
+  if (order.discount > 0) {
+    const promoTag = order.promoCode ? ` (${escapeHtml(order.promoCode)})` : '';
+    parts.push(`🎟 <b>Скидка${promoTag}:</b> −${formatUZS(order.discount)}`);
+  }
+  if (order.deliveryFee && order.deliveryFee > 0) {
+    parts.push(`🚚 <b>Доставка:</b> ${formatUZS(order.deliveryFee)}`);
+  }
   parts.push(`💰 <b>Jami / Итого:</b> ${formatUZS(order.totalAmount)}`);
+  if (order.isFirstOrder) {
+    parts.push(`✨ <b>Первый заказ клиента</b>`);
+  }
   parts.push(`💳 <b>To‘lov / Оплата:</b> ${paymentLabel(order.paymentMethod)}`);
   parts.push('');
   parts.push(`📍 <b>Manzil / Адрес:</b> ${escapeHtml(order.location.addressString) || '—'}`);

@@ -227,6 +227,126 @@ async function forwardOrderToChannel(bot, order) {
 // -----------------------------------------------------------------------------
 // Factory
 // -----------------------------------------------------------------------------
+function formatUZS(amount) {
+  return (Number(amount) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' UZS';
+}
+
+function buildNewProductMessage(product, frontendUrl) {
+  const cleanDesc = (product.description || '')
+    .toString()
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 600);
+  const lines = [];
+  lines.push(`🌿 <b>Новинка в каталоге FH Health</b>`);
+  lines.push('');
+  if (product.brand) {
+    lines.push(`<i>${escapeHtml(product.brand)}</i>`);
+  }
+  lines.push(`<b>${escapeHtml(product.name)}</b>`);
+  if (product.nameUz && product.nameUz !== product.name) {
+    lines.push(`<i>${escapeHtml(product.nameUz)}</i>`);
+  }
+  lines.push('');
+  if (cleanDesc) {
+    lines.push(escapeHtml(cleanDesc));
+    lines.push('');
+  }
+  lines.push(`💰 <b>Цена:</b> ${formatUZS(product.price)}`);
+  if (product.category) {
+    lines.push(`📦 <b>Категория:</b> ${escapeHtml(categoryLabel(product.category))}`);
+  }
+  lines.push('');
+  lines.push(`🛒 Откройте магазин и добавьте в корзину 👇`);
+  return lines.join('\n');
+}
+
+function escapeHtml(s) {
+  return (s || '').toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function categoryLabel(key) {
+  const map = {
+    cosmetics: 'Косметика',
+    parapharmaceuticals: 'Парафармация',
+    supplements: 'Добавки',
+    vitamins: 'Витамины',
+    hygiene: 'Гигиена',
+    drinks: 'Напитки',
+  };
+  return map[key] || key;
+}
+
+function pickProductImage(product) {
+  if (Array.isArray(product.images) && product.images.length) return product.images[0];
+  if (product.imageUrl) return product.imageUrl;
+  return null;
+}
+
+function absolutizeUrl(maybeRelative, frontendUrl) {
+  if (!maybeRelative) return null;
+  if (/^https?:\/\//i.test(maybeRelative)) return maybeRelative;
+  const base = (frontendUrl || '').replace(/\/+$/, '');
+  if (!base) return null;
+  return `${base}${maybeRelative.startsWith('/') ? '' : '/'}${maybeRelative}`;
+}
+
+async function broadcastNewProduct(bot, product, frontendUrl) {
+  const text = buildNewProductMessage(product, frontendUrl);
+  const photoUrl = absolutizeUrl(pickProductImage(product), frontendUrl);
+
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: '🛒 Открыть магазин', web_app: { url: frontendUrl } },
+      ],
+    ],
+  };
+
+  const recipients = await User.find({
+    registrationStep: 'done',
+    consentAccepted: true,
+    notificationsEnabled: { $ne: false },
+  }).select('telegramId').lean();
+
+  console.log(`[bot] Broadcasting new product "${product.name}" to ${recipients.length} users`);
+
+  let sent = 0;
+  let failed = 0;
+  for (let i = 0; i < recipients.length; i += 25) {
+    const chunk = recipients.slice(i, i + 25);
+    await Promise.allSettled(chunk.map(async (r) => {
+      try {
+        if (photoUrl) {
+          await bot.telegram.sendPhoto(r.telegramId, photoUrl, {
+            caption: text,
+            parse_mode: 'HTML',
+            reply_markup: keyboard,
+          });
+        } else {
+          await bot.telegram.sendMessage(r.telegramId, text, {
+            parse_mode: 'HTML',
+            disable_web_page_preview: true,
+            reply_markup: keyboard,
+          });
+        }
+        sent += 1;
+      } catch (err) {
+        failed += 1;
+      }
+    }));
+    if (i + 25 < recipients.length) {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+
+  console.log(`[bot] Broadcast done: ${sent} sent, ${failed} failed`);
+  return { sent, failed, total: recipients.length };
+}
+
 function createBot(token, frontendUrl) {
   if (!token) throw new Error('TELEGRAM_BOT_TOKEN is required');
   const bot = new Telegraf(token);
@@ -235,6 +355,9 @@ function createBot(token, frontendUrl) {
 
   // Attach the channel forwarder so orderController can call it.
   bot.forwardOrderToChannel = (order) => forwardOrderToChannel(bot, order);
+
+  // Broadcast a fresh product to all registered users.
+  bot.broadcastNewProduct = (product) => broadcastNewProduct(bot, product, FRONTEND);
 
   // Attach a helper for customer-initiated cancellations — edits the existing
   // channel card to strip the approve/reject buttons and append a verdict.

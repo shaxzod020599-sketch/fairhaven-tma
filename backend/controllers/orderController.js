@@ -1,17 +1,42 @@
 const Order = require('../models/Order');
 const User = require('../models/User');
+const PromoCode = require('../models/PromoCode');
+
+const FREE_DELIVERY_THRESHOLD = 500000;
+const DELIVERY_FEE = 25000;
+
+async function resolvePromo(code, subtotal, isFirstOrder, userPromosUsed) {
+  if (!code) return { discount: 0, promo: null };
+  const normalized = String(code).trim().toUpperCase();
+  if (!normalized) return { discount: 0, promo: null };
+  const promo = await PromoCode.findOne({ code: normalized });
+  if (!promo || !promo.isCurrentlyActive()) {
+    return { discount: 0, promo: null, error: 'invalid_promo' };
+  }
+  if (promo.firstOrderOnly && !isFirstOrder) {
+    return { discount: 0, promo: null, error: 'first_order_only' };
+  }
+  if (promo.oncePerUser && (userPromosUsed || []).includes(normalized)) {
+    return { discount: 0, promo: null, error: 'already_used' };
+  }
+  if (subtotal < (promo.minOrderAmount || 0)) {
+    return { discount: 0, promo: null, error: 'min_order_not_met', minOrderAmount: promo.minOrderAmount };
+  }
+  const discount = promo.calculateDiscount(subtotal);
+  return { discount, promo };
+}
 
 exports.create = async (req, res) => {
   try {
     const {
       telegramId,
       items,
-      totalAmount,
       location,
       customerName,
       customerPhone,
       paymentMethod,
       notes,
+      promoCode,
     } = req.body;
 
     if (!telegramId || !Array.isArray(items) || items.length === 0) {
@@ -22,7 +47,6 @@ exports.create = async (req, res) => {
     }
 
     const user = await User.findOne({ telegramId });
-    // Only registered users (bot wizard completed + consent accepted) can order.
     if (!user || user.registrationStep !== 'done' || !user.consentAccepted) {
       return res.status(403).json({
         success: false,
@@ -33,11 +57,40 @@ exports.create = async (req, res) => {
       });
     }
 
+    const previousOrders = await Order.countDocuments({ userId: user._id });
+    const isFirstOrder = previousOrders === 0;
+
+    const subtotal = items.reduce((sum, it) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0);
+
+    const promoResult = await resolvePromo(
+      promoCode,
+      subtotal,
+      isFirstOrder,
+      user.promoCodesUsed,
+    );
+    if (promoCode && promoResult.error) {
+      return res.status(400).json({
+        success: false,
+        error: promoResult.error,
+        message: 'Промокод недействителен',
+      });
+    }
+    const discount = promoResult.discount;
+    const appliedPromo = promoResult.promo;
+
+    const deliveryFee = subtotal === 0 || subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE;
+    const totalAmount = Math.max(0, subtotal - discount + deliveryFee);
+
     const order = await Order.create({
       userId: user._id,
       telegramId,
       items,
+      subtotal,
+      deliveryFee,
+      discount,
+      promoCode: appliedPromo ? appliedPromo.code : '',
       totalAmount,
+      isFirstOrder,
       location,
       customerName: customerName || [user.firstName, user.lastName].filter(Boolean).join(' '),
       customerPhone: customerPhone || user.phone,
@@ -45,8 +98,15 @@ exports.create = async (req, res) => {
       notes: notes || '',
     });
 
-    // Forward the order to the FairHaven operators channel.
-    // Failure to forward is non-fatal — the order is still persisted.
+    if (appliedPromo) {
+      appliedPromo.usedCount = (appliedPromo.usedCount || 0) + 1;
+      await appliedPromo.save();
+      if (appliedPromo.oncePerUser) {
+        user.promoCodesUsed = Array.from(new Set([...(user.promoCodesUsed || []), appliedPromo.code]));
+        await user.save();
+      }
+    }
+
     const bot = req.app.locals.bot;
     if (bot && typeof bot.forwardOrderToChannel === 'function') {
       try {
@@ -75,7 +135,7 @@ exports.getAll = async (req, res) => {
     if (telegramId) filter.telegramId = Number(telegramId);
 
     const orders = await Order.find(filter)
-      .populate('items.productId', 'name imageUrl')
+      .populate('items.productId', 'name imageUrl images')
       .sort({ createdAt: -1 });
 
     res.json({ success: true, data: orders });
@@ -87,7 +147,7 @@ exports.getAll = async (req, res) => {
 exports.getById = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
-      .populate('items.productId', 'name imageUrl price');
+      .populate('items.productId', 'name imageUrl images price');
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
@@ -124,12 +184,6 @@ exports.getByUser = async (req, res) => {
   }
 };
 
-/**
- * Customer-initiated cancellation. Only allowed while status === 'pending'.
- * The caller must provide their telegramId; we verify ownership before
- * touching the record. On success the channel message is edited to strip
- * the approve/reject buttons and append a "cancelled by customer" verdict.
- */
 exports.cancelByCustomer = async (req, res) => {
   try {
     const telegramId = Number(req.body?.telegramId || req.query?.telegramId);
@@ -155,7 +209,6 @@ exports.cancelByCustomer = async (req, res) => {
     order.status = 'cancelled';
     await order.save();
 
-    // Best-effort: update the channel card.
     const bot = req.app.locals.bot;
     if (bot && typeof bot.markOrderCancelledByCustomer === 'function') {
       bot.markOrderCancelledByCustomer(order).catch((err) =>
@@ -168,3 +221,56 @@ exports.cancelByCustomer = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+exports.validatePromo = async (req, res) => {
+  try {
+    const { code, subtotal = 0, telegramId } = req.body;
+    if (!code) {
+      return res.status(400).json({ success: false, error: 'code_required' });
+    }
+    const subtotalN = Number(subtotal) || 0;
+    let isFirstOrder = true;
+    let userPromosUsed = [];
+    if (telegramId) {
+      const user = await User.findOne({ telegramId: Number(telegramId) });
+      if (user) {
+        const prev = await Order.countDocuments({ userId: user._id });
+        isFirstOrder = prev === 0;
+        userPromosUsed = user.promoCodesUsed || [];
+      }
+    }
+    const result = await resolvePromo(code, subtotalN, isFirstOrder, userPromosUsed);
+    if (result.error || !result.promo) {
+      return res.json({
+        success: false,
+        valid: false,
+        error: result.error || 'invalid_promo',
+        minOrderAmount: result.minOrderAmount || 0,
+        message: messageForError(result.error),
+      });
+    }
+    res.json({
+      success: true,
+      valid: true,
+      data: {
+        code: result.promo.code,
+        discount: result.discount,
+        discountType: result.promo.discountType,
+        discountValue: result.promo.discountValue,
+        description: result.promo.description,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+function messageForError(code) {
+  switch (code) {
+    case 'first_order_only': return 'Промокод действует только для первого заказа';
+    case 'already_used': return 'Промокод уже использован';
+    case 'min_order_not_met': return 'Сумма заказа меньше минимальной для этого промокода';
+    case 'invalid_promo':
+    default: return 'Промокод не найден или истёк';
+  }
+}

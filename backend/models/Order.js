@@ -34,11 +34,16 @@ const orderSchema = new mongoose.Schema({
     required: true,
     validate: [arr => arr.length > 0, 'Order must have at least one item'],
   },
+  subtotal: { type: Number, default: 0, min: 0 },
+  deliveryFee: { type: Number, default: 0, min: 0 },
+  discount: { type: Number, default: 0, min: 0 },
+  promoCode: { type: String, default: '' },
   totalAmount: {
     type: Number,
     required: true,
     min: 0,
   },
+  isFirstOrder: { type: Boolean, default: false, index: true },
   status: {
     type: String,
     enum: ['pending', 'confirmed', 'preparing', 'delivering', 'delivered', 'cancelled'],
@@ -58,7 +63,6 @@ const orderSchema = new mongoose.Schema({
   },
   notes: { type: String, default: '' },
 
-  // Channel message tracking (for editing on approve/reject)
   channelMessageId: { type: Number, default: null },
 }, {
   timestamps: true,

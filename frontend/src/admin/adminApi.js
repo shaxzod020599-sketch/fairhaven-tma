@@ -93,6 +93,17 @@ export const listSettings = () => adminRequest('/settings');
 export const upsertSetting = (body) =>
   adminRequest('/settings', { method: 'PUT', body });
 
+// ──────────────────────── Promo codes
+export const listPromos = () => adminRequest('/promos');
+export const createPromo = (body) =>
+  adminRequest('/promos', { method: 'POST', body });
+export const updatePromo = (id, body) =>
+  adminRequest(`/promos/${id}`, { method: 'PATCH', body });
+export const deletePromo = (id) =>
+  adminRequest(`/promos/${id}`, { method: 'DELETE' });
+export const togglePromo = (id) =>
+  adminRequest(`/promos/${id}/toggle`, { method: 'PATCH' });
+
 // ──────────────────────── Uploads
 export const uploadImage = (dataUrl) =>
   adminRequest('/uploads', { method: 'POST', body: { dataUrl } });
