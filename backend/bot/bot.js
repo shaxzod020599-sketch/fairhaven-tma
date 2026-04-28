@@ -231,14 +231,22 @@ function formatUZS(amount) {
   return (Number(amount) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' UZS';
 }
 
-function buildNewProductMessage(product, frontendUrl) {
+function buildProductBroadcastMessage(product, kind) {
   const cleanDesc = (product.description || '')
     .toString()
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 600);
+  const headers = {
+    new: '🌿 <b>Новинка в каталоге FH Health</b>',
+    restock: '✨ <b>Снова в наличии!</b>',
+  };
+  const ctas = {
+    new: '🛒 Откройте магазин и добавьте в корзину 👇',
+    restock: '🛒 Не упустите — добавьте в корзину сейчас 👇',
+  };
   const lines = [];
-  lines.push(`🌿 <b>Новинка в каталоге FH Health</b>`);
+  lines.push(headers[kind] || headers.new);
   lines.push('');
   if (product.brand) {
     lines.push(`<i>${escapeHtml(product.brand)}</i>`);
@@ -257,7 +265,7 @@ function buildNewProductMessage(product, frontendUrl) {
     lines.push(`📦 <b>Категория:</b> ${escapeHtml(categoryLabel(product.category))}`);
   }
   lines.push('');
-  lines.push(`🛒 Откройте магазин и добавьте в корзину 👇`);
+  lines.push(ctas[kind] || ctas.new);
   return lines.join('\n');
 }
 
@@ -294,14 +302,19 @@ function absolutizeUrl(maybeRelative, frontendUrl) {
   return `${base}${maybeRelative.startsWith('/') ? '' : '/'}${maybeRelative}`;
 }
 
-async function broadcastNewProduct(bot, product, frontendUrl) {
-  const text = buildNewProductMessage(product, frontendUrl);
+async function broadcastProductToUsers(bot, product, frontendUrl, kind = 'new') {
+  const text = buildProductBroadcastMessage(product, kind);
   const photoUrl = absolutizeUrl(pickProductImage(product), frontendUrl);
 
+  const productUrl = `${frontendUrl}?product=${product._id}`;
+  const ctaLabels = {
+    new: '🛒 Открыть товар',
+    restock: '🛒 Открыть товар',
+  };
   const keyboard = {
     inline_keyboard: [
       [
-        { text: '🛒 Открыть магазин', web_app: { url: frontendUrl } },
+        { text: ctaLabels[kind] || '🛒 Открыть товар', web_app: { url: productUrl } },
       ],
     ],
   };
@@ -312,7 +325,7 @@ async function broadcastNewProduct(bot, product, frontendUrl) {
     notificationsEnabled: { $ne: false },
   }).select('telegramId').lean();
 
-  console.log(`[bot] Broadcasting new product "${product.name}" to ${recipients.length} users`);
+  console.log(`[bot] Broadcasting ${kind} product "${product.name}" to ${recipients.length} users`);
 
   let sent = 0;
   let failed = 0;
@@ -343,7 +356,7 @@ async function broadcastNewProduct(bot, product, frontendUrl) {
     }
   }
 
-  console.log(`[bot] Broadcast done: ${sent} sent, ${failed} failed`);
+  console.log(`[bot] Broadcast (${kind}) done: ${sent} sent, ${failed} failed`);
   return { sent, failed, total: recipients.length };
 }
 
@@ -357,7 +370,8 @@ function createBot(token, frontendUrl) {
   bot.forwardOrderToChannel = (order) => forwardOrderToChannel(bot, order);
 
   // Broadcast a fresh product to all registered users.
-  bot.broadcastNewProduct = (product) => broadcastNewProduct(bot, product, FRONTEND);
+  bot.broadcastNewProduct = (product) => broadcastProductToUsers(bot, product, FRONTEND, 'new');
+  bot.broadcastBackInStock = (product) => broadcastProductToUsers(bot, product, FRONTEND, 'restock');
 
   // Attach a helper for customer-initiated cancellations — edits the existing
   // channel card to strip the approve/reject buttons and append a verdict.

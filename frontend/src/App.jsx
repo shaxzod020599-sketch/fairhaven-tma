@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { initTelegram, getTelegramUser, hapticNotification } from './utils/telegram';
-import { upsertUser, fetchUser, fetchOrdersByUser } from './utils/api';
+import { upsertUser, fetchUser, fetchOrdersByUser, fetchProductById } from './utils/api';
 import { isActive } from './utils/orderStatus';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import Toast from './components/Toast';
 import Loading from './components/Loading';
 import RegistrationGate from './components/RegistrationGate';
+import ProductDetail from './components/ProductDetail';
 import Home from './pages/Home';
 import Catalog from './pages/Catalog';
 import Cart from './pages/Cart';
@@ -35,11 +36,38 @@ export default function App() {
   const [authStatus, setAuthStatus] = useState(AUTH.LOADING);
   const [orders, setOrders] = useState([]);
   const [adminMode, setAdminMode] = useState(false);
+  const [deepLinkProduct, setDeepLinkProduct] = useState(null);
 
   useEffect(() => {
     initTelegram();
     syncUser();
   }, []);
+
+  // Deep-link: ?product=<id> opens the product detail sheet on top of any page.
+  useEffect(() => {
+    if (authStatus !== AUTH.READY) return;
+    const params = new URLSearchParams(window.location.search);
+    let pid = params.get('product');
+    if (!pid) {
+      const tg = window.Telegram?.WebApp;
+      const start = tg?.initDataUnsafe?.start_param || '';
+      const m = /^product[_-]?([a-fA-F0-9]{24})$/.exec(start);
+      if (m) pid = m[1];
+    }
+    if (!pid) return;
+    fetchProductById(pid)
+      .then((res) => {
+        if (res?.data) setDeepLinkProduct(res.data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('product');
+          window.history.replaceState({}, '', url.toString());
+        } catch (_) {}
+      });
+  }, [authStatus]);
 
   const syncUser = async () => {
     try {
@@ -273,6 +301,14 @@ export default function App() {
           onNavigate={handleNavigate}
           cartCount={cartCount}
           activeOrdersCount={activeOrders.length}
+        />
+      )}
+      {deepLinkProduct && (
+        <ProductDetail
+          product={deepLinkProduct}
+          onClose={() => setDeepLinkProduct(null)}
+          onAdd={addToCart}
+          dbUser={dbUser}
         />
       )}
       <Toast message={toast.message} visible={toast.visible} />

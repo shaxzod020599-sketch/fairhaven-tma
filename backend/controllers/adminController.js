@@ -213,12 +213,25 @@ exports.createProduct = async (req, res) => {
 
 exports.updateProduct = async (req, res) => {
   try {
+    const before = await Product.findById(req.params.id).lean();
+    if (!before) return res.status(404).json({ success: false, error: 'not_found' });
+
     const p = await Product.findByIdAndUpdate(
       req.params.id,
       sanitizeProductBody(req.body),
       { new: true, runValidators: true }
     );
-    if (!p) return res.status(404).json({ success: false, error: 'not_found' });
+
+    const cameBackInStock = before.isAvailable === false && p.isAvailable === true;
+    if (cameBackInStock) {
+      const bot = req.app.locals.bot;
+      if (bot && typeof bot.broadcastBackInStock === 'function') {
+        bot.broadcastBackInStock(p).catch((err) =>
+          console.warn('[product.update] back-in-stock broadcast failed:', err.message)
+        );
+      }
+    }
+
     res.json({ success: true, data: p });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
@@ -243,8 +256,19 @@ exports.toggleProductAvailability = async (req, res) => {
   try {
     const p = await Product.findById(req.params.id);
     if (!p) return res.status(404).json({ success: false, error: 'not_found' });
+    const wasUnavailable = p.isAvailable === false;
     p.isAvailable = !p.isAvailable;
     await p.save();
+
+    if (wasUnavailable && p.isAvailable) {
+      const bot = req.app.locals.bot;
+      if (bot && typeof bot.broadcastBackInStock === 'function') {
+        bot.broadcastBackInStock(p).catch((err) =>
+          console.warn('[product.toggle] back-in-stock broadcast failed:', err.message)
+        );
+      }
+    }
+
     res.json({ success: true, data: p });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
