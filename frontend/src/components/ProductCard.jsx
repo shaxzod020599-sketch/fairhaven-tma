@@ -95,6 +95,14 @@ export default function ProductCard({ product, onAdd, onOpen, favorite, onToggle
       <div className="product-info">
         {product.brand && <div className="product-brand">{product.brand}</div>}
         <div className="product-name">{product.name}</div>
+        {discount.hasDiscount && (
+          <div className="product-discount-strip">
+            <span className="product-discount-pct">−{discount.percent}%</span>
+            <span className="product-discount-text">
+              Экономия {formatPrice(discount.oldPrice - discount.price)}
+            </span>
+          </div>
+        )}
         <div className="product-meta">
           <div className="product-price-row">
             {discount.hasDiscount && (

@@ -732,19 +732,20 @@ ul, ol {
 .product-badge.sale {
   background: linear-gradient(135deg, #C96F3E 0%, #9B2C36 100%);
   color: #fff;
-  font-size: 0.92rem;
-  font-weight: 800;
-  padding: 6px 12px;
-  letter-spacing: 0.04em;
+  font-size: 1.05rem;
+  font-weight: 900;
+  padding: 7px 13px;
+  letter-spacing: 0.02em;
   text-transform: none;
-  box-shadow: 0 4px 14px rgba(155, 44, 54, 0.35), 0 1px 2px rgba(0, 0, 0, 0.08);
-  border: 2px solid rgba(255, 255, 255, 0.6);
-  animation: salePulse 2.6s var(--ease-out) infinite;
+  box-shadow: 0 6px 18px rgba(155, 44, 54, 0.45), 0 1px 2px rgba(0, 0, 0, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  animation: salePulse 2.4s var(--ease-out) infinite;
   font-variation-settings: 'opsz' 14;
+  line-height: 1;
 }
 @keyframes salePulse {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.06); }
+  0%, 100% { transform: scale(1); box-shadow: 0 6px 18px rgba(155, 44, 54, 0.45); }
+  50%      { transform: scale(1.08); box-shadow: 0 8px 22px rgba(155, 44, 54, 0.6); }
 }
 
 .product-fav {
@@ -3837,6 +3838,39 @@ ul, ol {
   color: #C96F3E;
   font-weight: 700;
   font-size: 1.1rem;
+}
+
+.product-discount-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 4px;
+}
+.product-discount-pct {
+  display: inline-flex;
+  align-items: center;
+  background: linear-gradient(135deg, #C96F3E 0%, #9B2C36 100%);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  box-shadow: 0 2px 6px rgba(155, 44, 54, 0.3);
+  flex-shrink: 0;
+}
+.product-discount-text {
+  font-size: 0.66rem;
+  color: #2F4A2A;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--sage-wash);
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sheet-discount-badge {
