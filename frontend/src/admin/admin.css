@@ -1403,3 +1403,117 @@ body:has(.ap-modal-backdrop) .ap-bottom-nav { display: none !important; }
   font-weight: 700;
   letter-spacing: 0.06em;
 }
+
+/* ==========================================================================
+   Per-product discount editor
+   ========================================================================== */
+.ap-discount-block {
+  background: var(--ap-paper-warm, #FAF5EA);
+  border: 1px dashed var(--ap-line, #E4DAC2);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-top: 4px;
+}
+.ap-discount-block .ap-checkbox { font-weight: 600; }
+
+.ap-discount-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ap-line, #E4DAC2);
+}
+.ap-discount-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ap-discount-preset {
+  background: var(--ap-paper, #F6F1E6);
+  border: 1px solid var(--ap-line, #E4DAC2);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ap-ink, #0E2B1F);
+  cursor: pointer;
+  transition: 160ms;
+}
+.ap-discount-preset:hover {
+  background: var(--ap-paper-soft, #EFE7D5);
+}
+.ap-discount-preset.active {
+  background: #C96F3E;
+  color: white;
+  border-color: #C96F3E;
+}
+.ap-discount-preview {
+  background: var(--ap-paper, #F6F1E6);
+  border: 1px solid var(--ap-line, #E4DAC2);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.ap-discount-percent {
+  background: #C96F3E;
+  color: white;
+  font-size: 1rem;
+  font-weight: 800;
+  padding: 4px 12px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+}
+.ap-discount-old {
+  font-size: 0.78rem;
+  color: #8A9690;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  margin-right: 8px;
+}
+.ap-discount-new {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #C96F3E;
+}
+.ap-discount-save {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #2F4A2A;
+  background: #DDE5D0;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+@media (max-width: 720px) {
+  .ap-discount-grid { grid-template-columns: 1fr; }
+}
+
+/* product list discount row */
+.ap-product-price-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ap-product-price.discounted {
+  color: #C96F3E;
+}
+.ap-product-price-old {
+  font-size: 0.75rem;
+  color: #8A9690;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.4px;
+}
+.ap-product-discount-badge {
+  background: #C96F3E;
+  color: white;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 999px;
+}

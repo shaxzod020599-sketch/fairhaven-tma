@@ -278,13 +278,17 @@ exports.toggleProductAvailability = async (req, res) => {
 function sanitizeProductBody(b = {}) {
   const out = {};
   const fields = [
-    'name', 'nameUz', 'price', 'category', 'imageUrl', 'images',
+    'name', 'nameUz', 'price', 'oldPrice', 'category', 'imageUrl', 'images',
     'description', 'descriptionUz', 'descriptionUzLat',
     'isAvailable', 'brand', 'sku', 'tags',
   ];
   for (const f of fields) if (b[f] !== undefined) out[f] = b[f];
   if (typeof out.tags === 'string') out.tags = out.tags.split(',').map((s) => s.trim()).filter(Boolean);
   if (out.price !== undefined) out.price = Number(out.price);
+  if (out.oldPrice !== undefined) {
+    const v = Number(out.oldPrice) || 0;
+    out.oldPrice = v > 0 && v > Number(out.price || 0) ? v : 0;
+  }
   if (Array.isArray(out.images)) {
     out.images = out.images.map((s) => String(s || '').trim()).filter(Boolean);
   }

@@ -59,3 +59,17 @@ export function debounce(fn, delay = 300) {
     timer = setTimeout(() => fn(...args), delay);
   };
 }
+
+/**
+ * Returns discount info for a product when oldPrice is set above price.
+ * { hasDiscount, oldPrice, price, percent }
+ */
+export function getDiscountInfo(product) {
+  const price = Number(product?.price) || 0;
+  const oldPrice = Number(product?.oldPrice) || 0;
+  if (!price || oldPrice <= price) {
+    return { hasDiscount: false, oldPrice: 0, price, percent: 0 };
+  }
+  const percent = Math.round(((oldPrice - price) / oldPrice) * 100);
+  return { hasDiscount: true, oldPrice, price, percent };
+}

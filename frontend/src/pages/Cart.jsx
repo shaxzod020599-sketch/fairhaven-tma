@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { formatPrice, getProductIcon } from '../utils/helpers';
+import { formatPrice, getProductIcon, getDiscountInfo } from '../utils/helpers';
 import {
   showMainButton,
   hideMainButton,
@@ -485,7 +485,18 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
             <div className="cart-item-details">
               {item.brand && <div className="cart-item-brand">{item.brand}</div>}
               <div className="cart-item-name">{item.name}</div>
-              <div className="cart-item-price">{formatPrice(item.price * item.quantity)}</div>
+              {(() => {
+                const d = getDiscountInfo(item);
+                return d.hasDiscount ? (
+                  <div className="cart-item-price-row">
+                    <span className="cart-item-price-old">{formatPrice(d.oldPrice * item.quantity)}</span>
+                    <span className="cart-item-price discounted">{formatPrice(item.price * item.quantity)}</span>
+                    <span className="cart-item-discount-badge">−{d.percent}%</span>
+                  </div>
+                ) : (
+                  <div className="cart-item-price">{formatPrice(item.price * item.quantity)}</div>
+                );
+              })()}
             </div>
 
             <div className="cart-qty" aria-label="Количество">

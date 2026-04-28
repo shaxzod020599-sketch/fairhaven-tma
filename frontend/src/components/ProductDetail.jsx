@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getProductIcon, getCategoryInfo } from '../utils/helpers';
+import { getProductIcon, getCategoryInfo, getDiscountInfo, formatPrice } from '../utils/helpers';
 import { hapticFeedback, hapticNotification, getTelegramUser } from '../utils/telegram';
 import SmartImage from './SmartImage';
 import { getProductImages, pickDescription } from '../utils/productImages';
@@ -88,6 +88,7 @@ export default function ProductDetail({ product, onClose, onAdd, dbUser }) {
 
   const category = getCategoryInfo(product.category);
   const { value, unit } = splitPrice(product.price);
+  const discount = getDiscountInfo(product);
   const images = getProductImages(product);
   const lang = dbUser?.languageCode || getTelegramUser()?.language_code || 'ru';
   const description = pickDescription(product, lang);
@@ -138,11 +139,26 @@ export default function ProductDetail({ product, onClose, onAdd, dbUser }) {
 
         <div className="sheet-price-row">
           <div>
-            <div className="sheet-price-label">Цена</div>
-            <div className="sheet-price-value">
+            <div className="sheet-price-label">
+              {discount.hasDiscount ? (
+                <>
+                  Цена со скидкой
+                  <span className="sheet-discount-badge">−{discount.percent}%</span>
+                </>
+              ) : (
+                'Цена'
+              )}
+            </div>
+            <div className={`sheet-price-value ${discount.hasDiscount ? 'discounted' : ''}`}>
               {value}
               <span className="unit">{unit}</span>
             </div>
+            {discount.hasDiscount && (
+              <div className="sheet-price-old">
+                <span className="strike">{formatPrice(discount.oldPrice)}</span>
+                <span className="save">Экономия {formatPrice(discount.oldPrice - discount.price)}</span>
+              </div>
+            )}
           </div>
           <button className="sheet-add-btn" onClick={handleAdd} id="sheet-add-btn">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">

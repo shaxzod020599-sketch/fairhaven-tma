@@ -3828,3 +3828,76 @@ ul, ol {
   text-decoration: line-through;
   text-decoration-thickness: 1.5px;
 }
+
+/* ==========================================================================
+   product-level discount (oldPrice → price)
+   ========================================================================== */
+.product-price.product-price-new {
+  color: var(--terracotta);
+}
+
+.sheet-discount-badge {
+  display: inline-block;
+  margin-left: 8px;
+  background: var(--terracotta);
+  color: var(--paper);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  vertical-align: middle;
+}
+.sheet-price-value.discounted {
+  color: var(--terracotta);
+}
+.sheet-price-old {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.sheet-price-old .strike {
+  font-size: 0.95rem;
+  color: var(--ink-faint);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  font-weight: 500;
+}
+.sheet-price-old .save {
+  font-size: 0.7rem;
+  color: var(--sage);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: var(--sage-wash);
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+}
+
+.cart-item-price-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cart-item-price.discounted {
+  color: var(--terracotta);
+  font-weight: 600;
+}
+.cart-item-price-old {
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.4px;
+}
+.cart-item-discount-badge {
+  display: inline-block;
+  background: var(--terracotta);
+  color: var(--paper);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: var(--r-pill);
+}

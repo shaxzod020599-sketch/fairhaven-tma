@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getProductIcon } from '../utils/helpers';
+import { getProductIcon, getDiscountInfo, formatPrice } from '../utils/helpers';
 import { hapticFeedback } from '../utils/telegram';
 import SmartImage from './SmartImage';
 import { primaryImage } from '../utils/productImages';
@@ -10,14 +10,12 @@ function splitPrice(price) {
   return { value: formatted, unit: 'UZS' };
 }
 
-export default function ProductCard({ product, onAdd, onOpen, favorite, onToggleFav, promoPreview }) {
+export default function ProductCard({ product, onAdd, onOpen, favorite, onToggleFav }) {
   const [fav, setFav] = useState(Boolean(favorite));
   const isAvailable = product.isAvailable !== false;
   const { value, unit } = splitPrice(product.price);
 
-  const discountedPrice = promoPreview?.discountedUnitPrice;
-  const hasDiscount = discountedPrice && discountedPrice < product.price;
-  const newSplit = hasDiscount ? splitPrice(discountedPrice) : null;
+  const discount = getDiscountInfo(product);
 
   const handleAdd = (e) => {
     e.stopPropagation();
@@ -39,12 +37,10 @@ export default function ProductCard({ product, onAdd, onOpen, favorite, onToggle
     onToggleFav?.(product);
   };
 
-  const badge = hasDiscount && promoPreview?.percent
-    ? { cls: 'sale', label: `−${promoPreview.percent}%` }
+  const badge = discount.hasDiscount
+    ? { cls: 'sale', label: `−${discount.percent}%` }
     : product.isNew
     ? { cls: 'new', label: 'Новинка' }
-    : product.discount
-    ? { cls: 'sale', label: `−${product.discount}%` }
     : null;
 
   const image = primaryImage(product);
@@ -101,20 +97,13 @@ export default function ProductCard({ product, onAdd, onOpen, favorite, onToggle
         <div className="product-name">{product.name}</div>
         <div className="product-meta">
           <div className="product-price-row">
-            {hasDiscount ? (
-              <>
-                <span className="product-price-old">{value} {unit}</span>
-                <span className="product-price product-price-new">
-                  {newSplit.value}
-                  <span className="unit">{unit}</span>
-                </span>
-              </>
-            ) : (
-              <div className="product-price">
-                {value}
-                <span className="unit">{unit}</span>
-              </div>
+            {discount.hasDiscount && (
+              <span className="product-price-old">{formatPrice(discount.oldPrice)}</span>
             )}
+            <div className={`product-price ${discount.hasDiscount ? 'product-price-new' : ''}`}>
+              {value}
+              <span className="unit">{unit}</span>
+            </div>
           </div>
           {product.rating && (
             <div className="product-rating">

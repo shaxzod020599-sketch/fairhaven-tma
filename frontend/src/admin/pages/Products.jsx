@@ -148,7 +148,17 @@ export default function Products({ toast }) {
                 <div className="ap-product-brand">{p.brand || '—'}</div>
                 <div className="ap-product-name">{p.name}</div>
                 <div className="ap-muted-sm">{catLabel(p.category)}</div>
-                <div className="ap-product-price">{fmtPrice(p.price)}</div>
+                {p.oldPrice && p.oldPrice > p.price ? (
+                  <div className="ap-product-price-row">
+                    <span className="ap-product-price-old">{fmtPrice(p.oldPrice)}</span>
+                    <span className="ap-product-price discounted">{fmtPrice(p.price)}</span>
+                    <span className="ap-product-discount-badge">
+                      −{Math.round(((p.oldPrice - p.price) / p.oldPrice) * 100)}%
+                    </span>
+                  </div>
+                ) : (
+                  <div className="ap-product-price">{fmtPrice(p.price)}</div>
+                )}
               </div>
               <div className="ap-product-actions">
                 <button
@@ -201,6 +211,8 @@ function ProductEditor({ product, onClose, onSaved }) {
   const [brand, setBrand] = useState(product?.brand || 'FairHaven Health');
   const [sku, setSku] = useState(product?.sku || '');
   const [price, setPrice] = useState(product?.price || 0);
+  const [oldPrice, setOldPrice] = useState(product?.oldPrice || 0);
+  const [discountEnabled, setDiscountEnabled] = useState(Boolean(product?.oldPrice && product.oldPrice > product.price));
   const [cat, setCat] = useState(product?.category || 'supplements');
   const [description, setDescription] = useState(product?.description || '');
   const [descriptionUz, setDescriptionUz] = useState(product?.descriptionUz || '');
@@ -212,16 +224,34 @@ function ProductEditor({ product, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
+  const priceN = Number(price) || 0;
+  const oldPriceN = Number(oldPrice) || 0;
+  const computedPercent = discountEnabled && oldPriceN > priceN && oldPriceN > 0
+    ? Math.round(((oldPriceN - priceN) / oldPriceN) * 100)
+    : 0;
+
+  const applyPercent = (pct) => {
+    const p = Number(pct);
+    if (!p || p <= 0 || p >= 100 || !priceN) return;
+    const newOld = Math.round(priceN / (1 - p / 100));
+    setOldPrice(newOld);
+  };
+
   const save = async () => {
     setErr('');
     if (!name.trim()) { setErr('Укажите название'); return; }
-    if (!price || price <= 0) { setErr('Укажите цену'); return; }
+    if (!priceN || priceN <= 0) { setErr('Укажите цену'); return; }
+    if (discountEnabled && (!oldPriceN || oldPriceN <= priceN)) {
+      setErr('Старая цена должна быть больше текущей');
+      return;
+    }
     const body = {
       name: name.trim(),
       nameUz: nameUz.trim(),
       brand: brand.trim(),
       sku: sku.trim(),
-      price: Number(price),
+      price: priceN,
+      oldPrice: discountEnabled ? oldPriceN : 0,
       category: cat,
       description: description.trim(),
       descriptionUz: descriptionUz.trim(),
@@ -297,6 +327,68 @@ function ProductEditor({ product, onClose, onSaved }) {
           <select className="ap-input ap-select" value={cat} onChange={(e) => setCat(e.target.value)}>
             {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
+        </div>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <div className="ap-discount-block">
+            <label className="ap-checkbox">
+              <input
+                type="checkbox"
+                checked={discountEnabled}
+                onChange={(e) => {
+                  setDiscountEnabled(e.target.checked);
+                  if (!e.target.checked) setOldPrice(0);
+                }}
+              />
+              <span>🎯 Включить скидку (зачёркнутая старая цена + % бейдж)</span>
+            </label>
+
+            {discountEnabled && (
+              <div className="ap-discount-grid">
+                <div>
+                  <label className="ap-label">Старая цена (UZS)</label>
+                  <input
+                    className="ap-input"
+                    type="number"
+                    min="0"
+                    value={oldPrice}
+                    onChange={(e) => setOldPrice(e.target.value)}
+                    placeholder="600000"
+                  />
+                </div>
+                <div>
+                  <label className="ap-label">Быстро: % скидки</label>
+                  <div className="ap-discount-presets">
+                    {[5, 10, 15, 20, 25, 30, 40, 50].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        className={`ap-discount-preset ${computedPercent === pct ? 'active' : ''}`}
+                        onClick={() => applyPercent(pct)}
+                      >
+                        −{pct}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="ap-discount-preview">
+                  {computedPercent > 0 && oldPriceN > priceN ? (
+                    <>
+                      <div className="ap-discount-percent">−{computedPercent}%</div>
+                      <div>
+                        <span className="ap-discount-old">{oldPriceN.toLocaleString('ru-RU')} UZS</span>
+                        <span className="ap-discount-new">{priceN.toLocaleString('ru-RU')} UZS</span>
+                      </div>
+                      <div className="ap-discount-save">
+                        Экономия {(oldPriceN - priceN).toLocaleString('ru-RU')} UZS
+                      </div>
+                    </>
+                  ) : (
+                    <div className="ap-muted-sm">Укажите старую цену больше текущей, чтобы увидеть превью</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
           <label className="ap-label">Описание (рус)</label>
