@@ -4,10 +4,9 @@ export default function Header({ onOpenSearch, onOpenNotifications }) {
   return (
     <header className="header" id="app-header">
       <div className="brand">
-        <div className="brand-mark" aria-hidden="true">FH</div>
-        <div className="brand-text">
-          <div className="brand-name">FairHaven Health</div>
-          <div className="brand-tag">Officially in Uzbekistan</div>
+        <div className="brand-logo">
+          <span className="brand-logo-name">Fairhaven</span>
+          <span className="brand-logo-sub">health<sup className="brand-logo-tm">®</sup></span>
         </div>
       </div>
 

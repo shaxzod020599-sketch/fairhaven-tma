@@ -111,11 +111,11 @@ export default function AdminApp({ onExit, embedded }) {
     <div className={`ap-shell ${embedded ? 'embedded' : ''}`}>
       <aside className={`ap-sidebar ${navOpen ? 'open' : ''}`}>
         <div className="ap-brand">
-          <div className="ap-brand-mark">FH</div>
-          <div>
-            <div className="ap-brand-name">FairHaven</div>
-            <div className="ap-brand-tag">ADMIN · CMS</div>
+          <div className="ap-brand-logo">
+            <span className="ap-brand-logo-name">Fairhaven</span>
+            <span className="ap-brand-logo-sub">health<sup>®</sup></span>
           </div>
+          <div className="ap-brand-tag">ADMIN · CMS</div>
         </div>
         <nav className="ap-nav">
           {NAV.map((n) => (
@@ -259,8 +259,11 @@ function LoginPage({ onLoggedIn }) {
   return (
     <div className="ap-login">
       <div className="ap-login-card">
-        <div className="ap-brand-mark large">FH</div>
-        <h1 className="ap-login-title">FairHaven · Админ-панель</h1>
+        <div className="ap-brand-logo large">
+          <span className="ap-brand-logo-name">Fairhaven</span>
+          <span className="ap-brand-logo-sub">health<sup>®</sup></span>
+        </div>
+        <h1 className="ap-login-title">Fairhaven · Админ-панель</h1>
         <p className="ap-muted" style={{ marginBottom: 18 }}>
           Введите ваш Telegram ID, чтобы войти. Чтобы получить ID — откройте бота <b>@FairHavenHealthBot</b> и отправьте <code>/start</code>.
         </p>
