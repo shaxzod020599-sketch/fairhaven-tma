@@ -1,7 +1,7 @@
 /* ==========================================================================
-   FairHaven — Modern Botanical Apothecary
-   Aesthetic: Cream paper + deep forest + terracotta + sage
-   Typography: Fraunces (display serif) + DM Sans (body)
+   FairHaven — Fairhaven Health (US) inspired
+   Aesthetic: White surfaces + dadce0 borders + burgundy CTA + clean sans
+   Typography: Inter (everything) + system fallbacks
    ========================================================================== */
 
 *,
@@ -14,44 +14,63 @@
 }
 
 :root {
-  /* ---------- palette ---------- */
-  --ink: #0E2B1F;              /* deep forest — primary text + icons */
-  --ink-soft: #3A4F45;         /* muted forest — secondary text */
-  --ink-faint: #8A9690;        /* tertiary — meta, placeholders */
-  --paper: #F6F1E6;            /* warm cream — main background */
-  --paper-soft: #EFE7D5;       /* darker cream — cards, chips */
-  --paper-warm: #FAF5EA;       /* lightest cream — modals */
-  --line: #E4DAC2;             /* cream edge — borders */
-  --line-soft: #EDE3CD;        /* subtle dividers */
+  /* ---------- palette — EXACT fairhavenhealth.com :root ---------- */
+  --ink: #000000;              /* --color-body / --color-heading — pure black */
+  --ink-soft: #2c2d2e;         /* --color-secondary-menu-text */
+  --ink-faint: #6d6b6b;        /* --color-badge-sold-out */
+  --paper: #ffffff;            /* --bg-body / --color-header-bg — WHITE */
+  --paper-soft: #f7f7f7;       /* --bg-body-darken */
+  --paper-warm: #ffffff;       /* --color-drawer-bg / --color-article-card-bg */
+  --line: #DADCE0;             /* --color-border */
+  --line-soft: #E2E2E2;        /* --color-header-border */
+  --line-form: #D3D3D3;        /* --color-form-border */
 
-  --terracotta: #C96F3E;       /* warm accent — CTAs */
-  --terracotta-deep: #A8562B;  /* pressed state */
-  --terracotta-wash: #F4DDC7;  /* accent tint — badges */
+  --terracotta: #973961;       /* --color-accent / --solid-button-background */
+  --terracotta-deep: #7d2f50;  /* --color-accent-hover / wine */
+  --terracotta-wash: #e9c5d4;  /* --badge-heading-bg-color (rose pink) */
 
-  --sage: #6F8A6A;             /* secondary accent — success, botanical */
-  --sage-wash: #DDE5D0;        /* sage tint */
+  --sage: #58a291;             /* fairhaven teal (men's) */
+  --sage-deep: #279A4B;        /* --color-inventory-instock */
+  --sage-wash: #cee2de;        /* mint pastel */
 
-  --butter: #F2DFB5;           /* highlight — promo */
-  --clay: #D9A77A;             /* warm detail */
-  --ruby: #9B2C36;             /* alert / delete */
+  --butter: #973961;           /* primary accent — burgundy */
+  --clay: #FFAA47;             /* --color-star (rating only) */
+  --ruby: #c62a32;             /* --color-badge-sale */
+  --price-sale: #ff0000;       /* --color-price-discounted */
 
-  /* ---------- typography ---------- */
-  --font-display: 'Fraunces', 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
-  --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  /* ---------- fairhaven pastel category tiles ---------- */
+  --tile-pink-bg: #dbcad4;     /* fertility / women */
+  --tile-pink-deep: #7d2f50;   /* deep wine button */
+  --tile-rose-bg: #e9c5d4;     /* badge heading */
+  --tile-mint-bg: #cee2de;     /* general wellness — mint pastel */
+  --tile-mint-deep: #58a291;   /* teal button */
+  --tile-blue-bg: #d6e4f2;     /* men — light cool blue pastel */
+  --tile-blue-deep: #1e4d92;   /* FH PRO men — deep royal blue */
+  --tile-sage-bg: #d3efcd;     /* sage secondary */
+  --tile-lavender-bg: #ded8e5; /* postnatal */
+  --tile-lavender-deep: #8866bc; /* purple button */
+  --tile-wine-bg: #7d2f50;     /* menopause solid */
+  --tile-wine-deep: #301934;   /* deep wine button on wine tile */
+  --tile-cream-bg: #fdfaf7;    /* warm off-white tile */
+
+  /* ---------- typography — fairhaven uses Arial ONLY for both heading + body ---------- */
+  --font-display: Arial, "Helvetica Neue", Helvetica, sans-serif;
+  --font-body: Arial, "Helvetica Neue", Helvetica, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
 
-  /* ---------- shape ---------- */
-  --r-sm: 10px;
-  --r-md: 14px;
-  --r-lg: 20px;
-  --r-xl: 28px;
+  /* ---------- shape (fairhaven: button=25px, block=16px) ---------- */
+  --r-sm: 6px;     /* form inputs */
+  --r-md: 16px;    /* cards / blocks */
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-btn: 25px;   /* fairhaven button radius */
   --r-pill: 9999px;
 
-  /* ---------- elevation ---------- */
-  --shadow-xs: 0 1px 2px rgba(14, 43, 31, 0.06);
-  --shadow-sm: 0 2px 8px rgba(14, 43, 31, 0.06), 0 1px 2px rgba(14, 43, 31, 0.04);
-  --shadow-md: 0 8px 24px rgba(14, 43, 31, 0.08), 0 2px 6px rgba(14, 43, 31, 0.04);
-  --shadow-lg: 0 20px 48px rgba(14, 43, 31, 0.14), 0 4px 12px rgba(14, 43, 31, 0.06);
+  /* ---------- elevation (fairhaven 0 4px 6px #00000014) ---------- */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 9px 38px rgba(0, 0, 0, 0.05), 0 5px 12px rgba(0, 0, 0, 0.10);
   --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 
   /* ---------- motion ---------- */
@@ -64,8 +83,8 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
-  /* textured paper background — tiny noise */
-  --paper-texture: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.055 0 0 0 0 0.169 0 0 0 0 0.122 0 0 0 0.035 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  /* clean flat surfaces — no paper noise on fairhaven */
+  --paper-texture: none;
 }
 
 html {
@@ -176,7 +195,8 @@ ul, ol {
    ========================================================================== */
 .page-title {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 2.1rem;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -194,7 +214,8 @@ ul, ol {
 
 .section-title {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 1.35rem;
   line-height: 1.1;
   letter-spacing: -0.015em;
@@ -252,7 +273,7 @@ ul, ol {
   z-index: 100;
   border-bottom: 1px solid var(--line-soft);
   backdrop-filter: blur(12px);
-  background: rgba(246, 241, 230, 0.92);
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .brand {
@@ -261,51 +282,38 @@ ul, ol {
   gap: 10px;
 }
 
-.brand-mark {
-  width: 38px;
-  height: 38px;
-  border-radius: var(--r-pill);
-  background: var(--ink);
-  color: var(--paper);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: 1.15rem;
-  font-variation-settings: 'opsz' 14, 'SOFT' 100;
-  position: relative;
-  overflow: hidden;
-}
-.brand-mark::before {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border: 1px dashed rgba(246, 241, 230, 0.35);
-  border-radius: var(--r-pill);
-  pointer-events: none;
-}
-
-.brand-text {
-  display: flex;
+.brand-logo {
+  display: inline-flex;
   flex-direction: column;
+  align-items: flex-start;
+  line-height: 1;
+  color: var(--ink);
+}
+.brand-logo-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
   line-height: 1;
 }
-.brand-name {
+.brand-logo-sub {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: 1.15rem;
-  letter-spacing: -0.015em;
-  color: var(--ink);
-  font-variation-settings: 'opsz' 24, 'SOFT' 100;
+  font-size: 0.85rem;
+  letter-spacing: -0.01em;
+  margin-top: 2px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: flex-start;
 }
-.brand-tag {
-  font-size: 0.62rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  font-weight: 500;
-  margin-top: 3px;
+.brand-logo-tm {
+  font-size: 0.55rem;
+  font-weight: 400;
+  margin-left: 1px;
+  line-height: 1;
+  vertical-align: super;
+  top: 0;
+  position: relative;
 }
 
 .header-actions {
@@ -349,33 +357,16 @@ ul, ol {
   position: relative;
   margin: 6px 0 28px;
   padding: 28px 24px 26px;
-  background: var(--ink);
-  border-radius: var(--r-xl);
-  color: var(--paper);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--ink);
   overflow: hidden;
   isolation: isolate;
 }
 
-.hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 60% 40% at 85% 15%, rgba(201, 111, 62, 0.35), transparent 60%),
-    radial-gradient(ellipse 50% 50% at 10% 100%, rgba(111, 138, 106, 0.25), transparent 60%);
-  z-index: -1;
-}
-
-.hero::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: var(--paper-texture);
-  opacity: 0.5;
-  mix-blend-mode: overlay;
-  pointer-events: none;
-  z-index: -1;
-}
+.hero::before { content: none; }
+.hero::after { content: none; }
 
 .hero-leaf {
   position: absolute;
@@ -388,11 +379,11 @@ ul, ol {
 .hero-leaf.two { bottom: -20px; right: 72px; font-size: 2.4rem; animation-delay: 1.5s; }
 
 .hero-eyebrow {
-  font-size: 0.66rem;
-  letter-spacing: 0.24em;
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--butter);
-  font-weight: 600;
+  color: var(--terracotta);
+  font-weight: 700;
   margin-bottom: 14px;
   display: inline-flex;
   align-items: center;
@@ -402,59 +393,56 @@ ul, ol {
   content: '';
   width: 22px;
   height: 1px;
-  background: var(--butter);
+  background: var(--terracotta);
   display: inline-block;
 }
 
 .hero-title {
   font-family: var(--font-display);
-  font-weight: 300;
-  font-size: 2rem;
-  line-height: 1.05;
+  font-weight: 700;
   letter-spacing: -0.025em;
-  color: var(--paper);
-  margin-bottom: 10px;
-  font-variation-settings: 'opsz' 144, 'SOFT' 100, 'WONK' 1;
+  font-size: 2.1rem;
+  line-height: 1.05;
+  color: var(--ink);
+  margin-bottom: 12px;
 }
 .hero-title em {
   font-style: italic;
-  color: var(--butter);
-  font-weight: 300;
-  font-variation-settings: 'opsz' 144, 'SOFT' 100, 'WONK' 1;
+  color: var(--terracotta);
+  font-weight: 700;
 }
 
 .hero-desc {
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   line-height: 1.55;
-  color: rgba(246, 241, 230, 0.78);
-  max-width: 24ch;
-  margin-bottom: 20px;
+  color: var(--ink-soft);
+  max-width: 30ch;
+  margin-bottom: 22px;
 }
 
 .hero-cta {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 18px 12px 22px;
-  background: var(--butter);
-  color: var(--ink);
-  border-radius: var(--r-pill);
+  padding: 14px 22px 14px 24px;
+  background: var(--terracotta);
+  color: #ffffff;
+  border-radius: 25px;
   font-weight: 600;
-  font-size: 0.86rem;
-  letter-spacing: -0.005em;
+  font-size: 0.92rem;
+  letter-spacing: 0;
   transition: var(--t-fast);
-  box-shadow: var(--shadow-sm);
 }
 .hero-cta:active {
   transform: scale(0.96);
-  background: #EAD4A2;
+  background: var(--terracotta-deep);
 }
 .hero-cta .arrow {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   border-radius: var(--r-pill);
-  background: var(--ink);
-  color: var(--butter);
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -472,8 +460,8 @@ ul, ol {
 .hero-stats {
   display: flex;
   gap: 16px;
-  font-size: 0.65rem;
-  color: rgba(246, 241, 230, 0.6);
+  font-size: 0.7rem;
+  color: var(--ink-faint);
   letter-spacing: 0.02em;
   flex-shrink: 0;
 }
@@ -484,11 +472,11 @@ ul, ol {
   display: block;
   font-family: var(--font-display);
   font-size: 1.15rem;
-  font-weight: 400;
-  color: var(--paper);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
   line-height: 1;
   margin-bottom: 3px;
-  font-variation-settings: 'opsz' 24, 'SOFT' 100;
 }
 
 /* ==========================================================================
@@ -514,7 +502,7 @@ ul, ol {
 .search-bar input:focus {
   border-color: var(--ink);
   background: var(--paper-warm);
-  box-shadow: 0 0 0 4px rgba(14, 43, 31, 0.06);
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.06);
 }
 
 .search-bar input::placeholder {
@@ -650,7 +638,7 @@ ul, ol {
 .category-pill .pg { font-size: 0.9rem; }
 .category-pill:active { transform: scale(0.96); }
 .category-pill.active {
-  background: var(--ink);
+  background: var(--terracotta);
   color: var(--paper);
   border-color: var(--ink);
 }
@@ -705,7 +693,7 @@ ul, ol {
   inset: 0;
   background:
     radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.5), transparent 50%),
-    radial-gradient(circle at 70% 80%, rgba(201, 111, 62, 0.06), transparent 55%);
+    radial-gradient(circle at 70% 80%, rgba(151, 57, 97, 0.06), transparent 55%);
   pointer-events: none;
 }
 .product-media img {
@@ -718,7 +706,7 @@ ul, ol {
   position: absolute;
   top: 10px;
   left: 10px;
-  background: var(--ink);
+  background: var(--terracotta);
   color: var(--paper);
   font-size: 0.6rem;
   letter-spacing: 0.12em;
@@ -730,22 +718,22 @@ ul, ol {
 }
 .product-badge.new { background: var(--sage); }
 .product-badge.sale {
-  background: linear-gradient(135deg, #C96F3E 0%, #9B2C36 100%);
+  background: linear-gradient(135deg, #c62a32 0%, #973961 100%);
   color: #fff;
   font-size: 1.05rem;
   font-weight: 900;
   padding: 7px 13px;
   letter-spacing: 0.02em;
   text-transform: none;
-  box-shadow: 0 6px 18px rgba(155, 44, 54, 0.45), 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 6px 18px rgba(198, 42, 50, 0.45), 0 1px 2px rgba(0, 0, 0, 0.08);
   border: 2px solid rgba(255, 255, 255, 0.7);
   animation: salePulse 2.4s var(--ease-out) infinite;
   font-variation-settings: 'opsz' 14;
   line-height: 1;
 }
 @keyframes salePulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 6px 18px rgba(155, 44, 54, 0.45); }
-  50%      { transform: scale(1.08); box-shadow: 0 8px 22px rgba(155, 44, 54, 0.6); }
+  0%, 100% { transform: scale(1); box-shadow: 0 6px 18px rgba(198, 42, 50, 0.45); }
+  50%      { transform: scale(1.08); box-shadow: 0 8px 22px rgba(198, 42, 50, 0.6); }
 }
 
 .product-fav {
@@ -776,7 +764,7 @@ ul, ol {
   width: 36px;
   height: 36px;
   border-radius: var(--r-pill);
-  background: var(--ink);
+  background: var(--terracotta);
   color: var(--paper);
   display: flex;
   align-items: center;
@@ -808,7 +796,8 @@ ul, ol {
 
 .product-name {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 0.95rem;
   line-height: 1.2;
   letter-spacing: -0.01em;
@@ -831,7 +820,7 @@ ul, ol {
 
 .product-price {
   font-family: var(--font-display);
-  font-weight: 500;
+  font-weight: 600;
   font-size: 1rem;
   color: var(--ink);
   letter-spacing: -0.015em;
@@ -866,7 +855,7 @@ ul, ol {
   top: 44%;
   left: 50%;
   transform: translate(-50%, -50%) rotate(-8deg);
-  background: var(--ink);
+  background: var(--terracotta);
   color: var(--paper);
   padding: 5px 14px;
   border-radius: var(--r-pill);
@@ -894,23 +883,83 @@ ul, ol {
 .featured-card {
   flex: 0 0 240px;
   position: relative;
-  padding: 18px;
-  border-radius: var(--r-lg);
-  background: linear-gradient(135deg, var(--sage-wash) 0%, var(--paper-soft) 100%);
-  border: 1px solid var(--line);
+  padding: 22px 20px 20px;
+  border-radius: var(--r-md);
+  background: var(--tile-mint-bg);
+  border: none;
   scroll-snap-align: start;
   overflow: hidden;
 }
-.featured-card.terracotta {
-  background: linear-gradient(135deg, var(--terracotta-wash) 0%, var(--butter) 100%);
+/* tone variants — fairhaven life-stage pastels */
+.featured-card.terracotta,
+.featured-card.pink {
+  background: var(--tile-pink-bg);
 }
-.featured-card.ink {
-  background: var(--ink);
-  color: var(--paper);
+.featured-card.terracotta .featured-cta,
+.featured-card.pink .featured-cta {
+  background: var(--tile-pink-deep);
+  color: #ffffff;
 }
-.featured-card.ink .featured-title { color: var(--paper); }
-.featured-card.ink .featured-desc { color: rgba(246, 241, 230, 0.75); }
-.featured-card.ink .featured-cta { background: var(--butter); color: var(--ink); }
+.featured-card.terracotta .featured-eyebrow,
+.featured-card.pink .featured-eyebrow {
+  color: var(--tile-pink-deep);
+}
+
+/* "ink" tone repurposed: men's BLUE (FH PRO For Men palette) — no more black bg */
+.featured-card.ink,
+.featured-card.blue {
+  background: var(--tile-blue-bg);
+}
+.featured-card.ink .featured-cta,
+.featured-card.blue .featured-cta {
+  background: var(--tile-blue-deep);
+  color: #ffffff;
+}
+.featured-card.ink .featured-eyebrow,
+.featured-card.blue .featured-eyebrow {
+  color: var(--tile-blue-deep);
+}
+
+/* mint / teal tone — general wellness */
+.featured-card.mint,
+.featured-card.teal {
+  background: var(--tile-mint-bg);
+}
+.featured-card.mint .featured-cta,
+.featured-card.teal .featured-cta {
+  background: var(--tile-mint-deep);
+  color: #ffffff;
+}
+.featured-card.mint .featured-eyebrow,
+.featured-card.teal .featured-eyebrow {
+  color: #245d51;
+}
+
+/* default tone — pregnancy / lactation lavender */
+.featured-card.default,
+.featured-card.lavender {
+  background: var(--tile-lavender-bg);
+}
+.featured-card.default .featured-cta,
+.featured-card.lavender .featured-cta {
+  background: var(--tile-lavender-deep);
+  color: #ffffff;
+}
+.featured-card.default .featured-eyebrow,
+.featured-card.lavender .featured-eyebrow {
+  color: #4d3a78;
+}
+
+.featured-card.wine {
+  background: var(--tile-wine-bg);
+}
+.featured-card.wine .featured-title,
+.featured-card.wine .featured-desc { color: #ffffff; }
+.featured-card.wine .featured-eyebrow { color: rgba(255, 255, 255, 0.85); }
+.featured-card.wine .featured-cta {
+  background: #ffffff;
+  color: var(--tile-wine-bg);
+}
 
 .featured-art {
   position: absolute;
@@ -923,45 +972,44 @@ ul, ol {
 }
 
 .featured-eyebrow {
-  font-size: 0.62rem;
-  letter-spacing: 0.18em;
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--terracotta-deep);
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 10px;
 }
 
 .featured-title {
   font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: 1.2rem;
   line-height: 1.15;
-  letter-spacing: -0.015em;
-  color: var(--ink);
+  color: #000000;
   margin-bottom: 6px;
-  max-width: 12ch;
-  font-variation-settings: 'opsz' 24, 'SOFT' 80;
+  max-width: 14ch;
 }
 
 .featured-desc {
-  font-size: 0.75rem;
-  color: var(--ink-soft);
+  font-size: 0.78rem;
+  color: rgba(0, 0, 0, 0.72);
   line-height: 1.4;
-  margin-bottom: 14px;
-  max-width: 18ch;
+  margin-bottom: 16px;
+  max-width: 20ch;
 }
 
 .featured-cta {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
-  background: var(--ink);
-  color: var(--paper);
-  border-radius: var(--r-pill);
-  font-size: 0.74rem;
+  padding: 9px 18px;
+  background: var(--terracotta);
+  color: #ffffff;
+  border-radius: 25px;
+  font-size: 0.78rem;
   font-weight: 600;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
 }
 
 /* ==========================================================================
@@ -1022,7 +1070,7 @@ ul, ol {
 .promo-banner {
   position: relative;
   padding: 18px 22px;
-  background: var(--ink);
+  background: var(--terracotta);
   border-radius: var(--r-lg);
   color: var(--paper);
   margin: 22px 0;
@@ -1039,7 +1087,7 @@ ul, ol {
   background: repeating-linear-gradient(
     135deg,
     transparent 0 16px,
-    rgba(242, 223, 181, 0.05) 16px 17px
+    rgba(151, 57, 97, 0.05) 16px 17px
   );
   z-index: -1;
 }
@@ -1055,13 +1103,14 @@ ul, ol {
   font-size: 0.62rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--butter);
+  color: #ffffff;
   font-weight: 600;
   margin-bottom: 4px;
 }
 .promo-banner .promo-title {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 1.05rem;
   letter-spacing: -0.01em;
   line-height: 1.2;
@@ -1069,11 +1118,11 @@ ul, ol {
 }
 .promo-banner .promo-code {
   padding: 6px 10px;
-  border: 1px dashed rgba(242, 223, 181, 0.6);
+  border: 1px dashed rgba(151, 57, 97, 0.6);
   border-radius: 6px;
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  color: var(--butter);
+  color: #ffffff;
   letter-spacing: 0.08em;
 }
 
@@ -1152,7 +1201,8 @@ ul, ol {
 
 .cart-empty h3 {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 1.4rem;
   letter-spacing: -0.015em;
   color: var(--ink);
@@ -1173,7 +1223,7 @@ ul, ol {
   align-items: center;
   gap: 8px;
   padding: 12px 22px;
-  background: var(--ink);
+  background: var(--terracotta);
   color: var(--paper);
   border-radius: var(--r-pill);
   font-size: 0.86rem;
@@ -1235,7 +1285,8 @@ ul, ol {
 
 .cart-item-name {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 0.92rem;
   line-height: 1.2;
   color: var(--ink);
@@ -1249,7 +1300,7 @@ ul, ol {
 
 .cart-item-price {
   font-family: var(--font-display);
-  font-weight: 500;
+  font-weight: 600;
   font-size: 0.9rem;
   color: var(--ink);
   letter-spacing: -0.01em;
@@ -1362,7 +1413,7 @@ ul, ol {
 .checkout-btn {
   width: 100%;
   padding: 17px;
-  background: var(--ink);
+  background: var(--terracotta);
   color: var(--paper);
   font-size: 0.95rem;
   font-weight: 600;
@@ -1399,7 +1450,7 @@ ul, ol {
 .sheet-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(14, 43, 31, 0.45);
+  background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(4px);
   z-index: 900;
   animation: backdropIn 240ms var(--ease-out);
@@ -1456,7 +1507,7 @@ ul, ol {
   inset: 0;
   background:
     radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.6), transparent 55%),
-    radial-gradient(circle at 75% 80%, rgba(201, 111, 62, 0.1), transparent 60%);
+    radial-gradient(circle at 75% 80%, rgba(151, 57, 97, 0.1), transparent 60%);
   pointer-events: none;
 }
 
@@ -1471,7 +1522,8 @@ ul, ol {
 
 .sheet-name {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 1.7rem;
   line-height: 1.1;
   letter-spacing: -0.02em;
@@ -1524,7 +1576,7 @@ ul, ol {
 }
 .sheet-price-value {
   font-family: var(--font-display);
-  font-weight: 500;
+  font-weight: 600;
   font-size: 1.9rem;
   letter-spacing: -0.02em;
   color: var(--ink);
@@ -1543,7 +1595,7 @@ ul, ol {
 
 .sheet-add-btn {
   padding: 14px 24px;
-  background: var(--ink);
+  background: var(--terracotta);
   color: var(--paper);
   border-radius: var(--r-pill);
   font-size: 0.9rem;
@@ -1580,7 +1632,8 @@ ul, ol {
 
 .map-header .map-title {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 1.05rem;
   letter-spacing: -0.01em;
   color: var(--ink);
@@ -1619,7 +1672,7 @@ ul, ol {
   transform: translate(-50%, -100%);
   font-size: 2.2rem;
   z-index: 10;
-  filter: drop-shadow(0 4px 8px rgba(14, 43, 31, 0.25));
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
   pointer-events: none;
   animation: pinDrop 400ms var(--ease-spring);
 }
@@ -1661,7 +1714,7 @@ ul, ol {
 .map-confirm-btn {
   width: 100%;
   padding: 15px;
-  background: var(--ink);
+  background: var(--terracotta);
   color: var(--paper);
   font-size: 0.9rem;
   font-weight: 600;
@@ -1682,7 +1735,7 @@ ul, ol {
   position: relative;
   margin: 0 0 18px;
   padding: 24px 22px 26px;
-  background: var(--ink);
+  background: var(--terracotta);
   border-radius: var(--r-xl);
   color: var(--paper);
   overflow: hidden;
@@ -1693,8 +1746,8 @@ ul, ol {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 60% 50% at 90% 20%, rgba(242, 223, 181, 0.18), transparent 60%),
-    radial-gradient(ellipse 50% 50% at 10% 100%, rgba(201, 111, 62, 0.18), transparent 60%);
+    radial-gradient(ellipse 60% 50% at 90% 20%, rgba(151, 57, 97, 0.18), transparent 60%),
+    radial-gradient(ellipse 50% 50% at 10% 100%, rgba(151, 57, 97, 0.18), transparent 60%);
   z-index: -1;
 }
 
@@ -1708,12 +1761,12 @@ ul, ol {
   width: 64px;
   height: 64px;
   border-radius: var(--r-pill);
-  background: rgba(246, 241, 230, 0.15);
+  background: rgba(255, 255, 255, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.6rem;
-  border: 2px solid rgba(242, 223, 181, 0.4);
+  border: 2px solid rgba(255, 255, 255, 0.35);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -1726,16 +1779,17 @@ ul, ol {
 .profile-text { flex: 1; min-width: 0; }
 
 .profile-eyebrow {
-  font-size: 0.62rem;
-  letter-spacing: 0.2em;
+  font-size: 0.66rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--butter);
-  font-weight: 600;
-  margin-bottom: 4px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 700;
+  margin-bottom: 6px;
 }
 .profile-name {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 1.4rem;
   letter-spacing: -0.015em;
   line-height: 1.1;
@@ -1745,37 +1799,37 @@ ul, ol {
 }
 .profile-handle {
   font-size: 0.78rem;
-  color: rgba(246, 241, 230, 0.6);
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .profile-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1px;
-  background: rgba(246, 241, 230, 0.15);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: var(--r-md);
   margin-top: 20px;
   overflow: hidden;
 }
 .profile-stat {
-  background: var(--ink);
+  background: var(--terracotta);
   padding: 12px 8px;
   text-align: center;
 }
 .profile-stat .stat-val {
   font-family: var(--font-display);
-  font-size: 1.3rem;
-  font-weight: 400;
-  color: var(--butter);
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #ffffff;
   line-height: 1;
   margin-bottom: 4px;
-  font-variation-settings: 'opsz' 32, 'SOFT' 80;
 }
 .profile-stat .stat-label {
   font-size: 0.62rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(246, 241, 230, 0.7);
+  color: rgba(255, 255, 255, 0.7);
   font-weight: 500;
 }
 
@@ -1866,14 +1920,15 @@ ul, ol {
   bottom: calc(12px + var(--safe-bottom));
   width: calc(100% - 24px);
   max-width: 456px;
-  background: var(--ink);
+  background: #ffffff;
+  border: 1px solid var(--line);
   border-radius: var(--r-pill);
   display: flex;
   justify-content: space-around;
   align-items: center;
   padding: 6px;
   z-index: 500;
-  box-shadow: 0 12px 32px rgba(14, 43, 31, 0.2), 0 4px 10px rgba(14, 43, 31, 0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.04);
 }
 
 .nav-item {
@@ -1884,7 +1939,7 @@ ul, ol {
   justify-content: center;
   gap: 2px;
   padding: 9px 4px;
-  color: rgba(246, 241, 230, 0.58);
+  color: rgba(0, 0, 0, 0.55);
   transition: var(--t-fast);
   position: relative;
   border-radius: var(--r-pill);
@@ -1894,8 +1949,8 @@ ul, ol {
 .nav-item:active { transform: scale(0.94); }
 
 .nav-item.active {
-  color: var(--ink);
-  background: var(--butter);
+  color: #ffffff;
+  background: var(--terracotta);
 }
 
 .nav-item .nav-glyph {
@@ -1915,8 +1970,8 @@ ul, ol {
   position: absolute;
   top: 4px;
   right: calc(50% - 20px);
-  background: var(--terracotta);
-  color: var(--paper);
+  background: var(--ruby);
+  color: #ffffff;
   font-size: 0.58rem;
   font-weight: 700;
   min-width: 16px;
@@ -1927,9 +1982,9 @@ ul, ol {
   justify-content: center;
   padding: 0 4px;
   animation: scaleIn 200ms var(--ease-spring);
-  border: 2px solid var(--ink);
+  border: 2px solid #ffffff;
 }
-.nav-item.active .nav-badge { border-color: var(--butter); }
+.nav-item.active .nav-badge { border-color: var(--terracotta); }
 
 /* ==========================================================================
    loading, toast, misc
@@ -2019,7 +2074,7 @@ ul, ol {
   top: calc(20px + var(--safe-top));
   left: 50%;
   transform: translateX(-50%);
-  background: var(--ink);
+  background: var(--terracotta);
   color: var(--paper);
   padding: 11px 20px;
   border-radius: var(--r-pill);
@@ -2058,71 +2113,57 @@ ul, ol {
 .contact-centre {
   position: relative;
   margin: 28px 0 0;
-  padding: 26px 22px 22px;
-  background: linear-gradient(
-    152deg,
-    var(--ink) 0%,
-    #143427 60%,
-    #10251c 100%
-  );
-  border-radius: var(--r-xl);
-  color: var(--paper);
+  padding: 28px 24px 24px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--ink);
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
 }
 
-.contact-centre::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 18% 18%, rgba(242, 223, 181, 0.14), transparent 42%),
-    radial-gradient(circle at 86% 90%, rgba(201, 111, 62, 0.18), transparent 46%);
-  pointer-events: none;
-}
+.contact-centre::before { content: none; }
 
 .contact-leaf {
   position: absolute;
   top: 18px;
   right: 22px;
-  font-size: 2rem;
-  opacity: 0.35;
+  font-size: 1.8rem;
+  opacity: 0.5;
   animation: drift 5.5s ease-in-out infinite;
 }
 
 .contact-eyebrow {
   position: relative;
-  font-size: 0.62rem;
-  letter-spacing: 0.22em;
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   font-weight: 700;
-  color: var(--butter);
-  margin-bottom: 12px;
+  color: var(--terracotta);
+  margin-bottom: 14px;
 }
 
 .contact-title {
   position: relative;
   font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 1.85rem;
-  line-height: 1.05;
+  font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--paper);
-  margin-bottom: 8px;
-  font-variation-settings: 'opsz' 48, 'SOFT' 100;
+  font-size: 1.9rem;
+  line-height: 1.05;
+  color: var(--ink);
+  margin-bottom: 10px;
 }
 .contact-title em {
   font-style: italic;
-  color: var(--butter);
-  font-variation-settings: 'opsz' 48, 'SOFT' 100, 'WONK' 1;
+  color: var(--terracotta);
+  font-weight: 700;
 }
 
 .contact-desc {
   position: relative;
-  font-size: 0.86rem;
-  line-height: 1.45;
-  color: rgba(246, 241, 230, 0.74);
-  margin-bottom: 18px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  margin-bottom: 20px;
   max-width: 92%;
 }
 
@@ -2131,34 +2172,32 @@ ul, ol {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 16px 18px;
-  background: var(--butter);
-  color: var(--ink);
-  border-radius: var(--r-lg);
+  padding: 16px 20px;
+  background: var(--terracotta);
+  color: #ffffff;
+  border-radius: 25px;
   font-family: var(--font-display);
-  font-weight: 500;
-  font-size: 1.25rem;
+  font-weight: 700;
+  font-size: 1.2rem;
   letter-spacing: -0.01em;
   text-decoration: none;
-  box-shadow: 0 10px 22px rgba(14, 43, 31, 0.25);
   transition: var(--t-fast);
-  font-variation-settings: 'opsz' 36;
 }
 .contact-phone:active {
   transform: scale(0.985);
-  box-shadow: 0 4px 12px rgba(14, 43, 31, 0.18);
+  background: var(--terracotta-deep);
 }
 
 .contact-phone-icon {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--r-pill);
-  background: var(--ink);
-  color: var(--butter);
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   flex-shrink: 0;
 }
 
@@ -2170,8 +2209,8 @@ ul, ol {
 .contact-phone-arrow {
   font-family: var(--font-body);
   font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--terracotta);
+  font-weight: 700;
+  color: #ffffff;
 }
 
 .contact-tg {
@@ -2183,8 +2222,8 @@ ul, ol {
   padding: 10px 16px;
   width: 100%;
   justify-content: center;
-  background: rgba(246, 241, 230, 0.08);
-  border: 1px solid rgba(246, 241, 230, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   color: var(--paper);
   font-size: 0.82rem;
   font-weight: 500;
@@ -2193,15 +2232,15 @@ ul, ol {
   transition: var(--t-fast);
 }
 .contact-tg:active {
-  background: rgba(246, 241, 230, 0.14);
+  background: rgba(255, 255, 255, 0.14);
   transform: scale(0.985);
 }
 
 .contact-meta {
   position: relative;
   margin-top: 14px;
-  font-size: 0.72rem;
-  color: rgba(246, 241, 230, 0.56);
+  font-size: 0.78rem;
+  color: var(--ink-faint);
   text-align: center;
   letter-spacing: 0.02em;
 }
@@ -2450,7 +2489,7 @@ ul, ol {
 }
 .payment-option-radio.on {
   border-color: var(--ink);
-  background: var(--ink);
+  background: var(--terracotta);
   box-shadow: inset 0 0 0 3px var(--paper-warm);
 }
 
@@ -2512,14 +2551,15 @@ ul, ol {
   font-size: 2.4rem;
   font-weight: 700;
   box-shadow:
-    inset 0 0 0 8px rgba(111, 138, 106, 0.14),
-    0 12px 28px rgba(111, 138, 106, 0.22);
+    inset 0 0 0 8px rgba(88, 162, 145, 0.14),
+    0 12px 28px rgba(88, 162, 145, 0.22);
   animation: scaleIn 420ms var(--ease-spring);
 }
 
 .order-success h2 {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 1.85rem;
   letter-spacing: -0.02em;
   color: var(--ink);
@@ -2589,8 +2629,8 @@ ul, ol {
   min-width: 24px;
   height: 24px;
   padding: 0 7px;
-  background: var(--ink);
-  color: var(--butter);
+  background: var(--terracotta);
+  color: #ffffff;
   border-radius: var(--r-pill);
   font-size: 0.72rem;
   font-weight: 700;
@@ -2598,7 +2638,7 @@ ul, ol {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(14, 43, 31, 0.22);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
@@ -2662,8 +2702,8 @@ ul, ol {
   background: var(--butter);
   color: var(--ink);
   box-shadow:
-    inset 0 0 0 8px rgba(242, 223, 181, 0.5),
-    0 12px 28px rgba(242, 223, 181, 0.45);
+    inset 0 0 0 8px rgba(151, 57, 97, 0.5),
+    0 12px 28px rgba(151, 57, 97, 0.45);
 }
 .order-status-pending .order-status-art::after {
   content: '';
@@ -2684,15 +2724,15 @@ ul, ol {
   background: var(--sage-wash);
   color: var(--sage);
   box-shadow:
-    inset 0 0 0 8px rgba(111, 138, 106, 0.18),
-    0 12px 28px rgba(111, 138, 106, 0.26);
+    inset 0 0 0 8px rgba(88, 162, 145, 0.18),
+    0 12px 28px rgba(88, 162, 145, 0.26);
 }
 .order-status-cancelled .order-status-art {
-  background: rgba(155, 44, 54, 0.12);
+  background: rgba(198, 42, 50, 0.12);
   color: var(--ruby);
   box-shadow:
-    inset 0 0 0 8px rgba(155, 44, 54, 0.12),
-    0 12px 28px rgba(155, 44, 54, 0.2);
+    inset 0 0 0 8px rgba(198, 42, 50, 0.12),
+    0 12px 28px rgba(198, 42, 50, 0.2);
 }
 
 .order-status-kicker {
@@ -2709,7 +2749,8 @@ ul, ol {
 
 .order-status-title {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 1.95rem;
   letter-spacing: -0.02em;
   color: var(--ink);
@@ -2743,12 +2784,12 @@ ul, ol {
   height: 7px;
   border-radius: var(--r-pill);
   background: var(--sage);
-  box-shadow: 0 0 0 0 rgba(111, 138, 106, 0.55);
+  box-shadow: 0 0 0 0 rgba(88, 162, 145, 0.55);
   animation: pulse 1.4s ease-in-out infinite;
 }
 @keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(111, 138, 106, 0.55); }
-  50%      { box-shadow: 0 0 0 6px rgba(111, 138, 106, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(88, 162, 145, 0.55); }
+  50%      { box-shadow: 0 0 0 6px rgba(88, 162, 145, 0); }
 }
 
 /* ==========================================================================
@@ -2768,7 +2809,7 @@ ul, ol {
   transition: var(--t-fast);
 }
 .order-cancel-btn:active:not(:disabled) {
-  background: rgba(155, 44, 54, 0.08);
+  background: rgba(198, 42, 50, 0.08);
   transform: scale(0.985);
 }
 .order-cancel-btn:disabled {
@@ -2927,7 +2968,7 @@ ul, ol {
 }
 .order-card.highlight {
   border-color: var(--clay);
-  box-shadow: 0 4px 14px rgba(201, 111, 62, 0.12);
+  box-shadow: 0 4px 14px rgba(151, 57, 97, 0.12);
 }
 
 .order-card-head {
@@ -2957,7 +2998,7 @@ ul, ol {
 }
 .order-card-status.pending   { background: var(--butter); color: var(--ink); }
 .order-card-status.confirmed { background: var(--sage-wash); color: var(--sage); }
-.order-card-status.cancelled { background: rgba(155, 44, 54, 0.12); color: var(--ruby); }
+.order-card-status.cancelled { background: rgba(198, 42, 50, 0.12); color: var(--ruby); }
 
 .order-card-status-glyph {
   font-size: 0.88rem;
@@ -3025,7 +3066,8 @@ ul, ol {
 }
 .orders-empty h3 {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 1.35rem;
   letter-spacing: -0.015em;
   color: var(--ink);
@@ -3043,7 +3085,7 @@ ul, ol {
   align-items: center;
   gap: 8px;
   padding: 11px 20px;
-  background: var(--ink);
+  background: var(--terracotta);
   color: var(--paper);
   border-radius: var(--r-pill);
   font-size: 0.84rem;
@@ -3056,8 +3098,8 @@ ul, ol {
 .orders-error {
   margin-top: 14px;
   padding: 10px 14px;
-  background: rgba(155, 44, 54, 0.08);
-  border: 1px solid rgba(155, 44, 54, 0.2);
+  background: rgba(198, 42, 50, 0.08);
+  border: 1px solid rgba(198, 42, 50, 0.2);
   border-radius: var(--r-md);
   font-size: 0.78rem;
   color: var(--ruby);
@@ -3112,7 +3154,7 @@ ul, ol {
   text-align: left;
   margin-bottom: 8px;
   transition: var(--t-fast);
-  box-shadow: 0 4px 14px rgba(201, 111, 62, 0.08);
+  box-shadow: 0 4px 14px rgba(151, 57, 97, 0.08);
 }
 .active-order-card:active { transform: scale(0.99); }
 .active-order-card:last-child { margin-bottom: 0; }
@@ -3190,8 +3232,8 @@ ul, ol {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 60% 40% at 85% 20%, rgba(242, 223, 181, 0.22), transparent 60%),
-    radial-gradient(ellipse 40% 50% at 10% 90%, rgba(14, 43, 31, 0.15), transparent 60%);
+    radial-gradient(ellipse 60% 40% at 85% 20%, rgba(151, 57, 97, 0.22), transparent 60%),
+    radial-gradient(ellipse 40% 50% at 10% 90%, rgba(0, 0, 0, 0.15), transparent 60%);
   pointer-events: none;
 }
 .profile-admin-card:active {
@@ -3204,7 +3246,7 @@ ul, ol {
   height: 46px;
   flex-shrink: 0;
   border-radius: var(--r-pill);
-  background: rgba(246, 241, 230, 0.18);
+  background: rgba(255, 255, 255, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3225,13 +3267,14 @@ ul, ol {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   font-weight: 700;
-  color: var(--butter);
+  color: #ffffff;
   margin-bottom: 4px;
 }
 
 .profile-admin-title {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 1.3rem;
   letter-spacing: -0.015em;
   line-height: 1.05;
@@ -3241,7 +3284,7 @@ ul, ol {
 
 .profile-admin-desc {
   font-size: 0.78rem;
-  color: rgba(246, 241, 230, 0.82);
+  color: rgba(255, 255, 255, 0.82);
   letter-spacing: 0.005em;
 }
 
@@ -3250,7 +3293,7 @@ ul, ol {
   height: 32px;
   flex-shrink: 0;
   border-radius: var(--r-pill);
-  background: rgba(14, 43, 31, 0.22);
+  background: rgba(0, 0, 0, 0.22);
   color: var(--paper);
   display: flex;
   align-items: center;
@@ -3270,17 +3313,17 @@ ul, ol {
   gap: 14px;
   padding: 16px 18px;
   margin: 14px 0 0;
-  background: var(--ink);
+  background: var(--terracotta);
   color: var(--paper);
   border-radius: var(--r-lg);
   text-align: left;
   position: relative;
   transition: var(--t-fast);
-  box-shadow: 0 10px 24px rgba(14, 43, 31, 0.18);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
 }
 .profile-orders-card:active {
   transform: scale(0.99);
-  box-shadow: 0 4px 12px rgba(14, 43, 31, 0.14);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
 }
 
 .profile-orders-glyph {
@@ -3303,7 +3346,8 @@ ul, ol {
 
 .profile-orders-title {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 1.3rem;
   letter-spacing: -0.015em;
   line-height: 1.05;
@@ -3313,7 +3357,7 @@ ul, ol {
 
 .profile-orders-desc {
   font-size: 0.78rem;
-  color: rgba(246, 241, 230, 0.72);
+  color: rgba(255, 255, 255, 0.72);
   letter-spacing: 0.005em;
 }
 
@@ -3333,7 +3377,7 @@ ul, ol {
 }
 
 .profile-orders-arrow {
-  color: var(--butter);
+  color: #ffffff;
   font-size: 1.1rem;
   font-weight: 600;
   padding-left: 4px;
@@ -3430,7 +3474,8 @@ ul, ol {
 .gate-title {
   position: relative;
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 2rem;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -3518,24 +3563,24 @@ ul, ol {
   justify-content: center;
   gap: 10px;
   padding: 15px 20px;
-  background: var(--ink);
+  background: var(--terracotta);
   color: var(--paper);
   font-family: inherit;
   font-size: 0.95rem;
   font-weight: 600;
   letter-spacing: -0.005em;
   border-radius: var(--r-pill);
-  box-shadow: 0 10px 24px rgba(14, 43, 31, 0.22);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
   transition: var(--t-fast);
 }
 .gate-cta:active {
   transform: scale(0.985);
-  box-shadow: 0 4px 12px rgba(14, 43, 31, 0.18);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
 .gate-cta .arrow {
   font-weight: 400;
   font-size: 1.1rem;
-  color: var(--butter);
+  color: #ffffff;
 }
 
 .gate-cta-disabled {
@@ -3558,7 +3603,7 @@ ul, ol {
 .collection-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(14, 43, 31, 0.55);
+  background: rgba(0, 0, 0, 0.55);
   z-index: 1500;
   display: flex;
   align-items: flex-end;
@@ -3619,7 +3664,8 @@ ul, ol {
 
 .collection-title {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   font-size: 1.7rem;
   letter-spacing: -0.02em;
   line-height: 1.1;
@@ -3632,7 +3678,7 @@ ul, ol {
   color: var(--ink-soft);
   line-height: 1.45;
 }
-.collection-hero.ink .collection-desc { color: rgba(246, 241, 230, 0.78); }
+.collection-hero.ink .collection-desc { color: rgba(255, 255, 255, 0.78); }
 
 /* ==========================================================================
    smart image — flicker-free product photos
@@ -3750,11 +3796,11 @@ ul, ol {
   width: 7px;
   height: 7px;
   border-radius: var(--r-pill);
-  background: rgba(14, 43, 31, 0.25);
+  background: rgba(0, 0, 0, 0.25);
   transition: var(--t-fast);
 }
 .sheet-gallery-dot.active {
-  background: var(--ink);
+  background: var(--terracotta);
   width: 22px;
 }
 
@@ -3779,7 +3825,7 @@ ul, ol {
 }
 .sheet-gallery-thumb.active {
   border-color: var(--ink);
-  box-shadow: 0 0 0 2px rgba(14, 43, 31, 0.08);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.08);
 }
 .sheet-gallery-thumb .smart-image,
 .sheet-gallery-thumb .smart-image img {
@@ -3831,7 +3877,7 @@ ul, ol {
   color: #9B2C36;
   text-decoration: line-through;
   text-decoration-thickness: 2px;
-  text-decoration-color: rgba(155, 44, 54, 0.7);
+  text-decoration-color: rgba(198, 42, 50, 0.7);
   opacity: 0.85;
 }
 .product-price.product-price-new {
@@ -3857,7 +3903,7 @@ ul, ol {
   letter-spacing: 0.03em;
   padding: 3px 9px;
   border-radius: var(--r-pill);
-  box-shadow: 0 2px 6px rgba(155, 44, 54, 0.3);
+  box-shadow: 0 2px 6px rgba(198, 42, 50, 0.3);
   flex-shrink: 0;
 }
 .product-discount-text {
@@ -3884,7 +3930,7 @@ ul, ol {
   padding: 4px 12px;
   border-radius: var(--r-pill);
   vertical-align: middle;
-  box-shadow: 0 3px 10px rgba(155, 44, 54, 0.35);
+  box-shadow: 0 3px 10px rgba(198, 42, 50, 0.35);
 }
 .sheet-price-value.discounted {
   color: #C96F3E;
@@ -3901,7 +3947,7 @@ ul, ol {
   color: #9B2C36;
   text-decoration: line-through;
   text-decoration-thickness: 2px;
-  text-decoration-color: rgba(155, 44, 54, 0.75);
+  text-decoration-color: rgba(198, 42, 50, 0.75);
   font-weight: 600;
 }
 .sheet-price-old .save {
@@ -3912,7 +3958,7 @@ ul, ol {
   background: var(--sage-wash);
   padding: 4px 10px;
   border-radius: var(--r-pill);
-  border: 1px solid rgba(111, 138, 106, 0.4);
+  border: 1px solid rgba(88, 162, 145, 0.4);
 }
 
 .cart-item-price-row {
@@ -3941,5 +3987,5 @@ ul, ol {
   letter-spacing: 0.04em;
   padding: 3px 9px;
   border-radius: var(--r-pill);
-  box-shadow: 0 2px 6px rgba(155, 44, 54, 0.3);
+  box-shadow: 0 2px 6px rgba(198, 42, 50, 0.3);
 }

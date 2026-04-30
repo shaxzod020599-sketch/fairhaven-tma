@@ -205,14 +205,16 @@ export default function App() {
   const activeOrders = orders.filter((o) => isActive(o.status));
 
   // ─── Gate: block the entire app until registration is complete ──────────
-  if (authStatus === AUTH.LOADING) {
+  // Dev-only design preview bypass: append ?devpreview=1 in vite dev. Stripped from prod builds.
+  const devPreview = import.meta.env.DEV && new URLSearchParams(window.location.search).get('devpreview') === '1';
+  if (!devPreview && authStatus === AUTH.LOADING) {
     return (
       <div className="app-container" id="app-root">
         <Loading text="Загрузка…" />
       </div>
     );
   }
-  if (authStatus !== AUTH.READY) {
+  if (!devPreview && authStatus !== AUTH.READY) {
     return (
       <div className="app-container" id="app-root">
         <RegistrationGate reason={authStatus} />

@@ -82,42 +82,48 @@ body:has(.ap-shell.embedded) { padding-bottom: 0; }
 
 .ap-brand {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
   padding: 4px 6px;
 }
 
-.ap-brand-mark {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--butter);
-  color: var(--ink);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: 1.1rem;
-  letter-spacing: -0.01em;
+.ap-brand-logo {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1;
 }
-.ap-brand-mark.large {
-  width: 64px;
-  height: 64px;
-  font-size: 1.4rem;
+.ap-brand-logo-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.3rem;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.ap-brand-logo-sub {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 0.85rem;
+  margin-top: 2px;
+  line-height: 1;
+}
+.ap-brand-logo.large {
+  align-items: center;
   margin: 0 auto 14px;
 }
-
-.ap-brand-name {
-  font-family: var(--font-display);
-  font-size: 1.15rem;
-  letter-spacing: -0.015em;
+.ap-brand-logo.large .ap-brand-logo-name {
+  font-size: 1.75rem;
 }
+.ap-brand-logo.large .ap-brand-logo-sub {
+  font-size: 1.05rem;
+}
+
 .ap-brand-tag {
   font-size: 0.6rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: rgba(246, 241, 230, 0.6);
+  color: rgba(255, 255, 255, 0.6);
   margin-top: 2px;
 }
 

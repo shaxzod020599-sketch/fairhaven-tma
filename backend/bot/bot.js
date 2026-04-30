@@ -289,8 +289,8 @@ function categoryLabel(key) {
 }
 
 function pickProductImage(product) {
-  if (Array.isArray(product.images) && product.images.length) return product.images[0];
   if (product.imageUrl) return product.imageUrl;
+  if (Array.isArray(product.images) && product.images.length) return product.images[0];
   return null;
 }
 
