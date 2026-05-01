@@ -329,16 +329,30 @@ async function broadcastProductToUsers(bot, product, frontendUrl, kind = 'new') 
 
   let sent = 0;
   let failed = 0;
+  const errorSamples = [];
   for (let i = 0; i < recipients.length; i += 25) {
     const chunk = recipients.slice(i, i + 25);
     await Promise.allSettled(chunk.map(async (r) => {
       try {
         if (photoUrl) {
-          await bot.telegram.sendPhoto(r.telegramId, photoUrl, {
-            caption: text,
-            parse_mode: 'HTML',
-            reply_markup: keyboard,
-          });
+          try {
+            await bot.telegram.sendPhoto(r.telegramId, photoUrl, {
+              caption: text,
+              parse_mode: 'HTML',
+              reply_markup: keyboard,
+            });
+          } catch (photoErr) {
+            // Telegram couldn't fetch / accept the photo URL — fall back to plain text
+            // so the broadcast still reaches users instead of silently failing.
+            await bot.telegram.sendMessage(r.telegramId, text, {
+              parse_mode: 'HTML',
+              disable_web_page_preview: false,
+              reply_markup: keyboard,
+            });
+            if (errorSamples.length < 3) {
+              errorSamples.push(`photo fallback: ${photoErr.description || photoErr.message}`);
+            }
+          }
         } else {
           await bot.telegram.sendMessage(r.telegramId, text, {
             parse_mode: 'HTML',
@@ -349,11 +363,17 @@ async function broadcastProductToUsers(bot, product, frontendUrl, kind = 'new') 
         sent += 1;
       } catch (err) {
         failed += 1;
+        if (errorSamples.length < 5) {
+          errorSamples.push(`${r.telegramId}: ${err.description || err.message}`);
+        }
       }
     }));
     if (i + 25 < recipients.length) {
       await new Promise((r) => setTimeout(r, 1000));
     }
+  }
+  if (errorSamples.length) {
+    console.warn(`[bot] Broadcast (${kind}) sample errors:`, errorSamples);
   }
 
   console.log(`[bot] Broadcast (${kind}) done: ${sent} sent, ${failed} failed`);
