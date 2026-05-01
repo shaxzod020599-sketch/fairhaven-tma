@@ -137,7 +137,7 @@ async function autoSeed() {
       console.log('🗑  Clearing existing products for refresh...');
       await Product.deleteMany({});
     }
-    console.log('📦 Seeding FairHaven products...');
+    console.log('📦 Seeding Fairhaven products...');
     await Product.insertMany(FAIRHAVEN_PRODUCTS);
     console.log(`✅ Seeded ${FAIRHAVEN_PRODUCTS.length} products`);
   }

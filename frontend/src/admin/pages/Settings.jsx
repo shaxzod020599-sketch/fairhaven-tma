@@ -2,6 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { listSettings, upsertSetting } from '../adminApi';
 
 const FRIENDLY = {
+  // hero (главная) — главный баннер на главной странице
+  hero_eyebrow: { label: 'Главная — надпись над заголовком', hint: 'Например: FAIRHAVEN HEALTH · USA', group: 'hero' },
+  hero_title_pre: { label: 'Главная — начало заголовка', hint: 'Например: Репродуктивное —', group: 'hero' },
+  hero_title_em: { label: 'Главная — выделенное слово (бургунди курсив)', hint: 'Например: здоровье', group: 'hero' },
+  hero_title_post: { label: 'Главная — окончание заголовка', hint: 'Например: семьи', group: 'hero' },
+  hero_desc: { label: 'Главная — описание под заголовком', hint: '', group: 'hero', kind: 'textarea' },
+  hero_cta: { label: 'Главная — текст кнопки', hint: 'Например: Открыть каталог', group: 'hero' },
+  hero_stat1_value: { label: 'Главная — цифра №1', hint: 'Например: 22', group: 'hero' },
+  hero_stat1_label: { label: 'Главная — подпись цифры №1', hint: 'Например: продукта', group: 'hero' },
+  hero_stat2_value: { label: 'Главная — цифра №2', hint: 'Например: 100%', group: 'hero' },
+  hero_stat2_label: { label: 'Главная — подпись цифры №2', hint: 'Например: оригинал', group: 'hero' },
+  // contact + delivery
   support_phone: { label: 'Телефон контакт-центра (показывается)', hint: 'Например: +998 78 150 04 40' },
   support_phone_tel: { label: 'Телефон контакт-центра (tel:)', hint: 'Без пробелов, начинается с +. Например: +998781500440' },
   support_hours: { label: 'Часы работы контакт-центра', hint: '' },
@@ -84,12 +96,21 @@ export default function Settings({ toast }) {
                 <div className="ap-settings-row">
                   <div style={{ flex: 1 }}>
                     <div className="ap-label">{f.label}</div>
-                    <input
-                      className="ap-input"
-                      type={f.kind === 'number' ? 'number' : 'text'}
-                      value={draft[key] ?? ''}
-                      onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
-                    />
+                    {f.kind === 'textarea' ? (
+                      <textarea
+                        className="ap-input"
+                        rows={3}
+                        value={draft[key] ?? ''}
+                        onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+                      />
+                    ) : (
+                      <input
+                        className="ap-input"
+                        type={f.kind === 'number' ? 'number' : 'text'}
+                        value={draft[key] ?? ''}
+                        onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+                      />
+                    )}
                     {f.hint && <div className="ap-muted-sm" style={{ marginTop: 4 }}>{f.hint}</div>}
                     <div className="ap-muted-sm" style={{ marginTop: 2 }}>
                       <code>{key}</code>

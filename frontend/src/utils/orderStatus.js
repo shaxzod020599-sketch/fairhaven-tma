@@ -17,7 +17,7 @@ export const STATUS_META = {
     short: 'В обработке',
     tone: 'pending',
     glyph: '⏳',
-    desc: 'Оператор FairHaven Health проверяет ваш заказ',
+    desc: 'Оператор Fairhaven Health проверяет ваш заказ',
   },
   confirmed: {
     label: 'Заказ принят',

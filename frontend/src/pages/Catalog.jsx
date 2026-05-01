@@ -110,7 +110,7 @@ export default function Catalog({ onAddToCart, dbUser }) {
   return (
     <div className="page" id="page-catalog">
       <h1 className="page-title">Каталог</h1>
-      <p className="page-subtitle">FairHaven Health · полный ассортимент</p>
+      <p className="page-subtitle">Fairhaven Health · полный ассортимент</p>
 
       {/* Search */}
       <div className="search-bar">

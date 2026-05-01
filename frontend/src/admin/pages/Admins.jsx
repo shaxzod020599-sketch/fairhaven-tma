@@ -148,7 +148,7 @@ function AddAdminModal({ onClose, onAdd }) {
           onChange={(e) => setTgId(e.target.value)}
         />
         <div className="ap-muted-sm" style={{ marginTop: 4 }}>
-          Пользователь увидит @userinfobot свой ID, или откройте бота FairHaven и посмотрите ID заказа.
+          Пользователь увидит @userinfobot свой ID, или откройте бота Fairhaven и посмотрите ID заказа.
         </div>
       </div>
       <div style={{ marginTop: 10 }}>

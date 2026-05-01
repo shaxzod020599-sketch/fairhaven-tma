@@ -134,7 +134,7 @@ export default function ProductDetail({ product, onClose, onAdd, dbUser }) {
 
         <p className="sheet-desc">
           {description ||
-            'Продукт премиального качества. Сертифицированный бренд FairHaven Health, оригинальная упаковка, бережная доставка курьером.'}
+            'Продукт премиального качества. Сертифицированный бренд Fairhaven Health, оригинальная упаковка, бережная доставка курьером.'}
         </p>
 
         <div className="sheet-price-row">

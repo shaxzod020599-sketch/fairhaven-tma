@@ -407,7 +407,7 @@ export default function Cart({ cart, onUpdateQty, onRemove, onClear, onNavigate,
         <div className="cart-empty">
           <div className="empty-art" aria-hidden="true">🧺</div>
           <h3>Пока пусто</h3>
-          <p>Выберите продукты из каталога FairHaven Health — доставим по всему Узбекистану.</p>
+          <p>Выберите продукты из каталога Fairhaven Health — доставим по всему Узбекистану.</p>
           <button
             className="ghost-btn"
             id="cart-empty-cta"

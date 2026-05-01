@@ -91,7 +91,7 @@ export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0
           </div>
           <div className="profile-text">
             <div className="profile-eyebrow">
-              {registered ? 'Клиент FairHaven Health' : 'Гость · зарегистрируйтесь в боте'}
+              {registered ? 'Клиент Fairhaven Health' : 'Гость · зарегистрируйтесь в боте'}
             </div>
             <div className="profile-name">{fullName}</div>
             {username && <div className="profile-handle">@{username}</div>}
@@ -217,7 +217,7 @@ export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0
       </section>
 
       <div className="profile-footer">
-        <div className="fh-sig">FairHaven Health</div>
+        <div className="fh-sig">Fairhaven Health</div>
         <div>Uzbekistan distributor · fairhaven.uz</div>
       </div>
     </div>
