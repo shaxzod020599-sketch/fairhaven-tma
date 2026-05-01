@@ -93,7 +93,7 @@ export default function RegistrationGate({ reason }) {
           </button>
         ) : (
           <div className="gate-cta-disabled">
-            Откройте магазин через Telegram-бот FairHaven
+            Откройте магазин через Telegram-бот Fairhaven
           </div>
         )}
       </div>

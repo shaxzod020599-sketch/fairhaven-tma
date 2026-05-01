@@ -52,7 +52,7 @@ export default function Dashboard({ onNavigate }) {
       <div className="ap-page-head">
         <div>
           <h1 className="ap-page-title">Панель управления</h1>
-          <div className="ap-page-sub">FairHaven Health — оперативный обзор</div>
+          <div className="ap-page-sub">Fairhaven Health — оперативный обзор</div>
         </div>
         <button className="ap-btn ap-btn-ghost" onClick={load}>Обновить</button>
       </div>

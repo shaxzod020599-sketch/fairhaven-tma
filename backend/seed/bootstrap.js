@@ -39,7 +39,7 @@ const DEFAULT_SETTINGS = [
   },
   {
     key: 'brand_tagline',
-    value: 'Официальный дилер FairHaven Health в Узбекистане',
+    value: 'Официальный дилер Fairhaven Health в Узбекистане',
     label: 'Брендовый слоган на главной',
   },
 ];

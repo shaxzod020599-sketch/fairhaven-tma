@@ -208,7 +208,7 @@ function ProductEditor({ product, onClose, onSaved }) {
   const isNew = !product;
   const [name, setName] = useState(product?.name || '');
   const [nameUz, setNameUz] = useState(product?.nameUz || '');
-  const [brand, setBrand] = useState(product?.brand || 'FairHaven Health');
+  const [brand, setBrand] = useState(product?.brand || 'Fairhaven Health');
   const [sku, setSku] = useState(product?.sku || '');
   const [price, setPrice] = useState(product?.price || 0);
   const [oldPrice, setOldPrice] = useState(product?.oldPrice || 0);

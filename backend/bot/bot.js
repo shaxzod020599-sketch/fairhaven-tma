@@ -3,7 +3,7 @@ const User = require('../models/User');
 const Order = require('../models/Order');
 const { formatOrderReceipt } = require('../utils/helpers');
 
-// FairHaven channel — orders are sent here for operator approval.
+// Fairhaven channel — orders are sent here for operator approval.
 // Override via ORDERS_CHANNEL_ID env var if needed.
 const ORDERS_CHANNEL_ID = process.env.ORDERS_CHANNEL_ID || '-1003939788373';
 
@@ -17,8 +17,8 @@ const T = {
   welcome: (name) =>
     `🌿 <b>Assalomu alaykum, ${name}!</b>\n` +
     `🌿 <b>Здравствуйте, ${name}!</b>\n\n` +
-    `<b>FairHaven Health</b> — O‘zbekistondagi rasmiy diler. Fertillik, homiladorlik va emizish uchun AQSh mahsulotlari.\n` +
-    `<i>Официальный дилер FairHaven Health в Узбекистане. Фертильность, беременность, лактация — оригинальная продукция из США.</i>\n\n` +
+    `<b>Fairhaven Health</b> — O‘zbekistondagi rasmiy diler. Fertillik, homiladorlik va emizish uchun AQSh mahsulotlari.\n` +
+    `<i>Официальный дилер Fairhaven Health в Узбекистане. Фертильность, беременность, лактация — оригинальная продукция из США.</i>\n\n` +
     `Do‘konga kirish uchun qisqa ro‘yxatdan o‘ting.\n` +
     `Чтобы открыть магазин — короткая регистрация.`,
 
@@ -84,7 +84,7 @@ const T = {
     `📋 Номер заказа: <b>#${shortId}</b>\n\n` +
     `Мы приняли ваш заказ и скоро доставим его вам. ` +
     `Курьер свяжется с вами по указанному номеру телефона.\n\n` +
-    `Спасибо, что выбрали FairHaven Health. 🌿`,
+    `Спасибо, что выбрали Fairhaven Health. 🌿`,
 
   orderRejected: (shortId) =>
     `❌ <b>Заказ отменён</b>\n\n` +
@@ -138,7 +138,7 @@ async function sendStep(ctx, user, frontendUrl) {
 
     case 'awaiting_consent':
       return ctx.replyWithHTML(
-        T.askConsent(frontendUrl || '', 'FairHaven Health'),
+        T.askConsent(frontendUrl || '', 'Fairhaven Health'),
         {
           reply_markup: {
             inline_keyboard: [
@@ -439,7 +439,7 @@ function createBot(token, frontendUrl) {
   // ---------------------------------------------------------------------------
   bot.help((ctx) => {
     ctx.replyWithHTML(
-      `ℹ️ <b>FairHaven Health — yordam / помощь</b>\n\n` +
+      `ℹ️ <b>Fairhaven Health — yordam / помощь</b>\n\n` +
       `🛒 /start — do‘konni ochish / открыть магазин\n` +
       `📦 /myorders — buyurtmalarim / мои заказы\n` +
       `📄 /oferta — ommaviy oferta / публичная оферта\n\n` +

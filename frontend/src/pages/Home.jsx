@@ -14,6 +14,19 @@ const DEFAULT_PHONE = '+998 78 150 04 40';
 const DEFAULT_PHONE_TEL = '+998781500440';
 const DEFAULT_HOURS = 'Ежедневно · 9:00 – 21:00 (Asia/Tashkent)';
 
+const DEFAULT_HERO = {
+  eyebrow: 'FAIRHAVEN HEALTH · USA',
+  titlePre: 'Репродуктивное —',
+  titleEm: 'здоровье',
+  titlePost: 'семьи',
+  desc: 'Официальный дилер Fairhaven Health в Узбекистане. Фертильность, беременность, лактация.',
+  cta: 'Открыть каталог',
+  stat1Val: '22',
+  stat1Label: 'продукта',
+  stat2Val: '100%',
+  stat2Label: 'оригинал',
+};
+
 const FEATURED_FALLBACK = [
   {
     _id: 'fb-1',
@@ -52,7 +65,7 @@ const TRUST = [
     glyph: '✓',
     tone: 'sage',
     title: 'Официальный дилер',
-    desc: 'Оригинальная продукция FairHaven Health из США',
+    desc: 'Оригинальная продукция Fairhaven Health из США',
   },
   {
     glyph: '✦',
@@ -71,6 +84,7 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [], dbUse
   const [supportPhone, setSupportPhone] = useState(DEFAULT_PHONE);
   const [supportPhoneTel, setSupportPhoneTel] = useState(DEFAULT_PHONE_TEL);
   const [supportHours, setSupportHours] = useState(DEFAULT_HOURS);
+  const [hero, setHero] = useState(DEFAULT_HERO);
 
   useEffect(() => {
     let mounted = true;
@@ -94,6 +108,18 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [], dbUse
         if (s.support_phone) setSupportPhone(s.support_phone);
         if (s.support_phone_tel) setSupportPhoneTel(s.support_phone_tel);
         if (s.support_hours) setSupportHours(s.support_hours);
+        setHero({
+          eyebrow: s.hero_eyebrow || DEFAULT_HERO.eyebrow,
+          titlePre: s.hero_title_pre ?? DEFAULT_HERO.titlePre,
+          titleEm: s.hero_title_em ?? DEFAULT_HERO.titleEm,
+          titlePost: s.hero_title_post ?? DEFAULT_HERO.titlePost,
+          desc: s.hero_desc || DEFAULT_HERO.desc,
+          cta: s.hero_cta || DEFAULT_HERO.cta,
+          stat1Val: s.hero_stat1_value || DEFAULT_HERO.stat1Val,
+          stat1Label: s.hero_stat1_label || DEFAULT_HERO.stat1Label,
+          stat2Val: s.hero_stat2_value || DEFAULT_HERO.stat2Val,
+          stat2Label: s.hero_stat2_label || DEFAULT_HERO.stat2Label,
+        });
       })
       .catch(() => {});
 
@@ -150,30 +176,31 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [], dbUse
         <span className="hero-leaf one" aria-hidden="true">🌿</span>
         <span className="hero-leaf two" aria-hidden="true">🌱</span>
 
-        <div className="hero-eyebrow">FAIRHAVEN HEALTH · USA</div>
+        <div className="hero-eyebrow">{hero.eyebrow}</div>
         <h1 className="hero-title">
-          Репродуктивное —<br />
-          <em>здоровье</em> семьи
+          {hero.titlePre}{hero.titlePre && <br />}
+          {hero.titleEm && <em>{hero.titleEm}</em>}{hero.titleEm && hero.titlePost ? ' ' : ''}{hero.titlePost}
         </h1>
-        <p className="hero-desc">
-          Официальный дилер FairHaven Health в Узбекистане.
-          Фертильность, беременность, лактация.
-        </p>
+        {hero.desc && <p className="hero-desc">{hero.desc}</p>}
         <div className="hero-bottom">
           <button className="hero-cta" onClick={() => go('catalog')} id="hero-cta">
-            Открыть каталог
+            {hero.cta}
             <span className="arrow" aria-hidden="true">→</span>
           </button>
 
           <div className="hero-stats" aria-hidden="true">
-            <div className="stat">
-              <strong>22</strong>
-              продукта
-            </div>
-            <div className="stat">
-              <strong>100%</strong>
-              оригинал
-            </div>
+            {hero.stat1Val && (
+              <div className="stat">
+                <strong>{hero.stat1Val}</strong>
+                {hero.stat1Label}
+              </div>
+            )}
+            {hero.stat2Val && (
+              <div className="stat">
+                <strong>{hero.stat2Val}</strong>
+                {hero.stat2Label}
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -202,7 +229,7 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [], dbUse
         </div>
       ) : popular.length === 0 ? (
         <div className="popular-empty">
-          Скоро здесь появятся лидеры продаж FairHaven Health.
+          Скоро здесь появятся лидеры продаж Fairhaven Health.
         </div>
       ) : (
         <div className="popular-grid">
@@ -288,7 +315,7 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [], dbUse
           Нужна <em>консультация?</em>
         </div>
         <div className="contact-desc">
-          Специалист FairHaven Health поможет подобрать продукт под ваш запрос,
+          Специалист Fairhaven Health поможет подобрать продукт под ваш запрос,
           ответит на вопросы о приёме и доставке.
         </div>
         <a

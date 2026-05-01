@@ -113,7 +113,7 @@ export default function AdminApp({ onExit, embedded }) {
         <div className="ap-brand">
           <div className="ap-brand-logo">
             <span className="ap-brand-logo-name">Fairhaven</span>
-            <span className="ap-brand-logo-sub">health<sup>®</sup></span>
+            <span className="ap-brand-logo-sub">Health<sup>®</sup></span>
           </div>
           <div className="ap-brand-tag">ADMIN · CMS</div>
         </div>
@@ -261,7 +261,7 @@ function LoginPage({ onLoggedIn }) {
       <div className="ap-login-card">
         <div className="ap-brand-logo large">
           <span className="ap-brand-logo-name">Fairhaven</span>
-          <span className="ap-brand-logo-sub">health<sup>®</sup></span>
+          <span className="ap-brand-logo-sub">Health<sup>®</sup></span>
         </div>
         <h1 className="ap-login-title">Fairhaven · Админ-панель</h1>
         <p className="ap-muted" style={{ marginBottom: 18 }}>

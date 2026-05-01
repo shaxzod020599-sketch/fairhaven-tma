@@ -12,7 +12,7 @@ async function seed() {
     console.log('Cleared existing products');
 
     const created = await Product.insertMany(FAIRHAVEN_PRODUCTS);
-    console.log(`Seeded ${created.length} FairHaven products`);
+    console.log(`Seeded ${created.length} Fairhaven products`);
 
     await mongoose.connection.close();
     console.log('Done!');

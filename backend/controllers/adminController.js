@@ -620,7 +620,7 @@ async function tryNotifyCustomer(bot, order, status) {
   if (status === 'confirmed') {
     text =
       `✅ <b>Ваш заказ принят!</b>\n\n📋 Номер заказа: <b>#${shortId}</b>\n\n` +
-      `Мы приняли ваш заказ и скоро доставим его вам. Курьер свяжется с вами по указанному номеру.\n\nСпасибо, что выбрали FairHaven Health. 🌿`;
+      `Мы приняли ваш заказ и скоро доставим его вам. Курьер свяжется с вами по указанному номеру.\n\nСпасибо, что выбрали Fairhaven Health. 🌿`;
   } else if (status === 'cancelled') {
     text =
       `❌ <b>Заказ отменён</b>\n\n📋 Номер заказа: <b>#${shortId}</b>\n\n` +
@@ -628,7 +628,7 @@ async function tryNotifyCustomer(bot, order, status) {
   } else if (status === 'delivering') {
     text = `🚚 <b>Ваш заказ #${shortId} в пути</b>\n\nКурьер свяжется с вами в ближайшее время.`;
   } else if (status === 'delivered') {
-    text = `🏠 <b>Заказ #${shortId} доставлен</b>\n\nСпасибо, что выбрали FairHaven Health. Будем рады видеть вас снова! 🌿`;
+    text = `🏠 <b>Заказ #${shortId} доставлен</b>\n\nСпасибо, что выбрали Fairhaven Health. Будем рады видеть вас снова! 🌿`;
   } else {
     return;
   }
