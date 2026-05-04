@@ -1911,6 +1911,43 @@ ul, ol {
 }
 
 /* ==========================================================================
+   author credit — discoverable but ambient (matches site footer color)
+   ========================================================================== */
+.home-footer {
+  text-align: center;
+  padding: 18px 0 8px;
+  margin-top: 4px;
+}
+
+.author-credit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 0.66rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  opacity: 0.55;
+  text-decoration: none;
+  transition: opacity var(--t-fast), color var(--t-fast);
+  font-variant: small-caps;
+}
+.author-credit:hover,
+.author-credit:active {
+  opacity: 1;
+  color: var(--terracotta);
+}
+.author-credit-dot {
+  margin: 0 4px;
+  opacity: 0.6;
+}
+.author-credit-handle {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ==========================================================================
    bottom nav
    ========================================================================== */
 .bottom-nav {

@@ -219,6 +219,16 @@ export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0
       <div className="profile-footer">
         <div className="fh-sig">Fairhaven Health</div>
         <div>Uzbekistan distributor · fairhaven.uz</div>
+        <a
+          className="author-credit"
+          href="https://t.me/leon7647"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Автор проекта"
+        >
+          <span className="author-credit-dot" aria-hidden="true">·</span>
+          made by <span className="author-credit-handle">@leon7647</span>
+        </a>
       </div>
     </div>
   );
