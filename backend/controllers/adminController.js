@@ -337,6 +337,73 @@ exports.promoteAdmin = async (req, res) => {
   }
 };
 
+// ───────────────────────────────────────────────────────────────────────────
+// Customers (registered end-users)
+// ───────────────────────────────────────────────────────────────────────────
+exports.listUsers = async (req, res) => {
+  try {
+    const { search = '', role, registered } = req.query;
+    const filter = {};
+    if (role) filter.role = role;
+    if (registered === 'true') {
+      filter.registrationStep = 'done';
+      filter.consentAccepted = true;
+    } else if (registered === 'false') {
+      filter.$or = [
+        { registrationStep: { $ne: 'done' } },
+        { consentAccepted: { $ne: true } },
+      ];
+    }
+    if (search) {
+      const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$or = [
+        { firstName: re },
+        { lastName: re },
+        { username: re },
+        { phone: re },
+      ];
+      const asNum = Number(search);
+      if (Number.isFinite(asNum)) filter.$or.push({ telegramId: asNum });
+    }
+    const users = await User.find(filter)
+      .select('telegramId username photoUrl firstName lastName phone gender birthYear role registrationStep consentAccepted notificationsEnabled createdAt')
+      .sort({ createdAt: -1 })
+      .limit(500);
+    res.json({ success: true, data: users });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+exports.getUserDetail = async (req, res) => {
+  try {
+    const telegramId = Number(req.params.telegramId);
+    if (!telegramId) {
+      return res.status(400).json({ success: false, error: 'invalid_id' });
+    }
+    const user = await User.findOne({ telegramId }).lean();
+    if (!user) return res.status(404).json({ success: false, error: 'not_found' });
+    const orders = await Order.find({ 'user.telegramId': telegramId })
+      .select('_id status totalAmount items createdAt')
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+    const orderStats = orders.reduce(
+      (acc, o) => {
+        acc.total += 1;
+        acc.amount += Number(o.totalAmount) || 0;
+        if (['delivered'].includes(o.status)) acc.delivered += 1;
+        if (['cancelled'].includes(o.status)) acc.cancelled += 1;
+        return acc;
+      },
+      { total: 0, amount: 0, delivered: 0, cancelled: 0 }
+    );
+    res.json({ success: true, data: { user, orders, orderStats } });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 exports.demoteAdmin = async (req, res) => {
   try {
     const telegramId = Number(req.params.telegramId);
