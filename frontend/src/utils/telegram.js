@@ -86,16 +86,63 @@ export function sendData(data) {
   tg.sendData(JSON.stringify(data));
 }
 
-export function showBackButton(callback) {
+// Stack of registered back-button handlers. The top of the stack is the
+// active handler; pushing a new one (e.g. when a modal opens) overrides
+// the previous handler so back-press closes the modal instead of the
+// whole admin app. Popping restores the prior handler.
+const backStack = [];
+let activeHandler = null;
+
+function applyTopHandler() {
   if (!tg) return;
+  if (activeHandler) {
+    tg.BackButton.offClick(activeHandler);
+    activeHandler = null;
+  }
+  const top = backStack[backStack.length - 1];
+  if (top) {
+    tg.BackButton.show();
+    tg.BackButton.onClick(top);
+    activeHandler = top;
+  } else {
+    tg.BackButton.hide();
+  }
+}
+
+export function showBackButton(callback) {
+  // Legacy: replaces existing single handler. New code should prefer
+  // pushBackButton/popBackButton so stacking works correctly.
+  if (!tg) return;
+  if (activeHandler) tg.BackButton.offClick(activeHandler);
   tg.BackButton.show();
   tg.BackButton.onClick(callback);
+  activeHandler = callback;
 }
 
 export function hideBackButton() {
   if (!tg) return;
+  if (activeHandler) {
+    tg.BackButton.offClick(activeHandler);
+    activeHandler = null;
+  }
   tg.BackButton.hide();
-  tg.BackButton.offClick(() => {});
+}
+
+export function pushBackButton(callback) {
+  backStack.push(callback);
+  applyTopHandler();
+}
+
+export function popBackButton(callback) {
+  // Remove the most recent occurrence of the callback (or the top if no
+  // callback is provided). This guards against unmount-order races.
+  if (callback) {
+    const idx = backStack.lastIndexOf(callback);
+    if (idx !== -1) backStack.splice(idx, 1);
+  } else {
+    backStack.pop();
+  }
+  applyTopHandler();
 }
 
 export function hapticFeedback(type = 'light') {

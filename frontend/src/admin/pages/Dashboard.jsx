@@ -43,7 +43,7 @@ export default function Dashboard({ onNavigate }) {
   const second = [
     { label: 'Товары', value: `${data.products.available}/${data.products.total}`, sub: 'в наличии', to: { page: 'products' } },
     { label: 'Администраторы', value: data.users.admins, sub: '', to: { page: 'admins' } },
-    { label: 'Клиенты', value: data.users.customers, sub: 'зарегистр.', to: null },
+    { label: 'Клиенты', value: data.users.customers, sub: 'зарегистр.', to: { page: 'customers' } },
     { label: 'Выручка', value: formatUZS(data.revenue), sub: 'принятые заказы', to: null },
   ];
 

@@ -1,13 +1,19 @@
 import React, { useEffect } from 'react';
+import { pushBackButton, popBackButton } from '../../utils/telegram';
 
 export default function Modal({ title, onClose, children, footer, wide }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
+    // Override Telegram BackButton: while modal is open, back closes the
+    // modal instead of falling through to the admin/exit handler.
+    const backHandler = () => onClose?.();
+    pushBackButton(backHandler);
     return () => {
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
+      popBackButton(backHandler);
     };
   }, [onClose]);
 

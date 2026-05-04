@@ -28,6 +28,10 @@ router.get('/admins', admin.listAdmins);
 router.post('/admins', admin.promoteAdmin);
 router.delete('/admins/:telegramId', admin.demoteAdmin);
 
+// Customers (end-users)
+router.get('/users', admin.listUsers);
+router.get('/users/:telegramId', admin.getUserDetail);
+
 // Collections (podborka)
 router.get('/collections', admin.listCollections);
 router.post('/collections', admin.createCollection);

@@ -79,6 +79,14 @@ export const promoteAdmin = (body) =>
 export const demoteAdmin = (telegramId) =>
   adminRequest(`/admins/${telegramId}`, { method: 'DELETE' });
 
+// ──────────────────────── Customers
+export const listUsers = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return adminRequest(`/users${qs ? `?${qs}` : ''}`);
+};
+export const getUserDetail = (telegramId) =>
+  adminRequest(`/users/${telegramId}`);
+
 // ──────────────────────── Collections
 export const listCollectionsAdmin = () => adminRequest('/collections');
 export const createCollection = (body) =>

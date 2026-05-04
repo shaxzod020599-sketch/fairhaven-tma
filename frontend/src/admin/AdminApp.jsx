@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { whoami, setAdminTgId, clearAdminTgId } from './adminApi';
 import {
-  showBackButton,
-  hideBackButton,
+  pushBackButton,
+  popBackButton,
   hapticFeedback,
 } from '../utils/telegram';
 import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
 import Products from './pages/Products';
 import Admins from './pages/Admins';
+import Customers from './pages/Customers';
 import Collections from './pages/Collections';
 import Settings from './pages/Settings';
 import Gallery from './pages/Gallery';
@@ -22,6 +23,7 @@ const NAV = [
   { key: 'collections', label: 'Подборки', icon: '✦' },
   { key: 'promos', label: 'Промокоды', icon: '🎟' },
   { key: 'gallery', label: 'Галерея', icon: '🖼' },
+  { key: 'customers', label: 'Клиенты', icon: '👥' },
   { key: 'admins', label: 'Админы', icon: '👑' },
   { key: 'settings', label: 'Настройки', icon: '⚙' },
 ];
@@ -66,14 +68,18 @@ export default function AdminApp({ onExit, embedded }) {
 
   useEffect(() => { check(); }, [check]);
 
-  // Wire Telegram BackButton to exit admin mode when embedded.
+  // Wire Telegram BackButton to exit admin mode when embedded. We push
+  // the handler onto the stack so child screens (e.g. order detail
+  // modal) can override it with their own "close" action and have ours
+  // restored automatically when they unmount.
   useEffect(() => {
     if (!embedded || !onExit) return;
-    showBackButton(() => {
+    const handler = () => {
       hapticFeedback('light');
       onExit();
-    });
-    return () => hideBackButton();
+    };
+    pushBackButton(handler);
+    return () => popBackButton(handler);
   }, [embedded, onExit]);
 
   const navigate = useCallback((target, args = null) => {
@@ -96,6 +102,7 @@ export default function AdminApp({ onExit, embedded }) {
     switch (page) {
       case 'orders': return <Orders initial={pageArgs} toast={toastApi} />;
       case 'products': return <Products toast={toastApi} />;
+      case 'customers': return <Customers toast={toastApi} />;
       case 'admins': return <Admins me={me} toast={toastApi} />;
       case 'collections': return <Collections toast={toastApi} />;
       case 'promos': return <PromoCodes toast={toastApi} />;
