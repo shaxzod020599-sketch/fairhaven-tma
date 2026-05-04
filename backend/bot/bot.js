@@ -231,6 +231,17 @@ function formatUZS(amount) {
   return (Number(amount) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' UZS';
 }
 
+function getDiscountInfo(product) {
+  const price = Number(product.price) || 0;
+  const oldPrice = Number(product.oldPrice) || 0;
+  if (oldPrice > 0 && oldPrice > price && price > 0) {
+    const savings = oldPrice - price;
+    const percent = Math.round((savings / oldPrice) * 100);
+    return { hasDiscount: true, price, oldPrice, savings, percent };
+  }
+  return { hasDiscount: false, price, oldPrice: 0, savings: 0, percent: 0 };
+}
+
 function buildProductBroadcastMessage(product, kind) {
   const cleanDesc = (product.description || '')
     .toString()
@@ -238,13 +249,17 @@ function buildProductBroadcastMessage(product, kind) {
     .trim()
     .slice(0, 600);
   const headers = {
-    new: '🌿 <b>Новинка в каталоге FH Health</b>',
+    new: '🌿 <b>Новинка в каталоге Fairhaven Health</b>',
     restock: '✨ <b>Снова в наличии!</b>',
+    discount: '🎉 <b>Скидка на товар!</b>',
   };
   const ctas = {
     new: '🛒 Откройте магазин и добавьте в корзину 👇',
     restock: '🛒 Не упустите — добавьте в корзину сейчас 👇',
+    discount: '🔥 Успейте по выгодной цене 👇',
   };
+  const discount = getDiscountInfo(product);
+
   const lines = [];
   lines.push(headers[kind] || headers.new);
   lines.push('');
@@ -260,7 +275,19 @@ function buildProductBroadcastMessage(product, kind) {
     lines.push(escapeHtml(cleanDesc));
     lines.push('');
   }
-  lines.push(`💰 <b>Цена:</b> ${formatUZS(product.price)}`);
+
+  if (discount.hasDiscount) {
+    // Pretty Russian price block: strikethrough old, bold new, savings line.
+    lines.push(
+      `💰 <b>Цена:</b> <s>${formatUZS(discount.oldPrice)}</s>  →  <b>${formatUZS(discount.price)}</b>`
+    );
+    lines.push(
+      `🔥 <b>Скидка ${discount.percent}%</b> · экономия ${formatUZS(discount.savings)}`
+    );
+  } else {
+    lines.push(`💰 <b>Цена:</b> ${formatUZS(product.price)}`);
+  }
+
   if (product.category) {
     lines.push(`📦 <b>Категория:</b> ${escapeHtml(categoryLabel(product.category))}`);
   }
@@ -392,6 +419,7 @@ function createBot(token, frontendUrl) {
   // Broadcast a fresh product to all registered users.
   bot.broadcastNewProduct = (product) => broadcastProductToUsers(bot, product, FRONTEND, 'new');
   bot.broadcastBackInStock = (product) => broadcastProductToUsers(bot, product, FRONTEND, 'restock');
+  bot.broadcastDiscount = (product) => broadcastProductToUsers(bot, product, FRONTEND, 'discount');
 
   // Attach a helper for customer-initiated cancellations — edits the existing
   // channel card to strip the approve/reject buttons and append a verdict.

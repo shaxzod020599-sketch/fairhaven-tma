@@ -232,6 +232,33 @@ exports.updateProduct = async (req, res) => {
       }
     }
 
+    // Discount broadcast: fire when the product newly enters a discounted
+    // state, OR when an already-discounted product gets a deeper price drop.
+    // Only broadcast on available, in-stock items so we don't advertise an
+    // out-of-stock product the user can't buy. Skip if we already fired the
+    // restock broadcast in this same update — the restock message already
+    // carries the new price block (oldPrice + percent + savings).
+    const beforeOldPrice = Number(before.oldPrice) || 0;
+    const beforePrice = Number(before.price) || 0;
+    const afterOldPrice = Number(p.oldPrice) || 0;
+    const afterPrice = Number(p.price) || 0;
+    const hadDiscount = beforeOldPrice > 0 && beforeOldPrice > beforePrice;
+    const hasDiscount = afterOldPrice > 0 && afterOldPrice > afterPrice;
+    const newDiscount = !hadDiscount && hasDiscount;
+    const deeperDiscount = hadDiscount && hasDiscount && afterPrice < beforePrice;
+    if (
+      !cameBackInStock &&
+      p.isAvailable &&
+      (newDiscount || deeperDiscount)
+    ) {
+      const bot = req.app.locals.bot;
+      if (bot && typeof bot.broadcastDiscount === 'function') {
+        bot.broadcastDiscount(p).catch((err) =>
+          console.warn('[product.update] discount broadcast failed:', err.message)
+        );
+      }
+    }
+
     res.json({ success: true, data: p });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
