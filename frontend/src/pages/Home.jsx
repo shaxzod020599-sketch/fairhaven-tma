@@ -333,7 +333,17 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [], dbUse
         </div>
       </section>
 
-      <div style={{ height: 24 }} />
+      <div className="home-footer">
+        <a
+          className="author-credit"
+          href="https://t.me/leon7647"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Автор проекта"
+        >
+          made by <span className="author-credit-handle">@leon7647</span>
+        </a>
+      </div>
 
       {detailProduct && (
         <ProductDetail
