@@ -82,6 +82,8 @@
   /* ---------- safe area ---------- */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 
   /* clean flat surfaces — no paper noise on fairhaven */
   --paper-texture: none;
@@ -103,6 +105,11 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  /* Account for iOS safe-area insets so the storefront stays centered
+     on devices that reserve space on the left/right (e.g. landscape
+     orientation, devices with rounded corners). */
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
   padding-bottom: calc(82px + var(--safe-bottom));
   min-height: 100vh;
 }
@@ -146,8 +153,10 @@ ul, ol {
    layout shell
    ========================================================================== */
 .app-container {
+  width: 100%;
   max-width: 480px;
-  margin: 0 auto;
+  margin-left: auto;
+  margin-right: auto;
   min-height: 100vh;
   position: relative;
   background: var(--paper);
@@ -1459,9 +1468,11 @@ ul, ol {
 
 .sheet {
   position: fixed;
-  left: 50%;
+  left: var(--safe-left);
+  right: var(--safe-right);
+  margin-left: auto;
+  margin-right: auto;
   bottom: 0;
-  transform: translateX(-50%);
   width: 100%;
   max-width: 480px;
   background: var(--paper-warm);
@@ -1952,10 +1963,18 @@ ul, ol {
    ========================================================================== */
 .bottom-nav {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Anchor to the same horizontal centerline as the app container by
+     letting `left:0; right:0; margin:auto` size against the viewport
+     (or its safe-area insets) instead of `left:50%; transform:translateX(-50%)`.
+     The previous translate approach centered to the visual viewport
+     even when iOS reserved a non-zero safe-area-inset on one side,
+     pulling the nav off-center under the storefront. */
+  left: var(--safe-left);
+  right: var(--safe-right);
+  margin-left: auto;
+  margin-right: auto;
   bottom: calc(12px + var(--safe-bottom));
-  width: calc(100% - 24px);
+  width: calc(100% - 24px - var(--safe-left) - var(--safe-right));
   max-width: 456px;
   background: #ffffff;
   border: 1px solid var(--line);
@@ -2109,8 +2128,10 @@ ul, ol {
 .toast {
   position: fixed;
   top: calc(20px + var(--safe-top));
-  left: 50%;
-  transform: translateX(-50%);
+  left: var(--safe-left);
+  right: var(--safe-right);
+  margin-left: auto;
+  margin-right: auto;
   background: var(--terracotta);
   color: var(--paper);
   padding: 11px 20px;
