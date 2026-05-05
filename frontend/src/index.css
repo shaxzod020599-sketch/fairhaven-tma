@@ -675,7 +675,16 @@ ul, ol {
   position: relative;
   background: transparent;
   border-radius: var(--r-md);
-  overflow: visible;
+  /* Use `overflow: hidden` so long brand / price strings can never
+     extend past the card frame and bleed off the screen on narrow
+     viewports (the original `overflow: visible` was letting the
+     "Экономия N UZS" chip push the right card past the viewport
+     edge on 393–414px Telegram WebApp viewports). */
+  overflow: hidden;
+  /* Critical for grid/flex children: lets the card shrink below its
+     intrinsic content width so `text-overflow: ellipsis` can engage
+     on long price strings. */
+  min-width: 0;
   transition: transform var(--t-fast);
   animation: stagger 420ms var(--ease-out) both;
   cursor: pointer;
@@ -800,6 +809,10 @@ ul, ol {
 
 .product-info {
   padding: 0 2px;
+  /* Allow flex/grid children to shrink so price + discount chip wrap
+     instead of overflowing on narrow viewports. */
+  min-width: 0;
+  overflow: hidden;
 }
 
 .product-brand {
@@ -3933,23 +3946,29 @@ ul, ol {
 .product-price-row {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+  min-width: 0;
+}
+.product-price-row > * {
+  min-width: 0;
 }
 .product-price-old {
   font-family: var(--font-body);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 600;
   color: #9B2C36;
   text-decoration: line-through;
   text-decoration-thickness: 2px;
   text-decoration-color: rgba(198, 42, 50, 0.7);
   opacity: 0.85;
+  white-space: nowrap;
 }
 .product-price.product-price-new {
   color: #C96F3E;
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
+  white-space: nowrap;
 }
 
 .product-discount-strip {
@@ -3957,6 +3976,8 @@ ul, ol {
   align-items: center;
   gap: 6px;
   margin: 6px 0 4px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .product-discount-pct {
   display: inline-flex;
@@ -3983,6 +4004,11 @@ ul, ol {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+  /* Allow the chip to shrink with ellipsis instead of pushing the
+     parent past the card width when the savings string is long
+     (e.g. "Экономия 12 000 UZS"). */
+  max-width: 100%;
 }
 
 .sheet-discount-badge {
