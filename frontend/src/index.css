@@ -105,11 +105,14 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
-  /* Account for iOS safe-area insets so the storefront stays centered
-     on devices that reserve space on the left/right (e.g. landscape
-     orientation, devices with rounded corners). */
-  padding-left: var(--safe-left);
-  padding-right: var(--safe-right);
+  /* Reset margins explicitly. We do NOT apply horizontal safe-area
+     padding here because Telegram WebApp on some iPhone / Android
+     builds reports asymmetric `safe-area-inset-left` vs
+     `safe-area-inset-right`, which would push the entire storefront
+     off-center. Centering is handled by .app-container's auto margins
+     instead — that always splits any extra width evenly between the
+     two sides regardless of inset values. */
+  margin: 0;
   padding-bottom: calc(82px + var(--safe-bottom));
   min-height: 100vh;
 }
@@ -153,6 +156,11 @@ ul, ol {
    layout shell
    ========================================================================== */
 .app-container {
+  /* Always full-width on phones (where viewport ≤ 480px) and capped
+     on bigger screens. Horizontal `auto` margins centre the container
+     symmetrically; we deliberately ignore safe-area-inset here so an
+     asymmetric inset reported by Telegram WebApp can't pull the whole
+     UI sideways. */
   width: 100%;
   max-width: 480px;
   margin-left: auto;
@@ -161,6 +169,7 @@ ul, ol {
   position: relative;
   background: var(--paper);
   background-image: var(--paper-texture);
+  box-sizing: border-box;
 }
 
 .page {
@@ -1468,8 +1477,8 @@ ul, ol {
 
 .sheet {
   position: fixed;
-  left: var(--safe-left);
-  right: var(--safe-right);
+  left: 0;
+  right: 0;
   margin-left: auto;
   margin-right: auto;
   bottom: 0;
@@ -1963,18 +1972,17 @@ ul, ol {
    ========================================================================== */
 .bottom-nav {
   position: fixed;
-  /* Anchor to the same horizontal centerline as the app container by
-     letting `left:0; right:0; margin:auto` size against the viewport
-     (or its safe-area insets) instead of `left:50%; transform:translateX(-50%)`.
-     The previous translate approach centered to the visual viewport
-     even when iOS reserved a non-zero safe-area-inset on one side,
-     pulling the nav off-center under the storefront. */
-  left: var(--safe-left);
-  right: var(--safe-right);
+  /* Anchor at viewport edges and centre via `margin:auto`. Avoids
+     `left:50%; transform:translateX(-50%)` because that ties the
+     centreline to the visual viewport, which on Telegram WebApp can
+     differ from the storefront column when safe-area insets are
+     reported asymmetrically. */
+  left: 0;
+  right: 0;
   margin-left: auto;
   margin-right: auto;
   bottom: calc(12px + var(--safe-bottom));
-  width: calc(100% - 24px - var(--safe-left) - var(--safe-right));
+  width: calc(100% - 24px);
   max-width: 456px;
   background: #ffffff;
   border: 1px solid var(--line);
@@ -2128,8 +2136,8 @@ ul, ol {
 .toast {
   position: fixed;
   top: calc(20px + var(--safe-top));
-  left: var(--safe-left);
-  right: var(--safe-right);
+  left: 0;
+  right: 0;
   margin-left: auto;
   margin-right: auto;
   background: var(--terracotta);
