@@ -242,12 +242,49 @@ function getDiscountInfo(product) {
   return { hasDiscount: false, price, oldPrice: 0, savings: 0, percent: 0 };
 }
 
-function buildProductBroadcastMessage(product, kind) {
-  const cleanDesc = (product.description || '')
+/**
+ * Normalize a multi-line description for Telegram broadcast:
+ *   - collapse only horizontal whitespace (so paragraphs survive)
+ *   - cap consecutive blank lines at one (single \n\n = paragraph break)
+ *   - trim trailing whitespace per line
+ *   - hard-cap length, but rewind to the last paragraph / sentence /
+ *     word boundary so we don't slice a word in half
+ *   - "…" suffix when truncated
+ */
+function normalizeBroadcastDescription(input, maxLen = 800) {
+  let text = (input || '')
     .toString()
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 600);
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t ]+/g, ' ')      // collapse spaces/tabs only
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+$/g, ''))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')         // max one blank line between paragraphs
+    .trim();
+
+  if (text.length <= maxLen) return text;
+
+  // Rewind to the nearest sensible boundary so the truncated end reads
+  // cleanly: prefer paragraph break, then sentence end, then word.
+  const slice = text.slice(0, maxLen);
+  const candidates = [
+    slice.lastIndexOf('\n\n'),
+    slice.lastIndexOf('. '),
+    slice.lastIndexOf('! '),
+    slice.lastIndexOf('? '),
+    slice.lastIndexOf('\n'),
+    slice.lastIndexOf(' '),
+  ].filter((i) => i > maxLen * 0.6);   // don't cut off too aggressively
+
+  const cutAt = candidates.length ? Math.max(...candidates) : maxLen;
+  return slice.slice(0, cutAt).trim() + '…';
+}
+
+function buildProductBroadcastMessage(product, kind) {
+  // sendPhoto caption hard limit is 1024 chars. The other lines (header,
+  // brand, name, prices, CTA, etc.) take roughly ~250-350 chars, so 700
+  // is a safe ceiling for the description body.
+  const cleanDesc = normalizeBroadcastDescription(product.description, 700);
   const headers = {
     new: '🌿 <b>Новинка в каталоге Fairhaven Health</b>',
     restock: '✨ <b>Снова в наличии!</b>',
