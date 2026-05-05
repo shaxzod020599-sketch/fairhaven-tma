@@ -296,8 +296,10 @@ ul, ol {
 
 .brand {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 8px;
+  flex-direction: row;
+  flex-wrap: wrap;
 }
 
 .brand-logo {
@@ -306,6 +308,47 @@ ul, ol {
   align-items: flex-start;
   line-height: 1;
   color: var(--ink);
+}
+
+/* Author credit chip in header — small, colored, clickable. Sits to
+   the right of the brand block on a tight line so it never crowds the
+   logo or the action icons. */
+.brand-credit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-end;
+  padding: 4px 10px 4px 8px;
+  margin-bottom: 1px;
+  border-radius: var(--r-pill);
+  background: rgba(151, 57, 97, 0.08);
+  color: var(--terracotta);
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  text-decoration: none;
+  transition: background var(--t-fast), color var(--t-fast), transform var(--t-fast);
+}
+.brand-credit:active {
+  transform: scale(0.96);
+  background: var(--terracotta);
+  color: #ffffff;
+}
+.brand-credit-icon {
+  flex-shrink: 0;
+  color: #229ED9;          /* Telegram brand blue for the paper plane */
+  transition: color var(--t-fast);
+}
+.brand-credit:active .brand-credit-icon { color: #ffffff; }
+.brand-credit-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+}
+.brand-credit-handle {
+  font-weight: 800;
 }
 .brand-logo-name {
   font-family: var(--font-display);
@@ -1944,40 +1987,58 @@ ul, ol {
 }
 
 /* ==========================================================================
-   author credit — discoverable but ambient (matches site footer color)
+   author credit — visible accent pill at the foot of Home + Profile
    ========================================================================== */
 .home-footer {
   text-align: center;
-  padding: 18px 0 8px;
-  margin-top: 4px;
+  padding: 22px 0 12px;
+  margin-top: 6px;
 }
 
 .author-credit {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 10px;
-  font-size: 0.66rem;
-  font-weight: 400;
-  letter-spacing: 0.04em;
-  color: var(--ink-faint);
-  opacity: 0.55;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 8px 16px 8px 12px;
+  border-radius: var(--r-pill);
+  background: rgba(151, 57, 97, 0.08);
+  color: var(--terracotta);
+  font-family: var(--font-body);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
   text-decoration: none;
-  transition: opacity var(--t-fast), color var(--t-fast);
-  font-variant: small-caps;
+  transition: background var(--t-fast), color var(--t-fast), transform var(--t-fast);
+  border: 1px solid rgba(151, 57, 97, 0.18);
 }
 .author-credit:hover,
 .author-credit:active {
-  opacity: 1;
-  color: var(--terracotta);
+  background: var(--terracotta);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+.author-credit::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  background: #229ED9;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z'/></svg>") center / contain no-repeat;
+          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z'/></svg>") center / contain no-repeat;
+  transition: background var(--t-fast);
+}
+.author-credit:hover::before,
+.author-credit:active::before {
+  background: #ffffff;
 }
 .author-credit-dot {
-  margin: 0 4px;
-  opacity: 0.6;
+  display: none;
 }
 .author-credit-handle {
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-weight: 800;
+  letter-spacing: 0.01em;
 }
 
 /* ==========================================================================
