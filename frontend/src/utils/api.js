@@ -1,10 +1,17 @@
+import { getTelegramInitData } from './telegram';
+
 const API_BASE = '/api';
 
 async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
+  const initData = getTelegramInitData();
   const config = {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(initData ? { 'X-Telegram-Init-Data': initData } : {}),
+      ...(options.headers || {}),
+    },
   };
 
   if (config.body && typeof config.body === 'object') {

@@ -1,20 +1,10 @@
-import { getTelegramUser } from '../utils/telegram';
+import { getTelegramInitData } from '../utils/telegram';
 
 const API = '/api/admin';
 const PUBLIC = '/api';
 
-function getAdminTgId() {
-  const tg = getTelegramUser();
-  if (tg?.id) return tg.id;
-  try {
-    const saved = localStorage.getItem('fh-admin-tgid');
-    if (saved) return Number(saved);
-  } catch (_) {}
-  return null;
-}
-
-export function setAdminTgId(id) {
-  try { localStorage.setItem('fh-admin-tgid', String(id)); } catch (_) {}
+export function setAdminTgId() {
+  try { localStorage.removeItem('fh-admin-tgid'); } catch (_) {}
 }
 
 export function clearAdminTgId() {
@@ -22,10 +12,10 @@ export function clearAdminTgId() {
 }
 
 async function adminRequest(endpoint, options = {}) {
-  const tgId = getAdminTgId();
+  const initData = getTelegramInitData();
   const headers = {
     'Content-Type': 'application/json',
-    ...(tgId ? { 'X-Admin-Telegram-Id': String(tgId) } : {}),
+    ...(initData ? { 'X-Telegram-Init-Data': initData } : {}),
     ...(options.headers || {}),
   };
   const config = { ...options, headers };

@@ -36,6 +36,10 @@ export function getTelegramUser() {
   return tg.initDataUnsafe?.user || {};
 }
 
+export function getTelegramInitData() {
+  return tg?.initData || '';
+}
+
 export function getThemeParams() {
   if (!tg) {
     return {
