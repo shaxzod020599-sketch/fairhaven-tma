@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { withTelegramRetry } = require('../utils/telegramRetry');
+const { launchBotWithRetry, withTelegramRetry } = require('../utils/telegramRetry');
 
 test('retries transient Telegram timeouts and returns successful result', async () => {
   let attempts = 0;
@@ -39,4 +39,46 @@ test('does not retry permanent Telegram errors', async () => {
   );
 
   assert.equal(attempts, 1);
+});
+
+test('relaunches bot polling after transient launch failure', async () => {
+  let attempts = 0;
+  const bot = {
+    launch: async () => {
+      attempts += 1;
+      if (attempts < 3) {
+        const error = new Error('getMe failed');
+        error.code = 'ETIMEDOUT';
+        throw error;
+      }
+    },
+  };
+
+  await launchBotWithRetry(bot, {
+    delays: [0, 0],
+    isStopping: () => attempts >= 3,
+  });
+
+  assert.equal(attempts, 3);
+});
+
+test('relaunches bot polling after getUpdates conflict', async () => {
+  let attempts = 0;
+  const bot = {
+    launch: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        const error = new Error('Conflict: terminated by other getUpdates request');
+        error.response = { error_code: 409 };
+        throw error;
+      }
+    },
+  };
+
+  await launchBotWithRetry(bot, {
+    delays: [0],
+    isStopping: () => attempts >= 2,
+  });
+
+  assert.equal(attempts, 2);
 });

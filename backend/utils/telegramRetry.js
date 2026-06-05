@@ -34,7 +34,36 @@ async function withTelegramRetry(operation, options = {}) {
   }
 }
 
+async function launchBotWithRetry(bot, options = {}) {
+  const delays = options.delays || [1000, 5000, 15000, 30000];
+  const isStopping = options.isStopping || (() => false);
+  let attempt = 0;
+
+  while (!isStopping()) {
+    try {
+      await bot.launch();
+      if (isStopping()) return;
+
+      const error = new Error('Bot polling stopped unexpectedly');
+      error.code = 'BOT_POLLING_STOPPED';
+      throw error;
+    } catch (err) {
+      if (isStopping()) return;
+
+      const isConflict = Number(err?.response?.error_code) === 409;
+      const isUnexpectedStop = err?.code === 'BOT_POLLING_STOPPED';
+      if (!isTransientTelegramError(err) && !isConflict && !isUnexpectedStop) throw err;
+
+      const delay = delays[Math.min(attempt, delays.length - 1)];
+      attempt += 1;
+      options.onRetry?.(err, delay, attempt);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
 module.exports = {
   isTransientTelegramError,
+  launchBotWithRetry,
   withTelegramRetry,
 };

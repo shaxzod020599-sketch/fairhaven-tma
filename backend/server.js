@@ -22,6 +22,7 @@ const {
   ensureAtLeastOneAdmin,
 } = require('./seed/bootstrap');
 const { UPLOAD_DIR } = require('./controllers/uploadController');
+const { launchBotWithRetry } = require('./utils/telegramRetry');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -172,13 +173,23 @@ async function start() {
 
     // Start Telegram Bot & expose to controllers via app.locals.
     let bot = null;
+    let shuttingDown = false;
     try {
       if (!process.env.TELEGRAM_BOT_TOKEN) {
         console.warn('⚠️  TELEGRAM_BOT_TOKEN missing — bot disabled.');
       } else {
         bot = createBot(process.env.TELEGRAM_BOT_TOKEN, process.env.FRONTEND_URL);
         app.locals.bot = bot;
-        bot.launch();
+        launchBotWithRetry(bot, {
+          isStopping: () => shuttingDown,
+          onRetry: (err, delay) => {
+            const reason = err.response?.description || err.code || err.cause?.code || 'unknown';
+            console.warn(`[bot] polling retry in ${delay}ms: ${reason}`);
+          },
+        }).catch((err) => {
+          const reason = err.response?.description || err.code || err.cause?.code || 'unknown';
+          console.error(`[bot] polling stopped permanently: ${reason}`);
+        });
         console.log('🤖 Telegram bot launched');
       }
     } catch (botErr) {
@@ -187,7 +198,8 @@ async function start() {
 
     const shutdown = async (signal) => {
       console.log(`\n${signal} received. Shutting down gracefully...`);
-      if (bot) bot.stop(signal);
+      shuttingDown = true;
+      try { if (bot) bot.stop(signal); } catch (_) { /* bot not started yet */ }
       await mongoose.connection.close();
       if (process._mongod) await process._mongod.stop();
       process.exit(0);
