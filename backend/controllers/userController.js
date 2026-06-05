@@ -44,6 +44,15 @@ exports.getByTelegramId = async (req, res) => {
 exports.update = async (req, res) => {
   try {
     const update = pick(req.body, ['languageCode', 'notificationsEnabled', 'favorites']);
+    for (const field of ['firstName', 'lastName']) {
+      if (req.body?.[field] === undefined) continue;
+      const normalized = normalizeProfileName(req.body[field], field === 'lastName');
+      if (normalized === null) {
+        return res.status(400).json({ success: false, error: 'invalid_name' });
+      }
+      update[field] = normalized;
+    }
+
     const user = await User.findOneAndUpdate(
       { telegramId: req.telegramUser.id },
       update,
@@ -96,4 +105,14 @@ function pick(body = {}, fields) {
     if (body[field] !== undefined) out[field] = body[field];
   }
   return out;
+}
+
+const PROFILE_NAME_RE = /^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u;
+
+function normalizeProfileName(value, allowEmpty) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  if (!normalized) return allowEmpty ? '' : null;
+  if (normalized.length > 40 || !PROFILE_NAME_RE.test(normalized)) return null;
+  return normalized;
 }

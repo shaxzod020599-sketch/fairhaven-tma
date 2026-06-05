@@ -81,6 +81,74 @@ test('user update ignores role and identity mass assignment', async () => {
   }
 });
 
+test('user update accepts valid profile names and ignores protected fields', async () => {
+  let capturedUpdate;
+  const restore = stubModule('../models/User', {
+    findOneAndUpdate: async (_filter, update) => {
+      capturedUpdate = update;
+      return { telegramId: 111, ...update };
+    },
+  });
+  const controllerPath = require.resolve('../controllers/userController');
+  delete require.cache[controllerPath];
+  const controller = require('../controllers/userController');
+  const res = responseRecorder();
+
+  try {
+    await controller.update({
+      telegramUser: { id: 111 },
+      params: { telegramId: '111' },
+      body: {
+        firstName: '  Oʻtkir  ',
+        lastName: '  Aliyev-Karimov ',
+        role: 'admin',
+        phone: '+998000000000',
+        telegramId: 999,
+        registrationStep: 'done',
+        consentAccepted: true,
+      },
+    }, res);
+
+    assert.deepEqual(capturedUpdate, {
+      firstName: 'Oʻtkir',
+      lastName: 'Aliyev-Karimov',
+    });
+    assert.equal(res.statusCode, 200);
+  } finally {
+    delete require.cache[controllerPath];
+    restore();
+  }
+});
+
+test('user update rejects invalid profile names before database write', async () => {
+  let called = false;
+  const restore = stubModule('../models/User', {
+    findOneAndUpdate: async () => {
+      called = true;
+      return null;
+    },
+  });
+  const controllerPath = require.resolve('../controllers/userController');
+  delete require.cache[controllerPath];
+  const controller = require('../controllers/userController');
+  const res = responseRecorder();
+
+  try {
+    await controller.update({
+      telegramUser: { id: 111 },
+      params: { telegramId: '111' },
+      body: { firstName: '<script>alert(1)</script>' },
+    }, res);
+
+    assert.equal(called, false);
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.body.error, 'invalid_name');
+  } finally {
+    delete require.cache[controllerPath];
+    restore();
+  }
+});
+
 test('order detail query is scoped to authenticated owner', async () => {
   let capturedFilter;
   const restore = [

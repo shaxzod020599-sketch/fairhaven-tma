@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { getTelegramUser, hapticFeedback } from '../utils/telegram';
-import { fetchPublicSettings } from '../utils/api';
+import { fetchPublicSettings, updateUser } from '../utils/api';
 
 const DEFAULT_SUPPORT_PHONE = '+998 78 150 04 40';
 const DEFAULT_SUPPORT_PHONE_TEL = '+998781500440';
 const DEFAULT_SUPPORT_HOURS = 'Ежедневно · 9:00 – 21:00 (Asia/Tashkent)';
-const SUPPORT_TG = 'fairhaven_support';
+const SUPPORT_TG = 'fairhaven_uz';
 
 function genderLabel(g) {
   if (g === 'male') return 'Мужской';
@@ -19,11 +19,23 @@ function initials(firstName, lastName) {
   return (a + b) || '◉';
 }
 
-export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0, onNavigate, onOpenAdmin }) {
+export default function Profile({
+  dbUser,
+  ordersCount = 0,
+  activeOrdersCount = 0,
+  onNavigate,
+  onOpenAdmin,
+  onUserUpdated,
+}) {
   const tg = getTelegramUser();
   const [supportPhone, setSupportPhone] = useState(DEFAULT_SUPPORT_PHONE);
   const [supportPhoneTel, setSupportPhoneTel] = useState(DEFAULT_SUPPORT_PHONE_TEL);
   const [supportHours, setSupportHours] = useState(DEFAULT_SUPPORT_HOURS);
+  const [editingName, setEditingName] = useState(false);
+  const [draftFirstName, setDraftFirstName] = useState('');
+  const [draftLastName, setDraftLastName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState('');
 
   useEffect(() => {
     fetchPublicSettings()
@@ -36,8 +48,8 @@ export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0
       .catch(() => {});
   }, []);
 
-  const firstName = dbUser?.firstName || tg.first_name || '';
-  const lastName = dbUser?.lastName || tg.last_name || '';
+  const firstName = dbUser ? dbUser.firstName : (tg.first_name || '');
+  const lastName = dbUser ? dbUser.lastName : (tg.last_name || '');
   const fullName = [firstName, lastName].filter(Boolean).join(' ') || 'Гость';
   const username = dbUser?.username || tg.username || '';
   const phone = dbUser?.phone || '';
@@ -73,6 +85,45 @@ export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0
   const openAdmin = () => {
     hapticFeedback('medium');
     onOpenAdmin?.();
+  };
+
+  const startNameEdit = () => {
+    hapticFeedback('light');
+    setDraftFirstName(firstName);
+    setDraftLastName(lastName);
+    setNameError('');
+    setEditingName(true);
+  };
+
+  const cancelNameEdit = () => {
+    hapticFeedback('light');
+    setNameError('');
+    setEditingName(false);
+  };
+
+  const saveName = async () => {
+    const cleanFirstName = draftFirstName.trim().replace(/\s+/g, ' ');
+    const cleanLastName = draftLastName.trim().replace(/\s+/g, ' ');
+    if (!cleanFirstName) {
+      setNameError('Введите имя');
+      return;
+    }
+
+    setSavingName(true);
+    setNameError('');
+    try {
+      const res = await updateUser(tg.id, {
+        firstName: cleanFirstName,
+        lastName: cleanLastName,
+      });
+      onUserUpdated?.(res.data);
+      setEditingName(false);
+      hapticFeedback('medium');
+    } catch (_) {
+      setNameError('Проверьте имя и фамилию');
+    } finally {
+      setSavingName(false);
+    }
   };
 
   const isAdmin = dbUser?.role === 'admin';
@@ -137,7 +188,59 @@ export default function Profile({ dbUser, ordersCount = 0, activeOrdersCount = 0
       </button>
 
       {/* Personal data */}
-      <div className="profile-section">Личные данные</div>
+      <div
+        className="profile-section"
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+      >
+        <span>Личные данные</span>
+        {!editingName && (
+          <button className="review-block-edit" type="button" onClick={startNameEdit}>
+            Изменить
+          </button>
+        )}
+      </div>
+      {editingName && (
+        <div className="review-block">
+          <label className="review-field">
+            <span className="review-field-label">Имя</span>
+            <input
+              value={draftFirstName}
+              onChange={(event) => setDraftFirstName(event.target.value)}
+              maxLength={40}
+              autoComplete="given-name"
+              disabled={savingName}
+            />
+          </label>
+          <label className="review-field">
+            <span className="review-field-label">Фамилия</span>
+            <input
+              value={draftLastName}
+              onChange={(event) => setDraftLastName(event.target.value)}
+              maxLength={40}
+              autoComplete="family-name"
+              disabled={savingName}
+            />
+          </label>
+          {nameError && <span className="review-field-error">{nameError}</span>}
+          <button
+            className="checkout-btn"
+            type="button"
+            onClick={saveName}
+            disabled={savingName}
+          >
+            {savingName ? 'Сохраняем…' : 'Сохранить'}
+          </button>
+          <button
+            className="review-block-edit"
+            type="button"
+            onClick={cancelNameEdit}
+            disabled={savingName}
+            style={{ display: 'block', margin: '10px auto 0' }}
+          >
+            Отмена
+          </button>
+        </div>
+      )}
       <div className="profile-data">
         <div className="profile-data-row">
           <span className="profile-data-label">Имя</span>

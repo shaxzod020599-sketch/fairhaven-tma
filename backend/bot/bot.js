@@ -3,14 +3,17 @@ const User = require('../models/User');
 const Order = require('../models/Order');
 const { formatOrderReceipt } = require('../utils/helpers');
 const { errorLabel } = require('../utils/http');
+const {
+  acceptConsent,
+  applyVerifiedContact,
+  escapeRegistrationName,
+  syncRegistrationUser,
+} = require('../utils/registration');
 const { withTelegramRetry } = require('../utils/telegramRetry');
 
 // Fairhaven channel — orders are sent here for operator approval.
 // Override via ORDERS_CHANNEL_ID env var if needed.
 const ORDERS_CHANNEL_ID = process.env.ORDERS_CHANNEL_ID;
-
-const MIN_YEAR = 1930;
-const MAX_YEAR = new Date().getFullYear() - 14; // minimum 14 y.o.
 
 // -----------------------------------------------------------------------------
 // Copy (bilingual: RU + UZ)
@@ -49,12 +52,12 @@ const T = {
     `4️⃣ <b>Jinsingiz / Ваш пол</b>`,
 
   askPhone:
-    `5️⃣ <b>Telefon raqamingizni yuboring / Отправьте номер телефона</b>\n\n` +
+    `1️⃣ <b>Telefon raqamingizni yuboring / Отправьте номер телефона</b>\n\n` +
     `Pastdagi tugmani bosing — raqam avtomatik yuboriladi.\n` +
     `Нажмите кнопку ниже — номер отправится автоматически.`,
 
   askConsent: (frontendUrl, brandName) =>
-    `6️⃣ <b>Shaxsga doir ma’lumotlarga rozilik / Согласие на обработку данных</b>\n\n` +
+    `2️⃣ <b>Shaxsga doir ma’lumotlarga rozilik / Согласие на обработку данных</b>\n\n` +
     `${brandName} buyurtmalaringizni qayta ishlash uchun ma’lumotlaringizdan foydalanadi.\n` +
     `${brandName} использует ваши данные для обработки заказов.\n\n` +
     `Quyidagi ommaviy oferta bilan tanishing:\n` +
@@ -96,10 +99,6 @@ const T = {
     `📞 ${process.env.SUPPORT_PHONE || '+998 78 150 04 40'}`,
 };
 
-function cleanText(s) {
-  return (s || '').toString().trim().replace(/\s+/g, ' ');
-}
-
 function shortOrderId(order) {
   return order._id.toString().slice(-6).toUpperCase();
 }
@@ -108,27 +107,12 @@ function shortOrderId(order) {
 // Send a step prompt to a user, honouring their current registrationStep
 // -----------------------------------------------------------------------------
 async function sendStep(ctx, user, frontendUrl) {
+  if (!['awaiting_phone', 'awaiting_consent', 'done'].includes(user.registrationStep)) {
+    syncRegistrationUser(user, ctx.from || {});
+    await user.save();
+  }
+
   switch (user.registrationStep) {
-    case 'awaiting_name':
-      return ctx.replyWithHTML(T.askName, Markup.removeKeyboard());
-
-    case 'awaiting_surname':
-      return ctx.replyWithHTML(T.askSurname, Markup.removeKeyboard());
-
-    case 'awaiting_year':
-      return ctx.replyWithHTML(T.askYear, Markup.removeKeyboard());
-
-    case 'awaiting_gender':
-      return ctx.replyWithHTML(
-        T.askGender,
-        Markup.inlineKeyboard([
-          [
-            Markup.button.callback(T.male, 'gender:male'),
-            Markup.button.callback(T.female, 'gender:female'),
-          ],
-        ])
-      );
-
     case 'awaiting_phone':
       return ctx.replyWithHTML(T.askPhone, {
         reply_markup: {
@@ -162,7 +146,7 @@ async function sendStep(ctx, user, frontendUrl) {
 }
 
 async function sendOpenShop(ctx, user, frontendUrl) {
-  const firstName = user.firstName || ctx.from.first_name || '';
+  const firstName = escapeRegistrationName(user.firstName || ctx.from.first_name || '');
   const greeting = user.isRegistered()
     ? T.alreadyRegistered(firstName)
     : T.registered(firstName);
@@ -503,16 +487,13 @@ function createBot(token, frontendUrl) {
         telegramId: tg.id,
         username: tg.username || '',
         languageCode: tg.language_code || 'ru',
-        registrationStep: 'awaiting_name',
+        registrationStep: 'awaiting_phone',
       });
-    } else {
-      // Keep username/language fresh.
-      user.username = tg.username || user.username;
-      user.languageCode = tg.language_code || user.languageCode;
-      await user.save();
     }
+    syncRegistrationUser(user, tg);
+    await user.save();
 
-    const firstName = user.firstName || tg.first_name || 'друг';
+    const firstName = escapeRegistrationName(user.firstName || tg.first_name || 'друг');
     await ctx.replyWithHTML(T.welcome(firstName));
 
     if (user.isRegistered()) {
@@ -593,11 +574,7 @@ function createBot(token, frontendUrl) {
     try {
       const user = await User.findOne({ telegramId: ctx.from.id });
       if (!user) return ctx.answerCbQuery();
-      if (user.registrationStep !== 'awaiting_gender') {
-        return ctx.answerCbQuery();
-      }
-      user.gender = gender;
-      user.registrationStep = 'awaiting_phone';
+      syncRegistrationUser(user, ctx.from);
       await user.save();
       await ctx.answerCbQuery(gender === 'male' ? '👨' : '👩');
       try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (_) {}
@@ -615,12 +592,9 @@ function createBot(token, frontendUrl) {
     try {
       const user = await User.findOne({ telegramId: ctx.from.id });
       if (!user) return ctx.answerCbQuery();
-      if (user.registrationStep !== 'awaiting_consent') {
+      if (!acceptConsent(user)) {
         return ctx.answerCbQuery();
       }
-      user.consentAccepted = true;
-      user.consentAcceptedAt = new Date();
-      user.registrationStep = 'done';
       await user.save();
       await ctx.answerCbQuery('✅');
       try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (_) {}
@@ -701,16 +675,12 @@ function createBot(token, frontendUrl) {
       if (user.registrationStep !== 'awaiting_phone') return;
 
       const contact = ctx.message.contact;
-      if (!contact || String(contact.user_id) !== String(ctx.from.id)) {
+      if (!applyVerifiedContact(user, ctx.from.id, contact)) {
         return ctx.replyWithHTML(
           '⚠️ Iltimos, o‘zingizning raqamingizni yuboring.\n⚠️ Отправьте ваш собственный номер.'
         );
       }
 
-      user.phone = contact.phone_number.startsWith('+')
-        ? contact.phone_number
-        : `+${contact.phone_number}`;
-      user.registrationStep = 'awaiting_consent';
       await user.save();
 
       // Remove the contact keyboard.
@@ -744,50 +714,9 @@ function createBot(token, frontendUrl) {
         return sendOpenShop(ctx, user, FRONTEND);
       }
 
-      const value = cleanText(ctx.message.text);
-
-      if (user.registrationStep === 'awaiting_name') {
-        if (!/^[A-Za-zА-Яа-яЎўҚқҒғҲҳӯӢӣ’'\- ]{2,40}$/.test(value)) {
-          return ctx.replyWithHTML(T.invalidName);
-        }
-        user.firstName = value;
-        user.registrationStep = 'awaiting_surname';
-        await user.save();
-        return sendStep(ctx, user, FRONTEND);
-      }
-
-      if (user.registrationStep === 'awaiting_surname') {
-        if (!/^[A-Za-zА-Яа-яЎўҚқҒғҲҳӯӢӣ’'\- ]{2,40}$/.test(value)) {
-          return ctx.replyWithHTML(T.invalidName);
-        }
-        user.lastName = value;
-        user.registrationStep = 'awaiting_year';
-        await user.save();
-        return sendStep(ctx, user, FRONTEND);
-      }
-
-      if (user.registrationStep === 'awaiting_year') {
-        const year = parseInt(value.replace(/\D/g, ''), 10);
-        if (!year || year < MIN_YEAR || year > MAX_YEAR) {
-          return ctx.replyWithHTML(T.invalidYear(MIN_YEAR, MAX_YEAR));
-        }
-        user.birthYear = year;
-        user.registrationStep = 'awaiting_gender';
-        await user.save();
-        return sendStep(ctx, user, FRONTEND);
-      }
-
-      if (user.registrationStep === 'awaiting_gender') {
-        return sendStep(ctx, user, FRONTEND);
-      }
-
-      if (user.registrationStep === 'awaiting_phone') {
-        return sendStep(ctx, user, FRONTEND);
-      }
-
-      if (user.registrationStep === 'awaiting_consent') {
-        return sendStep(ctx, user, FRONTEND);
-      }
+      syncRegistrationUser(user, ctx.from);
+      await user.save();
+      return sendStep(ctx, user, FRONTEND);
     } catch (err) {
       console.error('text handler:', errorLabel(err));
     }
