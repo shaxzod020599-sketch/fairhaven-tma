@@ -1,6 +1,17 @@
 const Collection = require('../models/Collection');
 const Setting = require('../models/Setting');
 
+const PUBLIC_SETTING_KEYS = [
+  'support_phone',
+  'support_phone_tel',
+  'support_hours',
+  'free_delivery_threshold',
+  'delivery_city',
+  'delivery_region_ru',
+  'delivery_region_uz',
+  'brand_tagline',
+];
+
 exports.listCollections = async (_req, res) => {
   try {
     const items = await Collection.find({ visible: true })
@@ -27,7 +38,7 @@ exports.getCollection = async (req, res) => {
 
 exports.getSettings = async (_req, res) => {
   try {
-    const items = await Setting.find({});
+    const items = await Setting.find({ key: { $in: PUBLIC_SETTING_KEYS } });
     const dict = {};
     for (const item of items) dict[item.key] = item.value;
     res.json({ success: true, data: dict });

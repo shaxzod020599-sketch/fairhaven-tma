@@ -92,6 +92,17 @@ async function telegramAuth(req, res, next) {
   }
 }
 
+function requireSelf(paramName = 'telegramId') {
+  return function selfAuthorization(req, res, next) {
+    const requestedId = Number(req.params?.[paramName]);
+    if (!Number.isSafeInteger(requestedId) || requestedId !== Number(req.telegramUser?.id)) {
+      return res.status(403).json({ success: false, error: 'forbidden' });
+    }
+    next();
+  };
+}
+
 module.exports = telegramAuth;
 module.exports.getTelegramUserFromRequest = getTelegramUserFromRequest;
+module.exports.requireSelf = requireSelf;
 module.exports.validateTelegramInitData = validateTelegramInitData;

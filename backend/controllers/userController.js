@@ -2,21 +2,20 @@ const User = require('../models/User');
 
 exports.getOrCreate = async (req, res) => {
   try {
-    const { telegramId, firstName, lastName, username, photoUrl, languageCode } = req.body;
+    const telegramId = req.telegramUser.id;
+    const username = req.telegramUser.username || '';
+    const photoUrl = req.telegramUser.photo_url || '';
+    const languageCode = req.telegramUser.language_code || 'ru';
 
     let user = await User.findOne({ telegramId });
     if (!user) {
       user = await User.create({
         telegramId,
-        firstName: firstName || '',
-        lastName: lastName || '',
         username: username || '',
         photoUrl: photoUrl || '',
         languageCode: languageCode || 'ru',
       });
     } else {
-      if (firstName) user.firstName = firstName;
-      if (lastName) user.lastName = lastName;
       if (username) user.username = username;
       if (photoUrl) user.photoUrl = photoUrl;
       if (languageCode) user.languageCode = languageCode;
@@ -31,7 +30,7 @@ exports.getOrCreate = async (req, res) => {
 
 exports.getByTelegramId = async (req, res) => {
   try {
-    const user = await User.findOne({ telegramId: Number(req.params.telegramId) });
+    const user = await User.findOne({ telegramId: req.telegramUser.id });
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
@@ -43,9 +42,10 @@ exports.getByTelegramId = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
+    const update = pick(req.body, ['languageCode', 'notificationsEnabled', 'favorites']);
     const user = await User.findOneAndUpdate(
-      { telegramId: Number(req.params.telegramId) },
-      req.body,
+      { telegramId: req.telegramUser.id },
+      update,
       { new: true, runValidators: true }
     );
     if (!user) {
@@ -59,11 +59,15 @@ exports.update = async (req, res) => {
 
 exports.addAddress = async (req, res) => {
   try {
-    const user = await User.findOne({ telegramId: Number(req.params.telegramId) });
+    const user = await User.findOne({ telegramId: req.telegramUser.id });
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
-    user.savedAddresses.push(req.body);
+    if (user.savedAddresses.length >= 10) {
+      return res.status(400).json({ success: false, error: 'address_limit' });
+    }
+    const address = pick(req.body, ['label', 'lat', 'lng', 'addressString']);
+    user.savedAddresses.push(address);
     await user.save();
     res.json({ success: true, data: user.savedAddresses });
   } catch (err) {
@@ -73,7 +77,7 @@ exports.addAddress = async (req, res) => {
 
 exports.removeAddress = async (req, res) => {
   try {
-    const user = await User.findOne({ telegramId: Number(req.params.telegramId) });
+    const user = await User.findOne({ telegramId: req.telegramUser.id });
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
@@ -84,3 +88,11 @@ exports.removeAddress = async (req, res) => {
     res.status(400).json({ success: false, error: err.message });
   }
 };
+
+function pick(body = {}, fields) {
+  const out = {};
+  for (const field of fields) {
+    if (body[field] !== undefined) out[field] = body[field];
+  }
+  return out;
+}

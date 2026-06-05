@@ -29,7 +29,6 @@ async function resolvePromo(code, subtotal, isFirstOrder, userPromosUsed) {
 exports.create = async (req, res) => {
   try {
     const {
-      telegramId,
       items,
       location,
       customerName,
@@ -39,10 +38,11 @@ exports.create = async (req, res) => {
       promoCode,
     } = req.body;
 
-    if (!telegramId || !Array.isArray(items) || items.length === 0) {
+    const telegramId = req.telegramUser.id;
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'telegramId and items are required',
+        error: 'items are required',
       });
     }
 
@@ -146,7 +146,10 @@ exports.getAll = async (req, res) => {
 
 exports.getById = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id)
+    const order = await Order.findOne({
+      _id: req.params.id,
+      telegramId: req.telegramUser.id,
+    })
       .populate('items.productId', 'name imageUrl images price');
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
@@ -176,7 +179,7 @@ exports.updateStatus = async (req, res) => {
 
 exports.getByUser = async (req, res) => {
   try {
-    const orders = await Order.find({ telegramId: Number(req.params.telegramId) })
+    const orders = await Order.find({ telegramId: req.telegramUser.id })
       .sort({ createdAt: -1 });
     res.json({ success: true, data: orders });
   } catch (err) {
@@ -186,10 +189,7 @@ exports.getByUser = async (req, res) => {
 
 exports.cancelByCustomer = async (req, res) => {
   try {
-    const telegramId = Number(req.body?.telegramId || req.query?.telegramId);
-    if (!telegramId) {
-      return res.status(400).json({ success: false, error: 'telegramId required' });
-    }
+    const telegramId = req.telegramUser.id;
 
     const order = await Order.findById(req.params.id);
     if (!order) {
@@ -224,20 +224,19 @@ exports.cancelByCustomer = async (req, res) => {
 
 exports.validatePromo = async (req, res) => {
   try {
-    const { code, subtotal = 0, telegramId } = req.body;
+    const { code, subtotal = 0 } = req.body;
+    const telegramId = req.telegramUser.id;
     if (!code) {
       return res.status(400).json({ success: false, error: 'code_required' });
     }
     const subtotalN = Number(subtotal) || 0;
     let isFirstOrder = true;
     let userPromosUsed = [];
-    if (telegramId) {
-      const user = await User.findOne({ telegramId: Number(telegramId) });
-      if (user) {
-        const prev = await Order.countDocuments({ userId: user._id });
-        isFirstOrder = prev === 0;
-        userPromosUsed = user.promoCodesUsed || [];
-      }
+    const user = await User.findOne({ telegramId });
+    if (user) {
+      const prev = await Order.countDocuments({ userId: user._id });
+      isFirstOrder = prev === 0;
+      userPromosUsed = user.promoCodesUsed || [];
     }
     const result = await resolvePromo(code, subtotalN, isFirstOrder, userPromosUsed);
     if (result.error || !result.promo) {
