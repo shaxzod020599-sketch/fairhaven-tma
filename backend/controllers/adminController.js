@@ -5,6 +5,7 @@ const Collection = require('../models/Collection');
 const Setting = require('../models/Setting');
 const PromoCode = require('../models/PromoCode');
 const { resolveAdmin } = require('../middleware/adminAuth');
+const { withTelegramRetry } = require('../utils/telegramRetry');
 
 // ───────────────────────────────────────────────────────────────────────────
 // whoami — lightweight check frontend uses to decide "admin UI or login?"
@@ -135,9 +136,17 @@ exports.updateOrderStatus = async (req, res) => {
     if (!order) return res.status(404).json({ success: false, error: 'not_found' });
 
     const bot = req.app.locals.bot;
-    if (bot && bot.telegram && order.channelMessageId) {
-      tryEditChannelCard(bot, order, req.admin).catch(() => {});
-      tryNotifyCustomer(bot, order, status).catch(() => {});
+    if (bot && bot.telegram) {
+      if (order.channelMessageId) {
+        tryEditChannelCard(bot, order, req.admin).catch((err) =>
+          console.warn('[admin.order] channel edit failed:', err.message)
+        );
+      }
+      try {
+        await tryNotifyCustomer(bot, order, status);
+      } catch (err) {
+        console.warn('[admin.order] customer notification failed:', err.message);
+      }
     }
 
     res.json({ success: true, data: order });
@@ -726,7 +735,7 @@ async function tryNotifyCustomer(bot, order, status) {
   } else {
     return;
   }
-  try {
-    await bot.telegram.sendMessage(order.telegramId, text, { parse_mode: 'HTML' });
-  } catch (_) {}
+  await withTelegramRetry(() =>
+    bot.telegram.sendMessage(order.telegramId, text, { parse_mode: 'HTML' })
+  );
 }

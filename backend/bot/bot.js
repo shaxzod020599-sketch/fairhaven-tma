@@ -2,6 +2,7 @@ const { Telegraf, Markup } = require('telegraf');
 const User = require('../models/User');
 const Order = require('../models/Order');
 const { formatOrderReceipt } = require('../utils/helpers');
+const { withTelegramRetry } = require('../utils/telegramRetry');
 
 // Fairhaven channel — orders are sent here for operator approval.
 // Override via ORDERS_CHANNEL_ID env var if needed.
@@ -203,11 +204,13 @@ async function forwardOrderToChannel(bot, order) {
   }
   try {
     const text = formatOrderReceipt(order);
-    const sent = await bot.telegram.sendMessage(ORDERS_CHANNEL_ID, text, {
-      parse_mode: 'HTML',
-      disable_web_page_preview: true,
-      reply_markup: buildChannelKeyboard(order._id.toString(), 'pending'),
-    });
+    const sent = await withTelegramRetry(() =>
+      bot.telegram.sendMessage(ORDERS_CHANNEL_ID, text, {
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+        reply_markup: buildChannelKeyboard(order._id.toString(), 'pending'),
+      })
+    );
     console.log(`[bot] Order #${order._id.toString().slice(-6).toUpperCase()} → channel ${ORDERS_CHANNEL_ID}, msg ${sent.message_id}`);
     return sent.message_id;
   } catch (err) {
@@ -400,29 +403,35 @@ async function broadcastProductToUsers(bot, product, frontendUrl, kind = 'new') 
       try {
         if (photoUrl) {
           try {
-            await bot.telegram.sendPhoto(r.telegramId, photoUrl, {
-              caption: text,
-              parse_mode: 'HTML',
-              reply_markup: keyboard,
-            });
+            await withTelegramRetry(() =>
+              bot.telegram.sendPhoto(r.telegramId, photoUrl, {
+                caption: text,
+                parse_mode: 'HTML',
+                reply_markup: keyboard,
+              })
+            );
           } catch (photoErr) {
             // Telegram couldn't fetch / accept the photo URL — fall back to plain text
             // so the broadcast still reaches users instead of silently failing.
-            await bot.telegram.sendMessage(r.telegramId, text, {
-              parse_mode: 'HTML',
-              disable_web_page_preview: false,
-              reply_markup: keyboard,
-            });
+            await withTelegramRetry(() =>
+              bot.telegram.sendMessage(r.telegramId, text, {
+                parse_mode: 'HTML',
+                disable_web_page_preview: false,
+                reply_markup: keyboard,
+              })
+            );
             if (errorSamples.length < 3) {
               errorSamples.push(`photo fallback: ${photoErr.description || photoErr.message}`);
             }
           }
         } else {
-          await bot.telegram.sendMessage(r.telegramId, text, {
-            parse_mode: 'HTML',
-            disable_web_page_preview: true,
-            reply_markup: keyboard,
-          });
+          await withTelegramRetry(() =>
+            bot.telegram.sendMessage(r.telegramId, text, {
+              parse_mode: 'HTML',
+              disable_web_page_preview: true,
+              reply_markup: keyboard,
+            })
+          );
         }
         sent += 1;
       } catch (err) {
@@ -673,10 +682,12 @@ function createBot(token, frontendUrl) {
 
       // Notify the customer
       try {
-        await bot.telegram.sendMessage(
-          order.telegramId,
-          action === 'approve' ? T.orderApproved(shortId) : T.orderRejected(shortId),
-          { parse_mode: 'HTML' }
+        await withTelegramRetry(() =>
+          bot.telegram.sendMessage(
+            order.telegramId,
+            action === 'approve' ? T.orderApproved(shortId) : T.orderRejected(shortId),
+            { parse_mode: 'HTML' }
+          )
         );
       } catch (notifyErr) {
         console.warn('[bot] Could not notify customer:', notifyErr.message);
