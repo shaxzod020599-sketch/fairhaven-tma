@@ -29,7 +29,7 @@ module.exports = async function adminAuth(req, res, next) {
     req.admin = admin;
     next();
   } catch (err) {
-    console.error('[adminAuth]', err);
+    console.error('[adminAuth]', err?.name || 'Error', err?.code || '');
     res.status(500).json({ success: false, error: 'internal_error' });
   }
 };

@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { sendError } = require('../utils/http');
 
 exports.getOrCreate = async (req, res) => {
   try {
@@ -24,7 +25,7 @@ exports.getOrCreate = async (req, res) => {
 
     res.json({ success: true, data: user });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -36,7 +37,7 @@ exports.getByTelegramId = async (req, res) => {
     }
     res.json({ success: true, data: user });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -53,7 +54,7 @@ exports.update = async (req, res) => {
     }
     res.json({ success: true, data: user });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -71,7 +72,7 @@ exports.addAddress = async (req, res) => {
     await user.save();
     res.json({ success: true, data: user.savedAddresses });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -85,7 +86,7 @@ exports.removeAddress = async (req, res) => {
     await user.save();
     res.json({ success: true, data: user.savedAddresses });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 

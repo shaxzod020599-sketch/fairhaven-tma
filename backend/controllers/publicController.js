@@ -1,5 +1,6 @@
 const Collection = require('../models/Collection');
 const Setting = require('../models/Setting');
+const { sendError } = require('../utils/http');
 
 const PUBLIC_SETTING_KEYS = [
   'support_phone',
@@ -19,7 +20,7 @@ exports.listCollections = async (_req, res) => {
       .sort({ sortOrder: 1, createdAt: 1 });
     res.json({ success: true, data: items });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -32,7 +33,7 @@ exports.getCollection = async (req, res) => {
     }
     res.json({ success: true, data: c });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -43,6 +44,6 @@ exports.getSettings = async (_req, res) => {
     for (const item of items) dict[item.key] = item.value;
     res.json({ success: true, data: dict });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };

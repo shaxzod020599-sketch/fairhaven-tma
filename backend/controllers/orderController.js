@@ -1,9 +1,13 @@
 const Order = require('../models/Order');
 const User = require('../models/User');
+const Product = require('../models/Product');
 const PromoCode = require('../models/PromoCode');
+const { errorLabel, sendError } = require('../utils/http');
 
 const FREE_DELIVERY_THRESHOLD = 500000;
 const DELIVERY_FEE = 25000;
+const MAX_ORDER_ITEMS = 50;
+const MAX_ITEM_QUANTITY = 100;
 
 async function resolvePromo(code, subtotal, isFirstOrder, userPromosUsed) {
   if (!code) return { discount: 0, promo: null };
@@ -39,11 +43,17 @@ exports.create = async (req, res) => {
     } = req.body;
 
     const telegramId = req.telegramUser.id;
-    if (!Array.isArray(items) || items.length === 0) {
+    const requestedItems = normalizeItems(items);
+    if (!requestedItems) {
       return res.status(400).json({
         success: false,
-        error: 'items are required',
+        error: 'invalid_items',
       });
+    }
+    const safeLocation = normalizeLocation(location);
+    const safePhone = normalizePhone(customerPhone || '');
+    if (!safeLocation || (customerPhone && !safePhone)) {
+      return res.status(400).json({ success: false, error: 'invalid_order_details' });
     }
 
     const user = await User.findOne({ telegramId });
@@ -60,7 +70,25 @@ exports.create = async (req, res) => {
     const previousOrders = await Order.countDocuments({ userId: user._id });
     const isFirstOrder = previousOrders === 0;
 
-    const subtotal = items.reduce((sum, it) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0);
+    const productIds = [...new Set(requestedItems.map((item) => item.productId))];
+    const products = await Product.find({
+      _id: { $in: productIds },
+      isAvailable: true,
+    });
+    const productMap = new Map(products.map((product) => [product._id.toString(), product]));
+    if (productMap.size !== productIds.length) {
+      return res.status(400).json({ success: false, error: 'unavailable_product' });
+    }
+    const trustedItems = requestedItems.map((item) => {
+      const product = productMap.get(item.productId);
+      return {
+        productId: product._id,
+        name: product.name,
+        price: Number(product.price),
+        quantity: item.quantity,
+      };
+    });
+    const subtotal = trustedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
     const promoResult = await resolvePromo(
       promoCode,
@@ -84,18 +112,21 @@ exports.create = async (req, res) => {
     const order = await Order.create({
       userId: user._id,
       telegramId,
-      items,
+      items: trustedItems,
       subtotal,
       deliveryFee,
       discount,
       promoCode: appliedPromo ? appliedPromo.code : '',
       totalAmount,
       isFirstOrder,
-      location,
-      customerName: customerName || [user.firstName, user.lastName].filter(Boolean).join(' '),
-      customerPhone: customerPhone || user.phone,
+      location: safeLocation,
+      customerName: normalizeText(
+        customerName || [user.firstName, user.lastName].filter(Boolean).join(' '),
+        120
+      ),
+      customerPhone: safePhone || normalizePhone(user.phone || ''),
       paymentMethod: paymentMethod === 'card' ? 'card' : 'cash',
-      notes: notes || '',
+      notes: normalizeText(notes, 500),
     });
 
     if (appliedPromo) {
@@ -122,8 +153,7 @@ exports.create = async (req, res) => {
 
     res.status(201).json({ success: true, data: order });
   } catch (err) {
-    console.error('[order.create]', err);
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -140,7 +170,7 @@ exports.getAll = async (req, res) => {
 
     res.json({ success: true, data: orders });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -156,7 +186,7 @@ exports.getById = async (req, res) => {
     }
     res.json({ success: true, data: order });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -173,7 +203,7 @@ exports.updateStatus = async (req, res) => {
     }
     res.json({ success: true, data: order });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -183,7 +213,7 @@ exports.getByUser = async (req, res) => {
       .sort({ createdAt: -1 });
     res.json({ success: true, data: orders });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -212,13 +242,13 @@ exports.cancelByCustomer = async (req, res) => {
     const bot = req.app.locals.bot;
     if (bot && typeof bot.markOrderCancelledByCustomer === 'function') {
       bot.markOrderCancelledByCustomer(order).catch((err) =>
-        console.warn('[order.cancel] channel edit failed:', err.message)
+        console.warn('[order.cancel] channel edit failed:', errorLabel(err))
       );
     }
 
     res.json({ success: true, data: order });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -260,7 +290,7 @@ exports.validatePromo = async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -272,4 +302,53 @@ function messageForError(code) {
     case 'invalid_promo':
     default: return 'Промокод не найден или истёк';
   }
+}
+
+function normalizeItems(items) {
+  if (!Array.isArray(items) || items.length === 0 || items.length > MAX_ORDER_ITEMS) {
+    return null;
+  }
+  const normalized = [];
+  for (const item of items) {
+    const productId = String(item?.productId || '').trim();
+    const quantity = Number(item?.quantity);
+    if (
+      !/^[a-f0-9]{24}$/i.test(productId) ||
+      !Number.isSafeInteger(quantity) ||
+      quantity < 1 ||
+      quantity > MAX_ITEM_QUANTITY
+    ) {
+      return null;
+    }
+    normalized.push({ productId, quantity });
+  }
+  return normalized;
+}
+
+function normalizeLocation(location) {
+  const lat = Number(location?.lat);
+  const lng = Number(location?.lng);
+  const addressString = normalizeText(location?.addressString, 300);
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    lat < -90 ||
+    lat > 90 ||
+    lng < -180 ||
+    lng > 180 ||
+    !addressString
+  ) {
+    return null;
+  }
+  return { lat, lng, addressString };
+}
+
+function normalizePhone(phone) {
+  const text = normalizeText(phone, 32);
+  const digits = text.replace(/\D/g, '');
+  return digits.length >= 9 && digits.length <= 15 ? text : '';
+}
+
+function normalizeText(value, maxLength) {
+  return String(value || '').trim().slice(0, maxLength);
 }

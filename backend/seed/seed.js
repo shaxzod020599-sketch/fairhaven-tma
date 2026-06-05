@@ -5,6 +5,9 @@ const { FAIRHAVEN_PRODUCTS } = require('./products');
 
 async function seed() {
   try {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Refusing destructive product seed in production');
+    }
     await mongoose.connect(process.env.MONGO_URI, { dbName: 'fairhaven' });
     console.log('Connected to MongoDB');
 
@@ -18,7 +21,7 @@ async function seed() {
     console.log('Done!');
     process.exit(0);
   } catch (err) {
-    console.error('Seed error:', err);
+    console.error('Seed error:', err?.name || 'Error', err?.code || '');
     process.exit(1);
   }
 }

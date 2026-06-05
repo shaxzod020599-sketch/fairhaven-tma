@@ -2,11 +2,12 @@ const { Telegraf, Markup } = require('telegraf');
 const User = require('../models/User');
 const Order = require('../models/Order');
 const { formatOrderReceipt } = require('../utils/helpers');
+const { errorLabel } = require('../utils/http');
 const { withTelegramRetry } = require('../utils/telegramRetry');
 
 // Fairhaven channel — orders are sent here for operator approval.
 // Override via ORDERS_CHANNEL_ID env var if needed.
-const ORDERS_CHANNEL_ID = process.env.ORDERS_CHANNEL_ID || '-1003939788373';
+const ORDERS_CHANNEL_ID = process.env.ORDERS_CHANNEL_ID;
 
 const MIN_YEAR = 1930;
 const MAX_YEAR = new Date().getFullYear() - 14; // minimum 14 y.o.
@@ -211,18 +212,10 @@ async function forwardOrderToChannel(bot, order) {
         reply_markup: buildChannelKeyboard(order._id.toString(), 'pending'),
       })
     );
-    console.log(`[bot] Order #${order._id.toString().slice(-6).toUpperCase()} → channel ${ORDERS_CHANNEL_ID}, msg ${sent.message_id}`);
+    console.log(`[bot] Order forwarded, msg ${sent.message_id}`);
     return sent.message_id;
   } catch (err) {
-    // node-fetch/Telegraf error shapes vary. Log every bit we can get.
-    const details = [
-      err.message,
-      err.code,
-      err.cause?.code,
-      err.response?.description,
-      err.description,
-    ].filter(Boolean).join(' | ');
-    console.error('[bot] channel forward failed — channel=%s err=%s', ORDERS_CHANNEL_ID, details);
+    console.error('[bot] channel forward failed:', errorLabel(err));
     return null;
   }
 }
@@ -587,7 +580,7 @@ function createBot(token, frontendUrl) {
       }
       ctx.replyWithHTML(text);
     } catch (err) {
-      console.error('Error fetching orders:', err.message);
+      console.error('Error fetching orders:', errorLabel(err));
       ctx.reply('❌ Xatolik / Ошибка');
     }
   });
@@ -610,7 +603,7 @@ function createBot(token, frontendUrl) {
       try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (_) {}
       return sendStep(ctx, user, FRONTEND);
     } catch (err) {
-      console.error('gender callback:', err.message);
+      console.error('gender callback:', errorLabel(err));
       return ctx.answerCbQuery('Ошибка');
     }
   });
@@ -633,7 +626,7 @@ function createBot(token, frontendUrl) {
       try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (_) {}
       return sendOpenShop(ctx, user, FRONTEND);
     } catch (err) {
-      console.error('consent callback:', err.message);
+      console.error('consent callback:', errorLabel(err));
       return ctx.answerCbQuery('Ошибка');
     }
   });
@@ -690,10 +683,10 @@ function createBot(token, frontendUrl) {
           )
         );
       } catch (notifyErr) {
-        console.warn('[bot] Could not notify customer:', notifyErr.message);
+        console.warn('[bot] Could not notify customer:', errorLabel(notifyErr));
       }
     } catch (err) {
-      console.error('order action:', err);
+      console.error('order action:', errorLabel(err));
       return ctx.answerCbQuery('Ошибка');
     }
   });
@@ -726,7 +719,7 @@ function createBot(token, frontendUrl) {
       });
       return sendStep(ctx, user, FRONTEND);
     } catch (err) {
-      console.error('contact handler:', err.message);
+      console.error('contact handler:', errorLabel(err));
     }
   });
 
@@ -796,7 +789,7 @@ function createBot(token, frontendUrl) {
         return sendStep(ctx, user, FRONTEND);
       }
     } catch (err) {
-      console.error('text handler:', err.message);
+      console.error('text handler:', errorLabel(err));
     }
   });
 
@@ -804,7 +797,7 @@ function createBot(token, frontendUrl) {
   // Error handler
   // ---------------------------------------------------------------------------
   bot.catch((err, ctx) => {
-    console.error(`[bot] error in ${ctx.updateType}:`, err);
+    console.error(`[bot] error in ${ctx.updateType}:`, errorLabel(err));
   });
 
   return bot;

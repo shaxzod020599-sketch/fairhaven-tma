@@ -84,7 +84,7 @@ async function telegramAuth(req, res, next) {
       'stale_telegram_auth',
       'invalid_telegram_user',
     ].includes(err.code);
-    if (!known) console.error('[telegramAuth]', err);
+    if (!known) console.error('[telegramAuth]', err?.name || 'Error', err?.code || '');
     return res.status(401).json({
       success: false,
       error: known ? err.code : 'telegram_auth_required',
