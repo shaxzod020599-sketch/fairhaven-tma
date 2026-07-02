@@ -1,0 +1,115 @@
+/* ==========================================================================
+   Fairhaven Health — design tokens (web/)
+   EXACT values extracted from live fairhavenhealth.com CSS (theme 65):
+   - Font: self-hosted Arial (no Google Font)
+   - Brand: #973961 plum (buttons, footer, announcement, sale badge)
+   - BG: #fdfaf7 warm cream
+   - Buttons: 50px tall, 25px radius, weight 400, NOT uppercase
+   - Cards: 16px radius, soft shadow 0 4px 6px rgba(0,0,0,0.08)
+   ========================================================================== */
+
+:root {
+  /* ---------- TYPE — Arial, same as live site ---------- */
+  --font-display: Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, sans-serif;
+  --font-body: Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, monospace;
+
+  /* type weights — Arial Bold 700 headings, 400 body */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-bold: 700;
+  --fw-black: 900;
+
+  /* type scale (live site h1=54px, h2=46px, h3=36px, body=17px) */
+  --fs-body: 1.0625rem;          /* 17px — live body */
+  --fs-h1: 3.375rem;             /* 54px hero */
+  --fs-h2: 2.875rem;             /* 46px section */
+  --fs-h3: 2.25rem;              /* 36px */
+  --fs-h4: 1.75rem;              /* 28px */
+  --fs-h5: 1.5rem;               /* 24px */
+  --lh-body: 1.6;
+  --lh-heading: 1.45;
+  --ls-heading: -0.02em;
+
+  /* ---------- COLOR — exact fairhaven palette ---------- */
+  --plum: #973961;               /* --color-accent: primary brand */
+  --plum-deep: #7d2f50;          /* hover */
+  --plum-wash: #e9c5d4;          /* rose pastel */
+
+  --cream: #fdfaf7;              /* --bg-body: warm off-white */
+  --paper: #ffffff;              /* surfaces / header bg */
+  --paper-soft: #f7f7f7;         /* alt section bg */
+
+  --ink: #1a1c1d;                /* --color-heading: near-black (not pure) */
+  --ink-soft: #3a3b3c;           /* secondary text — lifted for editorial feel */
+  --ink-faint: #5a5858;          /* tertiary — 6.1:1 on white, passes WCAG AA */
+
+  --line: #DADCE0;               /* borders */
+  --line-soft: #E2E2E2;          /* header border */
+  --line-form: #D3D3D3;          /* inputs */
+
+  /* status */
+  --star: #FFAA47;               /* review stars */
+  --sale: #973961;               /* badge sale — plum on live site */
+  --price-discounted: #c81824;   /* sale price — was harsh pure-red, AA-safe */
+  --instock: #279A4B;            /* green */
+  --lowstock: #e97f32;           /* orange */
+
+  /* ---------- pastel category tiles (fairhaven section blocks) ---------- */
+  --tile-pink-bg: #dbcad4;       --tile-pink-deep: #7d2f50;   /* women */
+  --tile-mint-bg: #cee2de;       --tile-mint-deep: #2f6f5e;   /* wellness */
+  --tile-blue-bg: #d6e4f2;       --tile-blue-deep: #1e4d92;   /* men */
+  --tile-sage-bg: #d3efcd;
+  --tile-lavender-bg: #ded8e5;   --tile-lavender-deep: #5f4a8f; /* postnatal */
+  --tile-rose-bg: #e0c6d1;
+  --tile-wine-bg: #e9d4df;       --tile-wine-deep: #7d2f50;   /* menopause — light pastel to harmonize the row */
+  --tile-cream-bg: #f8f3ee;      /* warm alt section — differentiated from cream */
+  --paper-soft: #f4f1ec;         /* warm alt section — was cool gray #f7f7f7 */
+
+  /* ---------- SHAPE ---------- */
+  --r-sm: 6px;       /* inputs */
+  --r-md: 20px;      /* cards / blocks — was 16, lifted for soft wellness feel */
+  --r-lg: 24px;      /* was 16 */
+  --r-xl: 24px;
+  --r-btn: 25px;     /* buttons */
+  --r-pill: 9999px;
+  --r-badge: 9999px; /* badges are pills — was 14px */
+
+  /* ---------- ELEVATION ---------- */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.06);
+  --shadow-card: 0px 4px 6px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0px 4px 6px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 9px 38px rgba(0, 0, 0, 0.05), 0 5px 12px rgba(0, 0, 0, 0.10);
+  --shadow-lift: 0 18px 40px -12px rgba(125, 47, 80, 0.18), 0 4px 8px rgba(0,0,0,0.04); /* plum-tinted card hover */
+  --shadow-btn: 0 4px 12px -2px rgba(125, 47, 80, 0.35);
+  --shadow-btn-hover: 0 10px 22px -4px rgba(125, 47, 80, 0.45);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+
+  /* ---------- MOTION ---------- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);   /* easeOutQuint — was too aggressive stop */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-fast: 180ms var(--ease-out);              /* was 160 */
+  --t-mid: 220ms var(--ease-out);               /* was 250 */
+
+  /* ---------- BUTTON spec (exact fairhaven) ---------- */
+  --btn-bg: var(--plum);
+  --btn-color: #ffffff;
+  --btn-hover-bg: var(--plum-deep);
+  --btn-height: 50px;
+  --btn-padding: 13px 30px;
+  --btn-fs: 1.0625rem;           /* body 17px */
+  --btn-weight: 400;             /* NOT bold — fairhaven quirk */
+
+  /* ---------- LAYOUT ---------- */
+  --container: 1280px;
+  --container-padding: 35px;
+  --section-space: 80px;         /* desktop */
+  --section-space-mobile: 50px;
+  --header-h: 76px;
+  --announce-h: 40px;
+
+  /* ---------- safe area ---------- */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
