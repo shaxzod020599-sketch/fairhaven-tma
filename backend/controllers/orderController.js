@@ -34,18 +34,92 @@ exports.create = async (req, res) => {
       location,
       customerName,
       customerPhone,
+      email,
       paymentMethod,
       notes,
       promoCode,
     } = req.body;
 
-    if (!telegramId || !Array.isArray(items) || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'telegramId and items are required',
+        error: 'items are required',
       });
     }
 
+    // ─── Guest checkout (web site, no Telegram user) ───────────────────────
+    // When telegramId is absent, treat as a guest order from the public site.
+    // We still require a name + phone so the operator can reach the customer,
+    // and we forward to the channel like any other order. Bot path below stays
+    // untouched — the telegramId branch is the original mini-app flow.
+    if (!telegramId) {
+      if (!customerName || !customerPhone) {
+        return res.status(400).json({
+          success: false,
+          error: 'guest_fields_required',
+          message: 'Имя и телефон обязательны для оформления заказа.',
+        });
+      }
+
+      const subtotal = items.reduce(
+        (sum, it) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 0),
+        0
+      );
+
+      const promoResult = await resolvePromo(promoCode, subtotal, true, []);
+      if (promoCode && promoResult.error) {
+        return res.status(400).json({
+          success: false,
+          error: promoResult.error,
+          message: 'Промокод недействителен',
+        });
+      }
+      const discount = promoResult.discount;
+      const appliedPromo = promoResult.promo;
+
+      const deliveryFee = subtotal === 0 || subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE;
+      const totalAmount = Math.max(0, subtotal - discount + deliveryFee);
+
+      const guestOrder = await Order.create({
+        userId: null,
+        telegramId: null,
+        email: email || '',
+        items,
+        subtotal,
+        deliveryFee,
+        discount,
+        promoCode: appliedPromo ? appliedPromo.code : '',
+        totalAmount,
+        isFirstOrder: false,
+        location: location || null,
+        customerName,
+        customerPhone,
+        paymentMethod: paymentMethod === 'card' ? 'card' : 'cash',
+        notes: notes || '',
+      });
+
+      if (appliedPromo) {
+        appliedPromo.usedCount = (appliedPromo.usedCount || 0) + 1;
+        await appliedPromo.save();
+      }
+
+      const bot = req.app.locals.bot;
+      if (bot && typeof bot.forwardOrderToChannel === 'function') {
+        try {
+          const messageId = await bot.forwardOrderToChannel(guestOrder);
+          if (messageId) {
+            guestOrder.channelMessageId = messageId;
+            await guestOrder.save();
+          }
+        } catch (fwdErr) {
+          console.warn('[order.guest] channel forward failed:', fwdErr.message);
+        }
+      }
+
+      return res.status(201).json({ success: true, data: guestOrder });
+    }
+
+    // ─── Telegram (mini-app) checkout — original path, unchanged ───────────
     const user = await User.findOne({ telegramId });
     if (!user || user.registrationStep !== 'done' || !user.consentAccepted) {
       return res.status(403).json({
@@ -84,6 +158,7 @@ exports.create = async (req, res) => {
     const order = await Order.create({
       userId: user._id,
       telegramId,
+      email: email || '',
       items,
       subtotal,
       deliveryFee,

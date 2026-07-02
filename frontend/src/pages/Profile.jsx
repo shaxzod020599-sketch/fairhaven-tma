@@ -5,7 +5,7 @@ import { fetchPublicSettings } from '../utils/api';
 const DEFAULT_SUPPORT_PHONE = '+998 78 150 04 40';
 const DEFAULT_SUPPORT_PHONE_TEL = '+998781500440';
 const DEFAULT_SUPPORT_HOURS = 'Ежедневно · 9:00 – 21:00 (Asia/Tashkent)';
-const SUPPORT_TG = 'fairhaven_support';
+const SUPPORT_TG = 'fairhaven_uz';
 
 function genderLabel(g) {
   if (g === 'male') return 'Мужской';

@@ -2362,17 +2362,17 @@ ul, ol {
   padding: 10px 16px;
   width: 100%;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: var(--paper);
+  background: rgba(34, 158, 217, 0.08);
+  border: 1px solid rgba(34, 158, 217, 0.2);
+  color: #1877a8;
   font-size: 0.82rem;
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.005em;
   border-radius: var(--r-pill);
   transition: var(--t-fast);
 }
 .contact-tg:active {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(34, 158, 217, 0.14);
   transform: scale(0.985);
 }
 

@@ -13,6 +13,7 @@ import ProductDetail from '../components/ProductDetail';
 const DEFAULT_PHONE = '+998 78 150 04 40';
 const DEFAULT_PHONE_TEL = '+998781500440';
 const DEFAULT_HOURS = 'Ежедневно · 9:00 – 21:00 (Asia/Tashkent)';
+const SUPPORT_TG = 'fairhaven_uz';
 
 const DEFAULT_HERO = {
   eyebrow: 'FAIRHAVEN HEALTH · USA',
@@ -134,6 +135,11 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [], dbUse
   const callSupport = () => {
     hapticFeedback('medium');
     window.location.href = `tel:${supportPhoneTel}`;
+  };
+
+  const openTgSupport = () => {
+    hapticFeedback('light');
+    window.open(`https://t.me/${SUPPORT_TG}`, '_blank');
   };
 
   const openCollection = (col) => {
@@ -328,6 +334,15 @@ export default function Home({ onNavigate, onAddToCart, activeOrders = [], dbUse
           <span className="contact-phone-number">{supportPhone}</span>
           <span className="contact-phone-arrow" aria-hidden="true">→</span>
         </a>
+        <button
+          className="contact-tg"
+          onClick={openTgSupport}
+          id="home-contact-tg"
+          type="button"
+        >
+          <span aria-hidden="true">✈</span>
+          Написать консультанту · @{SUPPORT_TG}
+        </button>
         <div className="contact-meta">
           {supportHours}
         </div>

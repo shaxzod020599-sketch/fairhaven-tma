@@ -12,8 +12,8 @@ const orderItemSchema = new mongoose.Schema({
 }, { _id: false });
 
 const locationSchema = new mongoose.Schema({
-  lat: { type: Number, required: true },
-  lng: { type: Number, required: true },
+  lat: { type: Number, default: 0 },
+  lng: { type: Number, default: 0 },
   addressString: { type: String, required: true },
 }, { _id: false });
 
@@ -21,14 +21,16 @@ const orderSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
+    default: null,
     index: true,
   },
   telegramId: {
     type: Number,
-    required: true,
+    default: null,
     index: true,
   },
+  // Guest (web) checkout only — set when order is placed without a Telegram user.
+  email: { type: String, default: '', trim: true },
   items: {
     type: [orderItemSchema],
     required: true,
@@ -52,7 +54,7 @@ const orderSchema = new mongoose.Schema({
   },
   location: {
     type: locationSchema,
-    required: true,
+    default: null,
   },
   customerName: { type: String, default: '' },
   customerPhone: { type: String, default: '' },
