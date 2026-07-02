@@ -22,10 +22,11 @@ export default function Shop() {
   const [searchParams] = useSearchParams();
   const querySearch = searchParams.get('q') || '';
   const tagFilter = searchParams.get('tag') || '';
+  const categoryParam = searchParams.get('category') || '';
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [catFilter, setCatFilter] = useState('');
+  const [catFilter, setCatFilter] = useState(categoryParam);
   const [availableOnly, setAvailableOnly] = useState(false);
   const [sort, setSort] = useState('popular');
 
@@ -34,6 +35,11 @@ export default function Shop() {
     () => LIFE_STAGES.find((s) => s.slug === stage) || null,
     [stage]
   );
+
+  // Header mega-menu navigates with ?category= — follow those changes.
+  useEffect(() => {
+    setCatFilter(categoryParam);
+  }, [categoryParam]);
 
   useEffect(() => {
     let mounted = true;

@@ -2,9 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n/index.jsx';
 import { useCart } from '../context/CartContext.jsx';
-import { Leaf, Flower, Sprout, Baby, Bottle, Gift, Search, User, Cart as CartIcon } from './Icons.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
+import {
+  Leaf, Flower, Sprout, Baby, Bottle, Gift, Search, User, Cart as CartIcon,
+} from './Icons.jsx';
 
-/** Mega-menu product families — matches fairhavenhealth.com "Products" dropdown. */
+/** Life-stage families — mirrors fairhavenhealth.com "Products" dropdown. */
 const FAMILIES = [
   { to: '/shop/fertility-women', key: 'famWomen', Icon: Flower },
   { to: '/shop/fertility-men', key: 'famMen', Icon: Sprout },
@@ -12,12 +15,29 @@ const FAMILIES = [
   { to: '/shop/nursing', key: 'famNursing', Icon: Bottle },
   { to: '/shop/menopause', key: 'famMenopause', Icon: Leaf },
   { to: '/shop?tag=bundle', key: 'famBundles', Icon: Gift },
-  { to: '/shop', key: 'famAll', Icon: Search, featured: true },
+];
+
+/** Catalogue categories — the same set the bot admin assigns to products. */
+const CATEGORIES = [
+  { key: 'supplements', ru: 'Добавки', uz: 'Qo‘shimchalar' },
+  { key: 'vitamins', ru: 'Витамины', uz: 'Vitaminlar' },
+  { key: 'parapharmaceuticals', ru: 'Парафармация', uz: 'Parafarmatsiya' },
+  { key: 'drinks', ru: 'Напитки', uz: 'Ichimliklar' },
+  { key: 'hygiene', ru: 'Гигиена', uz: 'Gigiyena' },
+  { key: 'cosmetics', ru: 'Косметика', uz: 'Kosmetika' },
+];
+
+const COMPANY_LINKS = [
+  { to: '/about', key: 'navDifference' },
+  { to: '/learn', key: 'navLearn' },
+  { to: '/faq', key: 'faqTitle' },
+  { to: '/contact', key: 'navContact' },
 ];
 
 export default function Header({ onOpenCart }) {
   const { t, lang, toggle } = useI18n();
   const { count } = useCart();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [megaOpen, setMegaOpen] = useState(false);
@@ -45,6 +65,11 @@ export default function Header({ onOpenCart }) {
     setQuery('');
   };
 
+  const closeAll = () => {
+    setMegaOpen(false);
+    setMobileOpen(false);
+  };
+
   return (
     <header className="site-header">
       <div className="container header-row">
@@ -61,7 +86,7 @@ export default function Header({ onOpenCart }) {
           <span />
         </button>
 
-        <Link to="/" className="logo" onClick={() => setMobileOpen(false)}>
+        <Link to="/" className="logo" onClick={closeAll}>
           <span className="logo-mark"><Leaf width={26} height={26} /></span>
           <span className="logo-text">
             Fairhaven<span className="logo-accent">Health</span>
@@ -78,29 +103,57 @@ export default function Header({ onOpenCart }) {
               aria-haspopup="true"
               type="button"
             >
-              {t('navProducts')} <span className="nav-caret">▾</span>
+              {t('navCatalog')} <span className="nav-caret">▾</span>
             </button>
             {megaOpen && (
-              <div className="mega-menu" onMouseLeave={() => setMegaOpen(false)}>
-                <div className="mega-grid">
-                  {FAMILIES.map((f) => (
-                    <Link
-                      key={f.to}
-                      to={f.to}
-                      className={`mega-link ${f.featured ? 'featured' : ''}`}
-                      onClick={() => setMegaOpen(false)}
-                    >
-                      <span className="mega-icon"><f.Icon width={22} height={22} /></span>
-                      <span className="mega-label">{t(f.key)}</span>
+              <div className="mega-menu mega-menu-wide" onMouseLeave={() => setMegaOpen(false)}>
+                <div className="mega-columns">
+                  <div className="mega-col">
+                    <div className="mega-col-title">{t('navStage')}</div>
+                    {FAMILIES.map((f) => (
+                      <Link key={f.to} to={f.to} className="mega-link" onClick={closeAll}>
+                        <span className="mega-icon"><f.Icon width={20} height={20} /></span>
+                        <span className="mega-label">{t(f.key)}</span>
+                      </Link>
+                    ))}
+                  </div>
+                  <div className="mega-col">
+                    <div className="mega-col-title">{t('filterCategory')}</div>
+                    {CATEGORIES.map((c) => (
+                      <Link
+                        key={c.key}
+                        to={`/shop?category=${c.key}`}
+                        className="mega-link mega-link-plain"
+                        onClick={closeAll}
+                      >
+                        <span className="mega-label">{lang === 'uz' ? c.uz : c.ru}</span>
+                      </Link>
+                    ))}
+                  </div>
+                  <div className="mega-col">
+                    <div className="mega-col-title">{t('footerAbout2')}</div>
+                    {COMPANY_LINKS.map((l) => (
+                      <Link
+                        key={l.to}
+                        to={l.to}
+                        className="mega-link mega-link-plain"
+                        onClick={closeAll}
+                      >
+                        <span className="mega-label">{t(l.key)}</span>
+                      </Link>
+                    ))}
+                    <Link to="/shop" className="mega-link featured" onClick={closeAll}>
+                      <span className="mega-icon"><Search width={20} height={20} /></span>
+                      <span className="mega-label">{t('famAll')}</span>
                     </Link>
-                  ))}
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
           <NavLink to="/shop" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-            {t('navStage')}
+            {t('navProducts')}
           </NavLink>
           <NavLink to="/about" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
             {t('navDifference')}
@@ -143,8 +196,14 @@ export default function Header({ onOpenCart }) {
             {lang === 'ru' ? 'UZ' : 'RU'}
           </button>
 
-          <Link to="/account" className="header-icon-btn" aria-label={t('account')}>
-            <User width={20} height={20} />
+          <Link
+            to="/account"
+            className={`header-icon-btn ${user ? 'header-user-authed' : ''}`}
+            aria-label={t('account')}
+          >
+            {user && user.photoUrl
+              ? <img className="header-avatar" src={user.photoUrl} alt="" width="24" height="24" />
+              : <User width={20} height={20} />}
           </Link>
 
           <button className="header-cart-btn" onClick={onOpenCart} aria-label={t('cart')} type="button">
@@ -157,27 +216,37 @@ export default function Header({ onOpenCart }) {
       {mobileOpen && (
         <div className="mobile-nav" id="mobile-nav">
           <div className="container">
-            <Link to="/shop" onClick={() => setMobileOpen(false)} className="mobile-nav-link">
-              {t('navProducts')}
-            </Link>
+            <div className="mobile-nav-group-title">{t('navStage')}</div>
             <div className="mobile-nav-sub">
               {FAMILIES.map((f) => (
-                <Link key={f.to} to={f.to} onClick={() => setMobileOpen(false)} className="mobile-nav-sublink">
+                <Link key={f.to} to={f.to} onClick={closeAll} className="mobile-nav-sublink">
                   <f.Icon width={20} height={20} /> {t(f.key)}
                 </Link>
               ))}
             </div>
-            <Link to="/shop" onClick={() => setMobileOpen(false)} className="mobile-nav-link">
-              {t('navStage')}
+            <div className="mobile-nav-group-title">{t('filterCategory')}</div>
+            <div className="mobile-nav-sub">
+              {CATEGORIES.map((c) => (
+                <Link
+                  key={c.key}
+                  to={`/shop?category=${c.key}`}
+                  onClick={closeAll}
+                  className="mobile-nav-sublink"
+                >
+                  {lang === 'uz' ? c.uz : c.ru}
+                </Link>
+              ))}
+            </div>
+            <Link to="/shop" onClick={closeAll} className="mobile-nav-link">
+              {t('famAll')}
             </Link>
-            <Link to="/about" onClick={() => setMobileOpen(false)} className="mobile-nav-link">
-              {t('navDifference')}
-            </Link>
-            <Link to="/learn" onClick={() => setMobileOpen(false)} className="mobile-nav-link">
-              {t('navLearn')}
-            </Link>
-            <Link to="/contact" onClick={() => setMobileOpen(false)} className="mobile-nav-link">
-              {t('navContact')}
+            {COMPANY_LINKS.map((l) => (
+              <Link key={l.to} to={l.to} onClick={closeAll} className="mobile-nav-link">
+                {t(l.key)}
+              </Link>
+            ))}
+            <Link to="/account" onClick={closeAll} className="mobile-nav-link">
+              {t('account')}
             </Link>
             <form className="mobile-search" onSubmit={submitSearch}>
               <input

@@ -32,6 +32,7 @@ export const ru = {
   announce3: 'Консультация специалиста — ежедневно с 9:00 до 21:00',
 
   /* ---------- header / nav ---------- */
+  navCatalog: 'Каталог и сервисы',
   navProducts: 'Продукты',
   navStage: 'По стадии жизни',
   navDifference: 'Наше отличие',
@@ -69,6 +70,17 @@ export const ru = {
   heroStat1Label: 'продукта',
   heroStat2: '100%',
   heroStat2Label: 'оригинал',
+
+  /* scrolly journey — home */
+  journeyTitle1: 'Доверие,',
+  journeyTitle2: 'проверенное наукой',
+  journeySub: 'Оригинальные витамины и добавки Fairhaven Health (США) для фертильности, беременности и материнства — от официального дилера в Узбекистане.',
+  journeyScrollHint: 'Листайте вниз',
+  journeyVoicesTitle: 'Голоса доверия',
+  journeyVoicesSub: 'Врачи, исследования и семьи — о продуктах Fairhaven Health',
+  journeyStatFounded: 'год основания в США',
+  journeyFinaleTitle: 'Путь к материнству начинается с заботы',
+  journeyFinaleSub: 'Каталог, консультация и доставка по всему Узбекистану — всё в одном месте.',
 
   /* sections — home */
   shopByStage: 'По стадии жизни',

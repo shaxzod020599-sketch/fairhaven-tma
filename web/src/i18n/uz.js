@@ -32,6 +32,7 @@ export const uz = {
   announce3: 'Mutaxassis maslahati — har kuni 9:00 dan 21:00 gacha',
 
   /* ---------- header / nav ---------- */
+  navCatalog: 'Katalog va xizmatlar',
   navProducts: 'Mahsulotlar',
   navStage: 'Hayot bosqichi bo‘yicha',
   navDifference: 'Bizning farqimiz',
@@ -200,6 +201,17 @@ export const uz = {
   notFoundTitle: 'Sahifa topilmadi',
   notFoundDesc: 'Afsuski, bunday sahifa mavjud emas.',
   goHome: 'Bosh sahifaga',
+
+  /* scrolly journey — home */
+  journeyTitle1: 'Ilm-fan bilan',
+  journeyTitle2: 'tasdiqlangan ishonch',
+  journeySub: 'Fertillik, homiladorlik va onalik uchun Fairhaven Health (AQSh) original vitaminlari va qoʻshimchalari — Oʻzbekistondagi rasmiy dilerdan.',
+  journeyScrollHint: 'Pastga aylantiring',
+  journeyVoicesTitle: 'Ishonch ovozlari',
+  journeyVoicesSub: 'Shifokorlar, tadqiqotlar va oilalar — Fairhaven Health mahsulotlari haqida',
+  journeyStatFounded: 'yil — AQShda asos solingan',
+  journeyFinaleTitle: 'Onalik sari yoʻl gʻamxoʻrlikdan boshlanadi',
+  journeyFinaleSub: 'Katalog, maslahat va butun Oʻzbekiston boʻylab yetkazib berish — bir joyda.',
 
   /* telegram auth */
   tgLoginTitle: 'Telegram orqali kirish',
