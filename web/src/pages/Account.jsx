@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { AnimatePresence, m } from 'motion/react';
 import { useI18n } from '../i18n/index.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { fetchMyOrders } from '../api.js';
@@ -16,6 +17,39 @@ const STATUS_KEYS = {
   cancelled: 'statusCancelled',
 };
 
+function PlaneArt({ waiting }) {
+  return (
+    <m.div
+      className="tg-login-art"
+      aria-hidden="true"
+      animate={waiting ? { scale: [1, 1.04, 1] } : { scale: 1 }}
+      transition={waiting ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : {}}
+    >
+      <svg viewBox="0 0 240 240" width="96" height="96">
+        <circle cx="120" cy="120" r="120" fill="#973961" opacity="0.08" />
+        <m.circle
+          cx="120" cy="120" r="88" fill="#973961" opacity="0.12"
+          animate={waiting ? { opacity: [0.12, 0.22, 0.12] } : { opacity: 0.12 }}
+          transition={waiting ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : {}}
+        />
+        <m.path
+          d="M53 117l124-48c6-2 11 1 9 10l-21 99c-2 7-6 9-12 6l-32-24-16 15c-2 2-3 3-6 3l2-33 61-55c3-2-1-4-4-2l-76 48-33-10c-7-2-7-7 4-9z"
+          fill="#973961"
+          animate={waiting ? { x: [0, 5, 0], y: [0, -4, 0] } : { x: 0, y: 0 }}
+          transition={waiting ? { duration: 2.4, repeat: Infinity, ease: 'easeInOut' } : {}}
+        />
+      </svg>
+    </m.div>
+  );
+}
+
+const stageFade = {
+  initial: { opacity: 0, y: 14, scale: 0.99 },
+  animate: { opacity: 1, y: 0, scale: 1 },
+  exit: { opacity: 0, y: -10, transition: { duration: 0.16, ease: 'easeIn' } },
+  transition: { type: 'spring', stiffness: 300, damping: 26 },
+};
+
 function LoginPanel() {
   const { t } = useI18n();
   const { loginState, beginLogin, cancelLogin } = useAuth();
@@ -29,52 +63,70 @@ function LoginPanel() {
     }
   };
 
+  const waiting = loginState === 'waiting';
+
   return (
-    <section className="tg-login-panel">
-      <div className="tg-login-art" aria-hidden="true">
-        <svg viewBox="0 0 240 240" width="96" height="96">
-          <circle cx="120" cy="120" r="120" fill="#973961" opacity="0.08" />
-          <circle cx="120" cy="120" r="88" fill="#973961" opacity="0.12" />
-          <path
-            d="M53 117l124-48c6-2 11 1 9 10l-21 99c-2 7-6 9-12 6l-32-24-16 15c-2 2-3 3-6 3l2-33 61-55c3-2-1-4-4-2l-76 48-33-10c-7-2-7-7 4-9z"
-            fill="#973961"
-          />
-        </svg>
-      </div>
+    <m.section
+      className="tg-login-panel"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 220, damping: 26 }}
+    >
+      <PlaneArt waiting={waiting} />
       <h2 className="tg-login-title">{t('tgLoginTitle')}</h2>
       <p className="tg-login-desc">{t('tgLoginDesc')}</p>
 
-      {loginState !== 'waiting' && (
-        <button type="button" className="btn btn-primary btn-lg" onClick={start}>
-          {t('tgLoginCta')}
-        </button>
-      )}
-
-      {loginState === 'waiting' && (
-        <div className="tg-login-waiting">
-          <span className="tg-login-spinner" aria-hidden="true" />
-          <p>{t('tgLoginWaiting')}</p>
-          {botUrl && (
-            <a href={botUrl} target="_blank" rel="noopener noreferrer" className="tg-login-relink">
-              {t('tgLoginReopen')}
-            </a>
+      <div className="tg-login-stage">
+        <AnimatePresence mode="wait" initial={false}>
+          {!waiting ? (
+            <m.div key="cta" {...stageFade}>
+              <m.button
+                type="button"
+                className="btn btn-primary btn-lg tg-login-btn"
+                onClick={start}
+                whileHover={{ y: -2, scale: 1.015 }}
+                whileTap={{ scale: 0.965 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+              >
+                <svg width="19" height="19" viewBox="0 0 240 240" fill="none" aria-hidden="true">
+                  <path d="M53 117l124-48c6-2 11 1 9 10l-21 99c-2 7-6 9-12 6l-32-24-16 15c-2 2-3 3-6 3l2-33 61-55c3-2-1-4-4-2l-76 48-33-10c-7-2-7-7 4-9z" fill="currentColor" />
+                </svg>
+                {t('tgLoginCta')}
+              </m.button>
+              {loginState === 'error' && (
+                <m.div
+                  className="promo-msg error"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  role="alert"
+                >
+                  {t('tgLoginExpired')}
+                </m.div>
+              )}
+            </m.div>
+          ) : (
+            <m.div key="waiting" className="tg-login-waiting" {...stageFade}>
+              <span className="tg-login-spinner" aria-hidden="true" />
+              <p aria-live="polite">{t('tgLoginWaiting')}</p>
+              {botUrl && (
+                <a href={botUrl} target="_blank" rel="noopener noreferrer" className="tg-login-relink">
+                  {t('tgLoginReopen')}
+                </a>
+              )}
+              <button type="button" className="btn btn-outline btn-sm" onClick={cancelLogin}>
+                {t('cancel')}
+              </button>
+            </m.div>
           )}
-          <button type="button" className="btn btn-outline btn-sm" onClick={cancelLogin}>
-            {t('cancel')}
-          </button>
-        </div>
-      )}
-
-      {loginState === 'error' && (
-        <div className="promo-msg error">{t('tgLoginExpired')}</div>
-      )}
+        </AnimatePresence>
+      </div>
 
       <ol className="tg-login-steps">
         <li>{t('tgLoginStep1')}</li>
         <li>{t('tgLoginStep2')}</li>
         <li>{t('tgLoginStep3')}</li>
       </ol>
-    </section>
+    </m.section>
   );
 }
 
@@ -142,7 +194,11 @@ export default function Account() {
         {!isLoading && !user && <LoginPanel />}
 
         {!isLoading && user && (
-          <>
+          <m.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 240, damping: 26 }}
+          >
             <section className="account-profile">
               <div className="account-avatar" aria-hidden="true">
                 {user.photoUrl
@@ -162,7 +218,7 @@ export default function Account() {
               <h2 className="summary-title">{t('myOrders')}</h2>
               <OrdersList />
             </section>
-          </>
+          </m.div>
         )}
       </div>
     </div>

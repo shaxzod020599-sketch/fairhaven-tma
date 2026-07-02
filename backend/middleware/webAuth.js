@@ -34,7 +34,8 @@ async function resolveWebUser(req) {
   if (!secret || !raw) return null;
   let payload;
   try {
-    payload = jwt.verify(raw, secret);
+    // Pin the algorithm — prevents alg-confusion tokens from being accepted.
+    payload = jwt.verify(raw, secret, { algorithms: ['HS256'] });
   } catch (_) {
     return null;
   }

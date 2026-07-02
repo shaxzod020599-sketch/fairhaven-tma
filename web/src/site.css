@@ -2453,3 +2453,8 @@ a.contact-channel:hover { transform: translateY(-2px); }
 .account-order-foot strong { color: var(--ink); font-size: 1rem; }
 .account-empty { text-align: center; padding: 26px 0; color: var(--ink-faint); }
 .account-empty .btn { margin-top: 14px; }
+
+.logo-mark-img { border-radius: 50%; display: block; }
+
+.tg-login-stage { min-height: 96px; display: flex; align-items: center; justify-content: center; }
+.tg-login-btn { display: inline-flex; align-items: center; gap: 10px; }

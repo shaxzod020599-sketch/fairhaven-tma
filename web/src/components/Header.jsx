@@ -88,7 +88,13 @@ export default function Header({ onOpenCart }) {
         </button>
 
         <Link to="/" className="logo" onClick={closeAll}>
-          <span className="logo-mark"><Leaf width={26} height={26} /></span>
+          <img
+            className="logo-mark-img"
+            src="/fh-mark.png"
+            alt=""
+            width="30"
+            height="30"
+          />
           <span className="logo-text">
             Fairhaven<span className="logo-accent">Health</span>
           </span>
