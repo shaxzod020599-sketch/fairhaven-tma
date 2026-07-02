@@ -6,6 +6,7 @@ import {
   Lightformer,
   useTexture,
 } from '@react-three/drei';
+import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
 import { bottleSpec } from '../fhProModel.mjs';
@@ -87,33 +88,49 @@ function BottleShell() {
 
   return (
     <>
+      {/* HDPE body — satin plastic with a soft clearcoat so the studio
+          softboxes draw long vertical highlights down the flanks. */}
       <mesh castShadow>
         <latheGeometry args={[BODY_POINTS, 96]} />
         <meshPhysicalMaterial
           color="#fbfbfa"
-          roughness={0.58}
+          roughness={0.4}
           metalness={0}
-          clearcoat={0.08}
-          clearcoatRoughness={0.72}
+          clearcoat={0.35}
+          clearcoatRoughness={0.45}
+          sheen={0.25}
+          sheenColor="#ffffff"
+          envMapIntensity={0.95}
         />
       </mesh>
       <mesh position={[0, 1.19, 0]} geometry={capGeometry} castShadow>
-        <meshPhysicalMaterial color="#ffffff" roughness={0.42} clearcoat={0.12} clearcoatRoughness={0.65} />
+        <meshPhysicalMaterial
+          color="#ffffff"
+          roughness={0.38}
+          clearcoat={0.2}
+          clearcoatRoughness={0.5}
+          envMapIntensity={0.9}
+        />
       </mesh>
       <mesh position={[0, 1.015, 0]}>
         <cylinderGeometry args={[0.495, 0.495, 0.095, 96]} />
-        <meshStandardMaterial color="#f7f7f6" roughness={0.46} />
+        <meshStandardMaterial color="#f7f7f6" roughness={0.42} envMapIntensity={0.8} />
       </mesh>
       <mesh position={[0, 1.376, 0]}>
         <cylinderGeometry args={[0.487, 0.487, 0.018, 96]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.48} />
+        <meshStandardMaterial color="#ffffff" roughness={0.44} />
       </mesh>
       {/* full-wrap white sleeve under the printed face */}
       <mesh position={[0, (bottleSpec.labelTop + bottleSpec.labelBottom) / 2, 0]}>
         <cylinderGeometry
           args={[0.683, 0.683, bottleSpec.labelTop - bottleSpec.labelBottom, 96, 1, true]}
         />
-        <meshStandardMaterial color="#ffffff" roughness={0.64} side={THREE.DoubleSide} />
+        <meshStandardMaterial
+          color="#ffffff"
+          roughness={0.5}
+          side={THREE.DoubleSide}
+          envMapIntensity={0.7}
+        />
       </mesh>
     </>
   );
@@ -129,7 +146,15 @@ function PrintedLabel({ spec }) {
 
   return (
     <mesh geometry={geometry} renderOrder={2}>
-      <meshBasicMaterial map={texture} toneMapped={false} polygonOffset polygonOffsetFactor={-2} />
+      {/* Lit paper — the curved face shades around the cylinder instead of
+          reading as a flat unlit sticker. */}
+      <meshStandardMaterial
+        map={texture}
+        roughness={0.42}
+        envMapIntensity={0.55}
+        polygonOffset
+        polygonOffsetFactor={-2}
+      />
     </mesh>
   );
 }
@@ -150,7 +175,13 @@ function PhotoLabel() {
 
   return (
     <mesh geometry={geometry} renderOrder={2}>
-      <meshBasicMaterial map={texture} toneMapped={false} polygonOffset polygonOffsetFactor={-2} />
+      <meshStandardMaterial
+        map={texture}
+        roughness={0.42}
+        envMapIntensity={0.55}
+        polygonOffset
+        polygonOffsetFactor={-2}
+      />
     </mesh>
   );
 }
@@ -279,13 +310,14 @@ function CameraRig({ reducedMotion }) {
 
 function StudioEnvironment() {
   return (
-    <Environment resolution={128}>
-      <group rotation={[-Math.PI / 3, 0, 0]}>
-        <Lightformer intensity={2.7} position={[0, 5, -2]} scale={[2, 6, 1]} />
-        <Lightformer intensity={1.1} position={[-4, 1, 2]} scale={[3, 5, 1]} color="#f4dbe5" />
-        <Lightformer intensity={0.9} position={[4, 1, 1]} scale={[3, 5, 1]} color="#dcebe8" />
-        <Lightformer intensity={0.65} position={[0, -2, 4]} scale={[9, 4, 1]} />
-      </group>
+    <Environment resolution={256}>
+      {/* Product-shot studio: overhead softbox, two tall vertical strips for
+          flank highlights, warm bounce floor. */}
+      <Lightformer intensity={3.2} position={[0, 5, -2]} rotation={[-Math.PI / 3, 0, 0]} scale={[2.5, 7, 1]} />
+      <Lightformer intensity={1.6} position={[-5, 0.5, 1.5]} rotation={[0, Math.PI / 2.6, 0]} scale={[1.2, 8, 1]} />
+      <Lightformer intensity={1.4} position={[5, 0.5, 1]} rotation={[0, -Math.PI / 2.6, 0]} scale={[1.2, 8, 1]} color="#fdf0f5" />
+      <Lightformer intensity={0.7} position={[0, -3, 4]} rotation={[Math.PI / 3, 0, 0]} scale={[10, 4, 1]} color="#f7ece5" />
+      <Lightformer intensity={0.5} position={[0, 1, 6]} scale={[9, 5, 1]} />
     </Environment>
   );
 }
@@ -295,9 +327,10 @@ function SceneContents({ reducedMotion }) {
     <>
       {/* Cream fog — distant bottles melt into the atmosphere. */}
       <fog attach="fog" args={['#fdfaf7', 6.5, 13.5]} />
-      <ambientLight intensity={0.72} />
-      <directionalLight position={[3.5, 5.5, 3]} intensity={1.6} />
-      <directionalLight position={[-3, 2, 2]} intensity={0.38} color="#dcebe8" />
+      <ambientLight intensity={0.5} />
+      <directionalLight position={[3.5, 5.5, 3]} intensity={1.9} />
+      <directionalLight position={[-4, 3, -2]} intensity={0.85} color="#ffffff" />
+      <directionalLight position={[-3, 2, 2]} intensity={0.3} color="#dcebe8" />
 
       {GALLERY.map((conf, i) => (
         <GalleryBottle conf={conf} key={i} />
@@ -308,6 +341,12 @@ function SceneContents({ reducedMotion }) {
       <Suspense fallback={null}>
         <StudioEnvironment />
       </Suspense>
+
+      {/* Subtle studio glow + edge falloff — lifts the "flat render" feel. */}
+      <EffectComposer enableNormalPass={false}>
+        <Bloom intensity={0.22} luminanceThreshold={0.9} luminanceSmoothing={0.25} mipmapBlur />
+        <Vignette offset={0.28} darkness={0.26} />
+      </EffectComposer>
     </>
   );
 }
@@ -320,7 +359,7 @@ export default function Scene3D({ active = true, reducedMotion = false }) {
   return (
     <div className="scrolly-canvas" aria-hidden="true">
       <Canvas
-        dpr={[1, 1.6]}
+        dpr={[1, 2]}
         frameloop={active ? 'always' : 'never'}
         camera={{ position: [0, 0.08, 5.05], fov: 35 }}
         gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}

@@ -198,12 +198,15 @@ export default function Header({ onOpenCart }) {
 
           <Link
             to="/account"
-            className={`header-icon-btn ${user ? 'header-user-authed' : ''}`}
+            className={`header-signin ${user ? 'header-user-authed' : ''}`}
             aria-label={t('account')}
           >
             {user && user.photoUrl
               ? <img className="header-avatar" src={user.photoUrl} alt="" width="24" height="24" />
               : <User width={20} height={20} />}
+            <span className="header-signin-label">
+              {user ? (user.firstName || t('account')) : t('signIn')}
+            </span>
           </Link>
 
           <button className="header-cart-btn" onClick={onOpenCart} aria-label={t('cart')} type="button">

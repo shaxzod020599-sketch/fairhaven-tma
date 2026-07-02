@@ -41,6 +41,7 @@ export const ru = {
   navContact: 'Контакты',
   navAccount: 'Аккаунт',
   account: 'Аккаунт',
+  signIn: 'Войти',
   cart: 'Корзина',
 
   /* mega-menu product families */

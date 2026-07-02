@@ -1738,16 +1738,15 @@ a.contact-channel:hover { transform: translateY(-2px); }
 }
 .scrolly-canvas canvas { display: block; }
 
-/* CSS atmosphere: cream → rose wash that deepens with the journey */
+/* CSS atmosphere — stays true to the original site: white/cream ground
+   with only the faint plum-wash radial fairhavenhealth.com uses in its hero. */
 .scrolly-atmosphere {
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(120% 90% at 85% -10%, rgba(233, 197, 212, 0.55) 0%, rgba(233, 197, 212, 0) 55%),
-    radial-gradient(110% 80% at 8% 30%, rgba(206, 226, 222, 0.4) 0%, rgba(206, 226, 222, 0) 60%),
-    radial-gradient(130% 110% at 50% 115%, rgba(151, 57, 97, 0.10) 0%, rgba(151, 57, 97, 0) 55%),
+    radial-gradient(circle at 85% 12%, rgba(233, 197, 212, 0.35) 0%, transparent 48%),
     var(--cream);
 }
 .scrolly-simple .scrolly-atmosphere { position: absolute; }
@@ -2210,4 +2209,31 @@ a.contact-channel:hover { transform: translateY(-2px); }
 .voice-stat strong {
   font-family: var(--font-display);
   font-weight: var(--fw-bold);
+}
+
+/* ── Original-parity fixes ────────────────────────────────────────────── */
+
+/* Same stacking-context issue as the footer: static bars painted under the
+   scrolly canvas layers. Lift them — plum announcement returns. */
+.announcement-bar { position: relative; z-index: 5; }
+.site-header { z-index: 6; }
+
+/* Sign-in at the right edge, like the original "My Account / Login". */
+.header-signin {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border-radius: var(--r-pill);
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1;
+  transition: color var(--t-fast), background var(--t-fast);
+}
+.header-signin:hover { color: var(--plum); background: rgba(151, 57, 97, 0.07); }
+.header-signin .header-avatar { border-radius: 50%; }
+.header-signin-label { white-space: nowrap; }
+@media (max-width: 1180px) {
+  .header-signin-label { display: none; }
+  .header-signin { padding: 6px; }
 }

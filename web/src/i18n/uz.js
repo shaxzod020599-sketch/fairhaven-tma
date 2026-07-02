@@ -41,6 +41,7 @@ export const uz = {
   navContact: 'Kontaktlar',
   navAccount: 'Kabinet',
   account: 'Kabinet',
+  signIn: 'Kirish',
   cart: 'Savat',
 
   famWomen: 'Ayol fertilligi',
