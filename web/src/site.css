@@ -1931,15 +1931,15 @@ a.contact-channel:hover { transform: translateY(-2px); }
   width: min(660px, 92vw);
   margin: 0;
   padding: clamp(30px, 4.5vw, 54px) clamp(28px, 4.5vw, 58px);
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(253, 250, 247, 0.86));
+  /* Solid near-white — backdrop-filter over a per-frame canvas forces a
+     full re-blur every frame and stalls weaker GPUs. */
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.97), rgba(253, 250, 247, 0.95));
   border: 1px solid rgba(151, 57, 97, 0.14);
   border-radius: var(--r-lg);
   box-shadow:
     0 30px 60px -22px rgba(125, 47, 80, 0.28),
     0 6px 18px rgba(26, 28, 29, 0.05);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  will-change: transform, opacity, filter;
+  will-change: transform, opacity;
 }
 .cascade-full .voice-left { margin-right: auto; margin-left: max(4vw, calc(50vw - 700px)); }
 .cascade-full .voice-right { margin-left: auto; margin-right: max(7vw, calc(50vw - 640px)); }

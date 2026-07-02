@@ -79,10 +79,10 @@ export default function TestimonialCascade({ simple = false }) {
           const y = (1 - enter) * 10 - exit * 8; // vh units
           const scale = 0.95 + enter * 0.05 - exit * 0.025;
           const opacity = enter * (1 - exit);
-          const blur = (1 - enter) * 4 + exit * 3;
+          // transform+opacity only — blur() repaints the whole card every
+          // frame and stalls weaker machines.
           card.style.transform = `translate3d(0, ${y}vh, 0) scale(${scale})`;
           card.style.opacity = opacity.toFixed(3);
-          card.style.filter = blur > 0.05 ? `blur(${blur.toFixed(2)}px)` : 'none';
         }
         if (target > 0.25 && target < 0.75) {
           active = i;

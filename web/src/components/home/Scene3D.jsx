@@ -6,7 +6,6 @@ import {
   Lightformer,
   useTexture,
 } from '@react-three/drei';
-import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
 import { bottleSpec } from '../fhProModel.mjs';
@@ -64,7 +63,7 @@ function createCurvedLabelGeometry() {
 function createRibbedCapGeometry() {
   const height = 0.36;
   const geometry = new THREE.CylinderGeometry(
-    bottleSpec.capRadius, bottleSpec.capRadius, height, 192, 1, false
+    bottleSpec.capRadius, bottleSpec.capRadius, height, 96, 1, false
   );
   const positions = geometry.attributes.position;
   for (let i = 0; i < positions.count; i += 1) {
@@ -91,7 +90,7 @@ function BottleShell() {
       {/* HDPE body — satin plastic with a soft clearcoat so the studio
           softboxes draw long vertical highlights down the flanks. */}
       <mesh castShadow>
-        <latheGeometry args={[BODY_POINTS, 96]} />
+        <latheGeometry args={[BODY_POINTS, 64]} />
         <meshPhysicalMaterial
           color="#fbfbfa"
           roughness={0.4}
@@ -113,17 +112,17 @@ function BottleShell() {
         />
       </mesh>
       <mesh position={[0, 1.015, 0]}>
-        <cylinderGeometry args={[0.495, 0.495, 0.095, 96]} />
+        <cylinderGeometry args={[0.495, 0.495, 0.095, 64]} />
         <meshStandardMaterial color="#f7f7f6" roughness={0.42} envMapIntensity={0.8} />
       </mesh>
       <mesh position={[0, 1.376, 0]}>
-        <cylinderGeometry args={[0.487, 0.487, 0.018, 96]} />
+        <cylinderGeometry args={[0.487, 0.487, 0.018, 64]} />
         <meshStandardMaterial color="#ffffff" roughness={0.44} />
       </mesh>
       {/* full-wrap white sleeve under the printed face */}
       <mesh position={[0, (bottleSpec.labelTop + bottleSpec.labelBottom) / 2, 0]}>
         <cylinderGeometry
-          args={[0.683, 0.683, bottleSpec.labelTop - bottleSpec.labelBottom, 96, 1, true]}
+          args={[0.683, 0.683, bottleSpec.labelTop - bottleSpec.labelBottom, 64, 1, true]}
         />
         <meshStandardMaterial
           color="#ffffff"
@@ -188,7 +187,7 @@ function PhotoLabel() {
 
 /* ── Atmosphere: slow-drifting pollen motes ─────────────────────────────── */
 
-const MOTE_COUNT = 200;
+const MOTE_COUNT = 140;
 const JOURNEY_DEPTH = 15;
 
 function Motes() {
@@ -311,7 +310,7 @@ function CameraRig({ reducedMotion }) {
 
 function StudioEnvironment() {
   return (
-    <Environment resolution={256}>
+    <Environment resolution={128}>
       {/* Product-shot studio: overhead softbox, two tall vertical strips for
           flank highlights, warm bounce floor. */}
       <Lightformer intensity={3.2} position={[0, 5, -2]} rotation={[-Math.PI / 3, 0, 0]} scale={[2.5, 7, 1]} />
@@ -342,12 +341,6 @@ function SceneContents({ reducedMotion }) {
       <Suspense fallback={null}>
         <StudioEnvironment />
       </Suspense>
-
-      {/* Subtle studio glow + edge falloff — lifts the "flat render" feel. */}
-      <EffectComposer enableNormalPass={false}>
-        <Bloom intensity={0.22} luminanceThreshold={0.9} luminanceSmoothing={0.25} mipmapBlur />
-        <Vignette offset={0.28} darkness={0.26} />
-      </EffectComposer>
     </>
   );
 }
@@ -360,7 +353,7 @@ export default function Scene3D({ active = true, reducedMotion = false }) {
   return (
     <div className="scrolly-canvas" aria-hidden="true">
       <Canvas
-        dpr={[1, 2]}
+        dpr={[1, 1.5]}
         frameloop={active ? 'always' : 'never'}
         camera={{ position: [0, 0.08, 5.05], fov: 35 }}
         gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}

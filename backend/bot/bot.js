@@ -705,7 +705,28 @@ function createBot(token, frontendUrl) {
         return ctx.answerCbQuery('Buyurtma topilmadi / Заказ не найден');
       }
       if (order.status !== 'pending') {
-        return ctx.answerCbQuery(`Allaqachon: ${order.status}`);
+        // Stale card (order was finalised elsewhere) — sync the message so
+        // operators don't keep hitting dead buttons.
+        const staleLabel = {
+          confirmed: '✅ Tasdiqlangan / Подтверждён',
+          preparing: '✅ Tayyorlanmoqda / Готовится',
+          delivering: '🚚 Yetkazilmoqda / Доставляется',
+          delivered: '✅ Yetkazilgan / Доставлен',
+          cancelled: '❌ Bekor qilingan / Отменён',
+        }[order.status] || order.status;
+        try {
+          await ctx.editMessageText(
+            `${formatOrderReceipt(order)}\n\n${staleLabel}`,
+            {
+              parse_mode: 'HTML',
+              disable_web_page_preview: true,
+              reply_markup: { inline_keyboard: [] },
+            }
+          );
+        } catch (_) {
+          try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (_) { /* stale */ }
+        }
+        return ctx.answerCbQuery(staleLabel);
       }
 
       const newStatus = action === 'approve' ? 'confirmed' : 'cancelled';
@@ -736,17 +757,19 @@ function createBot(token, frontendUrl) {
 
       await ctx.answerCbQuery(action === 'approve' ? '✅ Подтверждено' : '❌ Отклонено');
 
-      // Notify the customer
-      try {
-        await withTelegramRetry(() =>
-          bot.telegram.sendMessage(
-            order.telegramId,
-            action === 'approve' ? T.orderApproved(shortId) : T.orderRejected(shortId),
-            { parse_mode: 'HTML' }
-          )
-        );
-      } catch (notifyErr) {
-        console.warn('[bot] Could not notify customer:', errorLabel(notifyErr));
+      // Notify the customer — guest web orders have no Telegram chat.
+      if (order.telegramId) {
+        try {
+          await withTelegramRetry(() =>
+            bot.telegram.sendMessage(
+              order.telegramId,
+              action === 'approve' ? T.orderApproved(shortId) : T.orderRejected(shortId),
+              { parse_mode: 'HTML' }
+            )
+          );
+        } catch (notifyErr) {
+          console.warn('[bot] Could not notify customer:', errorLabel(notifyErr));
+        }
       }
     } catch (err) {
       console.error('order action:', errorLabel(err));
