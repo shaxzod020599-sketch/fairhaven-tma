@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { sendError } = require('../utils/http');
 
 const UPLOAD_DIR = path.resolve(__dirname, '../uploads');
 
@@ -17,6 +18,28 @@ const MIME_EXT = {
   'image/webp': 'webp',
   'image/gif': 'gif',
 };
+
+function isValidImageSignature(buf, mime) {
+  if (!Buffer.isBuffer(buf)) return false;
+  if (mime === 'image/jpeg' || mime === 'image/jpg') {
+    return buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+  }
+  if (mime === 'image/png') {
+    return buf.length >= 8 && buf.subarray(0, 8).equals(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    );
+  }
+  if (mime === 'image/webp') {
+    return buf.length >= 12 &&
+      buf.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      buf.subarray(8, 12).toString('ascii') === 'WEBP';
+  }
+  if (mime === 'image/gif') {
+    const signature = buf.subarray(0, 6).toString('ascii');
+    return signature === 'GIF87a' || signature === 'GIF89a';
+  }
+  return false;
+}
 
 /**
  * Accepts a dataURL uploaded from the admin panel. The frontend canvas has
@@ -44,6 +67,9 @@ exports.uploadImage = async (req, res) => {
     if (buf.length > MAX_BYTES) {
       return res.status(413).json({ success: false, error: 'too_large' });
     }
+    if (!isValidImageSignature(buf, mime)) {
+      return res.status(415).json({ success: false, error: 'invalid_image' });
+    }
     const id = crypto.randomBytes(10).toString('hex');
     const filename = `${Date.now()}-${id}.${ext}`;
     fs.writeFileSync(path.join(UPLOAD_DIR, filename), buf);
@@ -51,8 +77,7 @@ exports.uploadImage = async (req, res) => {
     const url = `/uploads/${filename}`;
     res.json({ success: true, data: { url, filename, size: buf.length } });
   } catch (err) {
-    console.error('[upload]', err);
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -68,7 +93,7 @@ exports.listUploads = async (_req, res) => {
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     res.json({ success: true, data: files });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -83,8 +108,9 @@ exports.deleteUpload = async (req, res) => {
     if (fs.existsSync(p)) fs.unlinkSync(p);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
 exports.UPLOAD_DIR = UPLOAD_DIR;
+exports.isValidImageSignature = isValidImageSignature;

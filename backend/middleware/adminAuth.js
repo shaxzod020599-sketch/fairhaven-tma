@@ -1,30 +1,17 @@
 const User = require('../models/User');
+const { getTelegramUserFromRequest } = require('./telegramAuth');
 
 /**
- * Resolves the caller's Telegram ID from either an explicit header
- * (X-Admin-Telegram-Id) or from Telegram WebApp init_data passed via the
- * X-Telegram-Init-Data header. Anything that ends up as an admin gets
- * attached as `req.admin`.
+ * Resolves an admin only from Telegram-signed WebApp init data.
  */
 async function resolveAdmin(req) {
-  let tgId = Number(req.headers['x-admin-telegram-id']);
-
-  if (!tgId) {
-    const init = req.headers['x-telegram-init-data'];
-    if (init) {
-      try {
-        const params = new URLSearchParams(init);
-        const userJson = params.get('user');
-        if (userJson) {
-          const u = JSON.parse(decodeURIComponent(userJson));
-          if (u && u.id) tgId = Number(u.id);
-        }
-      } catch (_) {}
-    }
+  let telegramUser;
+  try {
+    telegramUser = getTelegramUserFromRequest(req);
+  } catch (_) {
+    return null;
   }
-
-  if (!tgId) return null;
-  const user = await User.findOne({ telegramId: tgId });
+  const user = await User.findOne({ telegramId: telegramUser.id });
   if (!user || user.role !== 'admin') return null;
   return user;
 }
@@ -42,8 +29,8 @@ module.exports = async function adminAuth(req, res, next) {
     req.admin = admin;
     next();
   } catch (err) {
-    console.error('[adminAuth]', err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('[adminAuth]', err?.name || 'Error', err?.code || '');
+    res.status(500).json({ success: false, error: 'internal_error' });
   }
 };
 

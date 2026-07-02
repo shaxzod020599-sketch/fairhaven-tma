@@ -54,16 +54,10 @@ async function seedDefaultSettings() {
   }
 }
 
-// Owners that are always promoted to admin on every startup, regardless of
-// whether an ADMIN_TELEGRAM_IDS env var is provided. Keep this list tiny —
-// it is intentionally hard-coded so the deploy does not depend on the host
-// remembering to set an env var.
-const OWNER_TELEGRAM_IDS = [769874135];
-
 async function promoteAdminsFromEnv() {
   const raw = process.env.ADMIN_TELEGRAM_IDS || '';
   const fromEnv = raw.split(/[,\s]+/).map((s) => Number(s)).filter((n) => Number.isFinite(n) && n > 0);
-  const ids = Array.from(new Set([...OWNER_TELEGRAM_IDS, ...fromEnv]));
+  const ids = Array.from(new Set(fromEnv));
   if (!ids.length) return { promoted: 0 };
   let promoted = 0;
   for (const tgId of ids) {
@@ -83,7 +77,7 @@ async function promoteAdminsFromEnv() {
       promoted += 1;
     }
   }
-  if (promoted) console.log(`👑 Promoted ${promoted} admin(s) (owners + ADMIN_TELEGRAM_IDS)`);
+  if (promoted) console.log(`👑 Promoted ${promoted} admin(s) from ADMIN_TELEGRAM_IDS`);
   return { promoted };
 }
 

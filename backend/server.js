@@ -22,22 +22,28 @@ const {
   ensureAtLeastOneAdmin,
 } = require('./seed/bootstrap');
 const { UPLOAD_DIR } = require('./controllers/uploadController');
+const { launchBotWithRetry } = require('./utils/telegramRetry');
+const { redactPath, securityHeaders } = require('./utils/http');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '127.0.0.1';
+const CORS_ORIGIN = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? false : '*');
 
 // Middleware
+app.disable('x-powered-by');
+app.set('query parser', 'simple');
 app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
+  origin: CORS_ORIGIN,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   credentials: true,
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(securityHeaders);
+app.use(express.json({ limit: '6mb' }));
 
 // Request logger (dev)
 app.use((req, _res, next) => {
-  console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  console.log(`${new Date().toISOString()} ${req.method} ${redactPath(req.path)}`);
   next();
 });
 
@@ -74,11 +80,7 @@ app.get('/legal/oferta', (_req, res) => {
 
 // Health check
 app.get('/api/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-  });
+  res.json({ status: 'ok' });
 });
 
 // Serve frontend static files (production)
@@ -124,19 +126,15 @@ app.get('*', (req, res) => {
 
 // Global error handler
 app.use((err, _req, res, _next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ success: false, error: 'Internal server error' });
+  console.error('Unhandled error:', err?.name || 'Error', err?.code || '');
+  res.status(500).json({ success: false, error: 'internal_error' });
 });
 
-// Auto-seed products if empty — also overwrites if SEED_REFRESH=true
+// Auto-seed only an empty catalog. Never delete an existing production catalog.
 async function autoSeed() {
   const Product = require('./models/Product');
   const count = await Product.countDocuments();
-  if (count === 0 || process.env.SEED_REFRESH === 'true') {
-    if (count > 0) {
-      console.log('🗑  Clearing existing products for refresh...');
-      await Product.deleteMany({});
-    }
+  if (count === 0) {
     console.log('📦 Seeding Fairhaven products...');
     await Product.insertMany(FAIRHAVEN_PRODUCTS);
     console.log(`✅ Seeded ${FAIRHAVEN_PRODUCTS.length} products`);
@@ -152,6 +150,7 @@ async function start() {
       await mongoose.connect(mongoUri, { dbName: 'fairhaven', serverSelectionTimeoutMS: 3000 });
       console.log('✅ MongoDB connected (external)');
     } catch (_connErr) {
+      if (process.env.ALLOW_IN_MEMORY_DB !== 'true') throw _connErr;
       console.log('⚠️  External MongoDB unavailable, starting in-memory server...');
       const { MongoMemoryServer } = require('mongodb-memory-server');
       const mongod = await MongoMemoryServer.create();
@@ -166,19 +165,29 @@ async function start() {
     await promoteAdminsFromEnv();
     await ensureAtLeastOneAdmin();
 
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
+    app.listen(PORT, HOST, () => {
+      console.log(`🚀 Server running on http://${HOST}:${PORT}`);
     });
 
     // Start Telegram Bot & expose to controllers via app.locals.
     let bot = null;
+    let shuttingDown = false;
     try {
       if (!process.env.TELEGRAM_BOT_TOKEN) {
         console.warn('⚠️  TELEGRAM_BOT_TOKEN missing — bot disabled.');
       } else {
         bot = createBot(process.env.TELEGRAM_BOT_TOKEN, process.env.FRONTEND_URL);
         app.locals.bot = bot;
-        bot.launch();
+        launchBotWithRetry(bot, {
+          isStopping: () => shuttingDown,
+          onRetry: (err, delay) => {
+            const reason = err.response?.description || err.code || err.cause?.code || 'unknown';
+            console.warn(`[bot] polling retry in ${delay}ms: ${reason}`);
+          },
+        }).catch((err) => {
+          const reason = err.response?.description || err.code || err.cause?.code || 'unknown';
+          console.error(`[bot] polling stopped permanently: ${reason}`);
+        });
         console.log('🤖 Telegram bot launched');
       }
     } catch (botErr) {
@@ -187,7 +196,8 @@ async function start() {
 
     const shutdown = async (signal) => {
       console.log(`\n${signal} received. Shutting down gracefully...`);
-      if (bot) bot.stop(signal);
+      shuttingDown = true;
+      try { if (bot) bot.stop(signal); } catch (_) { /* bot not started yet */ }
       await mongoose.connection.close();
       if (process._mongod) await process._mongod.stop();
       process.exit(0);
@@ -196,7 +206,7 @@ async function start() {
     process.once('SIGINT', () => shutdown('SIGINT'));
     process.once('SIGTERM', () => shutdown('SIGTERM'));
   } catch (err) {
-    console.error('❌ Failed to start server:', err);
+    console.error('❌ Failed to start server:', err?.name || 'Error', err?.code || '');
     process.exit(1);
   }
 }

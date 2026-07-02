@@ -1,5 +1,6 @@
 const Product = require('../models/Product');
 const Order = require('../models/Order');
+const { sendError } = require('../utils/http');
 
 exports.getAll = async (req, res) => {
   try {
@@ -19,7 +20,7 @@ exports.getAll = async (req, res) => {
     const products = await Product.find(filter).sort({ createdAt: -1 });
     res.json({ success: true, data: products });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -31,7 +32,7 @@ exports.getById = async (req, res) => {
     }
     res.json({ success: true, data: product });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -40,7 +41,7 @@ exports.create = async (req, res) => {
     const product = await Product.create(req.body);
     res.status(201).json({ success: true, data: product });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -56,7 +57,7 @@ exports.update = async (req, res) => {
     }
     res.json({ success: true, data: product });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -68,7 +69,7 @@ exports.remove = async (req, res) => {
     }
     res.json({ success: true, message: 'Product deleted' });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -86,7 +87,7 @@ exports.toggleAvailability = async (req, res) => {
       message: product.isAvailable ? 'Товар в наличии (bor)' : 'Нет в наличии (yo\'q)',
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -148,7 +149,7 @@ exports.getPopular = async (req, res) => {
 
     return res.json({ success: true, data: [...aggregated, ...filler] });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -157,6 +158,6 @@ exports.getCategories = async (_req, res) => {
     const categories = await Product.distinct('category');
     res.json({ success: true, data: categories });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };

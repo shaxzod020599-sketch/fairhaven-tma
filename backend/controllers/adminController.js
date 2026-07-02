@@ -5,6 +5,8 @@ const Collection = require('../models/Collection');
 const Setting = require('../models/Setting');
 const PromoCode = require('../models/PromoCode');
 const { resolveAdmin } = require('../middleware/adminAuth');
+const { errorLabel, sendError } = require('../utils/http');
+const { withTelegramRetry } = require('../utils/telegramRetry');
 
 // ───────────────────────────────────────────────────────────────────────────
 // whoami — lightweight check frontend uses to decide "admin UI or login?"
@@ -80,7 +82,7 @@ exports.stats = async (_req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -115,7 +117,7 @@ exports.listOrders = async (req, res) => {
     const orders = await Order.find(filter).sort({ createdAt: -1 }).limit(500);
     res.json({ success: true, data: orders });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -135,14 +137,22 @@ exports.updateOrderStatus = async (req, res) => {
     if (!order) return res.status(404).json({ success: false, error: 'not_found' });
 
     const bot = req.app.locals.bot;
-    if (bot && bot.telegram && order.channelMessageId) {
-      tryEditChannelCard(bot, order, req.admin).catch(() => {});
-      tryNotifyCustomer(bot, order, status).catch(() => {});
+    if (bot && bot.telegram) {
+      if (order.channelMessageId) {
+        tryEditChannelCard(bot, order, req.admin).catch((err) =>
+          console.warn('[admin.order] channel edit failed:', errorLabel(err))
+        );
+      }
+      try {
+        await tryNotifyCustomer(bot, order, status);
+      } catch (err) {
+        console.warn('[admin.order] customer notification failed:', errorLabel(err));
+      }
     }
 
     res.json({ success: true, data: order });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -165,7 +175,7 @@ exports.revertOrder = async (req, res) => {
 
     res.json({ success: true, data: order });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -190,7 +200,7 @@ exports.listProducts = async (req, res) => {
     const products = await Product.find(filter).sort({ createdAt: -1 });
     res.json({ success: true, data: products });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -201,13 +211,13 @@ exports.createProduct = async (req, res) => {
     const bot = req.app.locals.bot;
     if (bot && typeof bot.broadcastNewProduct === 'function' && p.isAvailable) {
       bot.broadcastNewProduct(p).catch((err) =>
-        console.warn('[product.create] broadcast failed:', err.message)
+        console.warn('[product.create] broadcast failed:', errorLabel(err))
       );
     }
 
     res.status(201).json({ success: true, data: p });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -227,7 +237,7 @@ exports.updateProduct = async (req, res) => {
       const bot = req.app.locals.bot;
       if (bot && typeof bot.broadcastBackInStock === 'function') {
         bot.broadcastBackInStock(p).catch((err) =>
-          console.warn('[product.update] back-in-stock broadcast failed:', err.message)
+          console.warn('[product.update] back-in-stock broadcast failed:', errorLabel(err))
         );
       }
     }
@@ -254,14 +264,14 @@ exports.updateProduct = async (req, res) => {
       const bot = req.app.locals.bot;
       if (bot && typeof bot.broadcastDiscount === 'function') {
         bot.broadcastDiscount(p).catch((err) =>
-          console.warn('[product.update] discount broadcast failed:', err.message)
+          console.warn('[product.update] discount broadcast failed:', errorLabel(err))
         );
       }
     }
 
     res.json({ success: true, data: p });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -275,7 +285,7 @@ exports.deleteProduct = async (req, res) => {
     );
     res.json({ success: true, message: 'Удалено' });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -291,14 +301,14 @@ exports.toggleProductAvailability = async (req, res) => {
       const bot = req.app.locals.bot;
       if (bot && typeof bot.broadcastBackInStock === 'function') {
         bot.broadcastBackInStock(p).catch((err) =>
-          console.warn('[product.toggle] back-in-stock broadcast failed:', err.message)
+          console.warn('[product.toggle] back-in-stock broadcast failed:', errorLabel(err))
         );
       }
     }
 
     res.json({ success: true, data: p });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -332,7 +342,7 @@ exports.listAdmins = async (_req, res) => {
       .sort({ createdAt: 1 });
     res.json({ success: true, data: admins });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -360,7 +370,7 @@ exports.promoteAdmin = async (req, res) => {
     }
     res.json({ success: true, data: user });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -398,7 +408,7 @@ exports.listUsers = async (req, res) => {
       .limit(500);
     res.json({ success: true, data: users });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -427,7 +437,7 @@ exports.getUserDetail = async (req, res) => {
     );
     res.json({ success: true, data: { user, orders, orderStats } });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -457,7 +467,7 @@ exports.demoteAdmin = async (req, res) => {
     if (!user) return res.status(404).json({ success: false, error: 'not_found' });
     res.json({ success: true, data: user });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -471,7 +481,7 @@ exports.listCollections = async (_req, res) => {
       .sort({ sortOrder: 1, createdAt: 1 });
     res.json({ success: true, data: items });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -480,7 +490,7 @@ exports.createCollection = async (req, res) => {
     const c = await Collection.create(sanitizeCollectionBody(req.body));
     res.status(201).json({ success: true, data: c });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -494,7 +504,7 @@ exports.updateCollection = async (req, res) => {
     if (!c) return res.status(404).json({ success: false, error: 'not_found' });
     res.json({ success: true, data: c });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -504,7 +514,7 @@ exports.deleteCollection = async (req, res) => {
     if (!c) return res.status(404).json({ success: false, error: 'not_found' });
     res.json({ success: true, message: 'Удалено' });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -523,7 +533,7 @@ exports.listSettings = async (_req, res) => {
     const items = await Setting.find({}).sort({ key: 1 });
     res.json({ success: true, data: items });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -538,7 +548,7 @@ exports.upsertSetting = async (req, res) => {
     );
     res.json({ success: true, data: s });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -547,7 +557,7 @@ exports.deleteSetting = async (req, res) => {
     await Setting.deleteOne({ key: req.params.key });
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -556,7 +566,7 @@ exports.deleteSetting = async (req, res) => {
 // ───────────────────────────────────────────────────────────────────────────
 async function tryEditChannelCard(bot, order, actor) {
   const { formatOrderReceipt } = require('../utils/helpers');
-  const ORDERS_CHANNEL_ID = process.env.ORDERS_CHANNEL_ID || '-1003939788373';
+  const ORDERS_CHANNEL_ID = process.env.ORDERS_CHANNEL_ID;
   const verdictMap = {
     confirmed: `\n\n✅ <b>Подтверждено</b> (админ-панель${actor ? ' · ' + (actor.firstName || actor.username || '') : ''})`,
     cancelled: `\n\n❌ <b>Отклонено</b> (админ-панель${actor ? ' · ' + (actor.firstName || actor.username || '') : ''})`,
@@ -588,7 +598,7 @@ async function tryEditChannelCard(bot, order, actor) {
 
 async function tryRevertChannelCard(bot, order) {
   const { formatOrderReceipt } = require('../utils/helpers');
-  const ORDERS_CHANNEL_ID = process.env.ORDERS_CHANNEL_ID || '-1003939788373';
+  const ORDERS_CHANNEL_ID = process.env.ORDERS_CHANNEL_ID;
   const keyboard = {
     inline_keyboard: [
       [
@@ -629,7 +639,7 @@ exports.listPromos = async (_req, res) => {
     }));
     res.json({ success: true, data: augmented });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -645,7 +655,7 @@ exports.createPromo = async (req, res) => {
     const p = await PromoCode.create(body);
     res.status(201).json({ success: true, data: p });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -660,7 +670,7 @@ exports.updatePromo = async (req, res) => {
     if (!p) return res.status(404).json({ success: false, error: 'not_found' });
     res.json({ success: true, data: p });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -670,7 +680,7 @@ exports.deletePromo = async (req, res) => {
     if (!p) return res.status(404).json({ success: false, error: 'not_found' });
     res.json({ success: true, message: 'Удалено' });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
@@ -682,7 +692,7 @@ exports.togglePromo = async (req, res) => {
     await p.save();
     res.json({ success: true, data: p });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
@@ -726,7 +736,7 @@ async function tryNotifyCustomer(bot, order, status) {
   } else {
     return;
   }
-  try {
-    await bot.telegram.sendMessage(order.telegramId, text, { parse_mode: 'HTML' });
-  } catch (_) {}
+  await withTelegramRetry(() =>
+    bot.telegram.sendMessage(order.telegramId, text, { parse_mode: 'HTML' })
+  );
 }

@@ -2,13 +2,18 @@ const { Telegraf, Markup } = require('telegraf');
 const User = require('../models/User');
 const Order = require('../models/Order');
 const { formatOrderReceipt } = require('../utils/helpers');
+const { errorLabel } = require('../utils/http');
+const {
+  acceptConsent,
+  applyVerifiedContact,
+  escapeRegistrationName,
+  syncRegistrationUser,
+} = require('../utils/registration');
+const { withTelegramRetry } = require('../utils/telegramRetry');
 
 // Fairhaven channel — orders are sent here for operator approval.
 // Override via ORDERS_CHANNEL_ID env var if needed.
-const ORDERS_CHANNEL_ID = process.env.ORDERS_CHANNEL_ID || '-1003939788373';
-
-const MIN_YEAR = 1930;
-const MAX_YEAR = new Date().getFullYear() - 14; // minimum 14 y.o.
+const ORDERS_CHANNEL_ID = process.env.ORDERS_CHANNEL_ID;
 
 // -----------------------------------------------------------------------------
 // Copy (bilingual: RU + UZ)
@@ -47,12 +52,12 @@ const T = {
     `4️⃣ <b>Jinsingiz / Ваш пол</b>`,
 
   askPhone:
-    `5️⃣ <b>Telefon raqamingizni yuboring / Отправьте номер телефона</b>\n\n` +
+    `1️⃣ <b>Telefon raqamingizni yuboring / Отправьте номер телефона</b>\n\n` +
     `Pastdagi tugmani bosing — raqam avtomatik yuboriladi.\n` +
     `Нажмите кнопку ниже — номер отправится автоматически.`,
 
   askConsent: (frontendUrl, brandName) =>
-    `6️⃣ <b>Shaxsga doir ma’lumotlarga rozilik / Согласие на обработку данных</b>\n\n` +
+    `2️⃣ <b>Shaxsga doir ma’lumotlarga rozilik / Согласие на обработку данных</b>\n\n` +
     `${brandName} buyurtmalaringizni qayta ishlash uchun ma’lumotlaringizdan foydalanadi.\n` +
     `${brandName} использует ваши данные для обработки заказов.\n\n` +
     `Quyidagi ommaviy oferta bilan tanishing:\n` +
@@ -94,10 +99,6 @@ const T = {
     `📞 ${process.env.SUPPORT_PHONE || '+998 78 150 04 40'}`,
 };
 
-function cleanText(s) {
-  return (s || '').toString().trim().replace(/\s+/g, ' ');
-}
-
 function shortOrderId(order) {
   return order._id.toString().slice(-6).toUpperCase();
 }
@@ -106,27 +107,12 @@ function shortOrderId(order) {
 // Send a step prompt to a user, honouring their current registrationStep
 // -----------------------------------------------------------------------------
 async function sendStep(ctx, user, frontendUrl) {
+  if (!['awaiting_phone', 'awaiting_consent', 'done'].includes(user.registrationStep)) {
+    syncRegistrationUser(user, ctx.from || {});
+    await user.save();
+  }
+
   switch (user.registrationStep) {
-    case 'awaiting_name':
-      return ctx.replyWithHTML(T.askName, Markup.removeKeyboard());
-
-    case 'awaiting_surname':
-      return ctx.replyWithHTML(T.askSurname, Markup.removeKeyboard());
-
-    case 'awaiting_year':
-      return ctx.replyWithHTML(T.askYear, Markup.removeKeyboard());
-
-    case 'awaiting_gender':
-      return ctx.replyWithHTML(
-        T.askGender,
-        Markup.inlineKeyboard([
-          [
-            Markup.button.callback(T.male, 'gender:male'),
-            Markup.button.callback(T.female, 'gender:female'),
-          ],
-        ])
-      );
-
     case 'awaiting_phone':
       return ctx.replyWithHTML(T.askPhone, {
         reply_markup: {
@@ -160,7 +146,7 @@ async function sendStep(ctx, user, frontendUrl) {
 }
 
 async function sendOpenShop(ctx, user, frontendUrl) {
-  const firstName = user.firstName || ctx.from.first_name || '';
+  const firstName = escapeRegistrationName(user.firstName || ctx.from.first_name || '');
   const greeting = user.isRegistered()
     ? T.alreadyRegistered(firstName)
     : T.registered(firstName);
@@ -203,23 +189,17 @@ async function forwardOrderToChannel(bot, order) {
   }
   try {
     const text = formatOrderReceipt(order);
-    const sent = await bot.telegram.sendMessage(ORDERS_CHANNEL_ID, text, {
-      parse_mode: 'HTML',
-      disable_web_page_preview: true,
-      reply_markup: buildChannelKeyboard(order._id.toString(), 'pending'),
-    });
-    console.log(`[bot] Order #${order._id.toString().slice(-6).toUpperCase()} → channel ${ORDERS_CHANNEL_ID}, msg ${sent.message_id}`);
+    const sent = await withTelegramRetry(() =>
+      bot.telegram.sendMessage(ORDERS_CHANNEL_ID, text, {
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+        reply_markup: buildChannelKeyboard(order._id.toString(), 'pending'),
+      })
+    );
+    console.log(`[bot] Order forwarded, msg ${sent.message_id}`);
     return sent.message_id;
   } catch (err) {
-    // node-fetch/Telegraf error shapes vary. Log every bit we can get.
-    const details = [
-      err.message,
-      err.code,
-      err.cause?.code,
-      err.response?.description,
-      err.description,
-    ].filter(Boolean).join(' | ');
-    console.error('[bot] channel forward failed — channel=%s err=%s', ORDERS_CHANNEL_ID, details);
+    console.error('[bot] channel forward failed:', errorLabel(err));
     return null;
   }
 }
@@ -400,29 +380,35 @@ async function broadcastProductToUsers(bot, product, frontendUrl, kind = 'new') 
       try {
         if (photoUrl) {
           try {
-            await bot.telegram.sendPhoto(r.telegramId, photoUrl, {
-              caption: text,
-              parse_mode: 'HTML',
-              reply_markup: keyboard,
-            });
+            await withTelegramRetry(() =>
+              bot.telegram.sendPhoto(r.telegramId, photoUrl, {
+                caption: text,
+                parse_mode: 'HTML',
+                reply_markup: keyboard,
+              })
+            );
           } catch (photoErr) {
             // Telegram couldn't fetch / accept the photo URL — fall back to plain text
             // so the broadcast still reaches users instead of silently failing.
-            await bot.telegram.sendMessage(r.telegramId, text, {
-              parse_mode: 'HTML',
-              disable_web_page_preview: false,
-              reply_markup: keyboard,
-            });
+            await withTelegramRetry(() =>
+              bot.telegram.sendMessage(r.telegramId, text, {
+                parse_mode: 'HTML',
+                disable_web_page_preview: false,
+                reply_markup: keyboard,
+              })
+            );
             if (errorSamples.length < 3) {
               errorSamples.push(`photo fallback: ${photoErr.description || photoErr.message}`);
             }
           }
         } else {
-          await bot.telegram.sendMessage(r.telegramId, text, {
-            parse_mode: 'HTML',
-            disable_web_page_preview: true,
-            reply_markup: keyboard,
-          });
+          await withTelegramRetry(() =>
+            bot.telegram.sendMessage(r.telegramId, text, {
+              parse_mode: 'HTML',
+              disable_web_page_preview: true,
+              reply_markup: keyboard,
+            })
+          );
         }
         sent += 1;
       } catch (err) {
@@ -501,16 +487,13 @@ function createBot(token, frontendUrl) {
         telegramId: tg.id,
         username: tg.username || '',
         languageCode: tg.language_code || 'ru',
-        registrationStep: 'awaiting_name',
+        registrationStep: 'awaiting_phone',
       });
-    } else {
-      // Keep username/language fresh.
-      user.username = tg.username || user.username;
-      user.languageCode = tg.language_code || user.languageCode;
-      await user.save();
     }
+    syncRegistrationUser(user, tg);
+    await user.save();
 
-    const firstName = user.firstName || tg.first_name || 'друг';
+    const firstName = escapeRegistrationName(user.firstName || tg.first_name || 'друг');
     await ctx.replyWithHTML(T.welcome(firstName));
 
     if (user.isRegistered()) {
@@ -578,7 +561,7 @@ function createBot(token, frontendUrl) {
       }
       ctx.replyWithHTML(text);
     } catch (err) {
-      console.error('Error fetching orders:', err.message);
+      console.error('Error fetching orders:', errorLabel(err));
       ctx.reply('❌ Xatolik / Ошибка');
     }
   });
@@ -591,17 +574,13 @@ function createBot(token, frontendUrl) {
     try {
       const user = await User.findOne({ telegramId: ctx.from.id });
       if (!user) return ctx.answerCbQuery();
-      if (user.registrationStep !== 'awaiting_gender') {
-        return ctx.answerCbQuery();
-      }
-      user.gender = gender;
-      user.registrationStep = 'awaiting_phone';
+      syncRegistrationUser(user, ctx.from);
       await user.save();
       await ctx.answerCbQuery(gender === 'male' ? '👨' : '👩');
       try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (_) {}
       return sendStep(ctx, user, FRONTEND);
     } catch (err) {
-      console.error('gender callback:', err.message);
+      console.error('gender callback:', errorLabel(err));
       return ctx.answerCbQuery('Ошибка');
     }
   });
@@ -613,18 +592,15 @@ function createBot(token, frontendUrl) {
     try {
       const user = await User.findOne({ telegramId: ctx.from.id });
       if (!user) return ctx.answerCbQuery();
-      if (user.registrationStep !== 'awaiting_consent') {
+      if (!acceptConsent(user)) {
         return ctx.answerCbQuery();
       }
-      user.consentAccepted = true;
-      user.consentAcceptedAt = new Date();
-      user.registrationStep = 'done';
       await user.save();
       await ctx.answerCbQuery('✅');
       try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (_) {}
       return sendOpenShop(ctx, user, FRONTEND);
     } catch (err) {
-      console.error('consent callback:', err.message);
+      console.error('consent callback:', errorLabel(err));
       return ctx.answerCbQuery('Ошибка');
     }
   });
@@ -673,16 +649,18 @@ function createBot(token, frontendUrl) {
 
       // Notify the customer
       try {
-        await bot.telegram.sendMessage(
-          order.telegramId,
-          action === 'approve' ? T.orderApproved(shortId) : T.orderRejected(shortId),
-          { parse_mode: 'HTML' }
+        await withTelegramRetry(() =>
+          bot.telegram.sendMessage(
+            order.telegramId,
+            action === 'approve' ? T.orderApproved(shortId) : T.orderRejected(shortId),
+            { parse_mode: 'HTML' }
+          )
         );
       } catch (notifyErr) {
-        console.warn('[bot] Could not notify customer:', notifyErr.message);
+        console.warn('[bot] Could not notify customer:', errorLabel(notifyErr));
       }
     } catch (err) {
-      console.error('order action:', err);
+      console.error('order action:', errorLabel(err));
       return ctx.answerCbQuery('Ошибка');
     }
   });
@@ -697,16 +675,12 @@ function createBot(token, frontendUrl) {
       if (user.registrationStep !== 'awaiting_phone') return;
 
       const contact = ctx.message.contact;
-      if (!contact || String(contact.user_id) !== String(ctx.from.id)) {
+      if (!applyVerifiedContact(user, ctx.from.id, contact)) {
         return ctx.replyWithHTML(
           '⚠️ Iltimos, o‘zingizning raqamingizni yuboring.\n⚠️ Отправьте ваш собственный номер.'
         );
       }
 
-      user.phone = contact.phone_number.startsWith('+')
-        ? contact.phone_number
-        : `+${contact.phone_number}`;
-      user.registrationStep = 'awaiting_consent';
       await user.save();
 
       // Remove the contact keyboard.
@@ -715,7 +689,7 @@ function createBot(token, frontendUrl) {
       });
       return sendStep(ctx, user, FRONTEND);
     } catch (err) {
-      console.error('contact handler:', err.message);
+      console.error('contact handler:', errorLabel(err));
     }
   });
 
@@ -740,52 +714,11 @@ function createBot(token, frontendUrl) {
         return sendOpenShop(ctx, user, FRONTEND);
       }
 
-      const value = cleanText(ctx.message.text);
-
-      if (user.registrationStep === 'awaiting_name') {
-        if (!/^[A-Za-zА-Яа-яЎўҚқҒғҲҳӯӢӣ’'\- ]{2,40}$/.test(value)) {
-          return ctx.replyWithHTML(T.invalidName);
-        }
-        user.firstName = value;
-        user.registrationStep = 'awaiting_surname';
-        await user.save();
-        return sendStep(ctx, user, FRONTEND);
-      }
-
-      if (user.registrationStep === 'awaiting_surname') {
-        if (!/^[A-Za-zА-Яа-яЎўҚқҒғҲҳӯӢӣ’'\- ]{2,40}$/.test(value)) {
-          return ctx.replyWithHTML(T.invalidName);
-        }
-        user.lastName = value;
-        user.registrationStep = 'awaiting_year';
-        await user.save();
-        return sendStep(ctx, user, FRONTEND);
-      }
-
-      if (user.registrationStep === 'awaiting_year') {
-        const year = parseInt(value.replace(/\D/g, ''), 10);
-        if (!year || year < MIN_YEAR || year > MAX_YEAR) {
-          return ctx.replyWithHTML(T.invalidYear(MIN_YEAR, MAX_YEAR));
-        }
-        user.birthYear = year;
-        user.registrationStep = 'awaiting_gender';
-        await user.save();
-        return sendStep(ctx, user, FRONTEND);
-      }
-
-      if (user.registrationStep === 'awaiting_gender') {
-        return sendStep(ctx, user, FRONTEND);
-      }
-
-      if (user.registrationStep === 'awaiting_phone') {
-        return sendStep(ctx, user, FRONTEND);
-      }
-
-      if (user.registrationStep === 'awaiting_consent') {
-        return sendStep(ctx, user, FRONTEND);
-      }
+      syncRegistrationUser(user, ctx.from);
+      await user.save();
+      return sendStep(ctx, user, FRONTEND);
     } catch (err) {
-      console.error('text handler:', err.message);
+      console.error('text handler:', errorLabel(err));
     }
   });
 
@@ -793,7 +726,7 @@ function createBot(token, frontendUrl) {
   // Error handler
   // ---------------------------------------------------------------------------
   bot.catch((err, ctx) => {
-    console.error(`[bot] error in ${ctx.updateType}:`, err);
+    console.error(`[bot] error in ${ctx.updateType}:`, errorLabel(err));
   });
 
   return bot;

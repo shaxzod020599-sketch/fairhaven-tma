@@ -42,7 +42,7 @@ const userSchema = new mongoose.Schema({
       'awaiting_consent',
       'done',
     ],
-    default: 'awaiting_name',
+    default: 'awaiting_phone',
   },
 
   savedAddresses: [addressSchema],

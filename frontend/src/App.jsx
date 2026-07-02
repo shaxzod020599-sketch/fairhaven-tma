@@ -275,6 +275,7 @@ export default function App() {
             activeOrdersCount={activeOrders.length}
             onNavigate={handleNavigate}
             onOpenAdmin={() => setAdminMode(true)}
+            onUserUpdated={setDbUser}
           />
         );
       default:

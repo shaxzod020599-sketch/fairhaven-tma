@@ -1,22 +1,22 @@
 const User = require('../models/User');
+const { sendError } = require('../utils/http');
 
 exports.getOrCreate = async (req, res) => {
   try {
-    const { telegramId, firstName, lastName, username, photoUrl, languageCode } = req.body;
+    const telegramId = req.telegramUser.id;
+    const username = req.telegramUser.username || '';
+    const photoUrl = req.telegramUser.photo_url || '';
+    const languageCode = req.telegramUser.language_code || 'ru';
 
     let user = await User.findOne({ telegramId });
     if (!user) {
       user = await User.create({
         telegramId,
-        firstName: firstName || '',
-        lastName: lastName || '',
         username: username || '',
         photoUrl: photoUrl || '',
         languageCode: languageCode || 'ru',
       });
     } else {
-      if (firstName) user.firstName = firstName;
-      if (lastName) user.lastName = lastName;
       if (username) user.username = username;
       if (photoUrl) user.photoUrl = photoUrl;
       if (languageCode) user.languageCode = languageCode;
@@ -25,27 +25,37 @@ exports.getOrCreate = async (req, res) => {
 
     res.json({ success: true, data: user });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
 exports.getByTelegramId = async (req, res) => {
   try {
-    const user = await User.findOne({ telegramId: Number(req.params.telegramId) });
+    const user = await User.findOne({ telegramId: req.telegramUser.id });
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     res.json({ success: true, data: user });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, err);
   }
 };
 
 exports.update = async (req, res) => {
   try {
+    const update = pick(req.body, ['languageCode', 'notificationsEnabled', 'favorites']);
+    for (const field of ['firstName', 'lastName']) {
+      if (req.body?.[field] === undefined) continue;
+      const normalized = normalizeProfileName(req.body[field], field === 'lastName');
+      if (normalized === null) {
+        return res.status(400).json({ success: false, error: 'invalid_name' });
+      }
+      update[field] = normalized;
+    }
+
     const user = await User.findOneAndUpdate(
-      { telegramId: Number(req.params.telegramId) },
-      req.body,
+      { telegramId: req.telegramUser.id },
+      update,
       { new: true, runValidators: true }
     );
     if (!user) {
@@ -53,27 +63,31 @@ exports.update = async (req, res) => {
     }
     res.json({ success: true, data: user });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
 exports.addAddress = async (req, res) => {
   try {
-    const user = await User.findOne({ telegramId: Number(req.params.telegramId) });
+    const user = await User.findOne({ telegramId: req.telegramUser.id });
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
-    user.savedAddresses.push(req.body);
+    if (user.savedAddresses.length >= 10) {
+      return res.status(400).json({ success: false, error: 'address_limit' });
+    }
+    const address = pick(req.body, ['label', 'lat', 'lng', 'addressString']);
+    user.savedAddresses.push(address);
     await user.save();
     res.json({ success: true, data: user.savedAddresses });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
 
 exports.removeAddress = async (req, res) => {
   try {
-    const user = await User.findOne({ telegramId: Number(req.params.telegramId) });
+    const user = await User.findOne({ telegramId: req.telegramUser.id });
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
@@ -81,6 +95,24 @@ exports.removeAddress = async (req, res) => {
     await user.save();
     res.json({ success: true, data: user.savedAddresses });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, err);
   }
 };
+
+function pick(body = {}, fields) {
+  const out = {};
+  for (const field of fields) {
+    if (body[field] !== undefined) out[field] = body[field];
+  }
+  return out;
+}
+
+const PROFILE_NAME_RE = /^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u;
+
+function normalizeProfileName(value, allowEmpty) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  if (!normalized) return allowEmpty ? '' : null;
+  if (normalized.length > 40 || !PROFILE_NAME_RE.test(normalized)) return null;
+  return normalized;
+}
