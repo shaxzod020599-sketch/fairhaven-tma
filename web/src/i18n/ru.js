@@ -118,6 +118,7 @@ export const ru = {
 
   /* shop */
   shopTitle: 'Все продукты',
+  filtersLabel: 'Фильтры',
   filterStage: 'Стадия',
   filterCategory: 'Категория',
   filterAvailability: 'Наличие',

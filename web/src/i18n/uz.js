@@ -101,6 +101,7 @@ export const uz = {
   trustPractitioner: 'Shifokorlar tavsiyasi',
 
   shopTitle: 'Barcha mahsulotlar',
+  filtersLabel: 'Filtrlar',
   filterStage: 'Bosqich',
   filterCategory: 'Kategoriya',
   filterAvailability: 'Mavjudligi',

@@ -29,6 +29,8 @@ export default function Shop() {
   const [catFilter, setCatFilter] = useState(categoryParam);
   const [availableOnly, setAvailableOnly] = useState(false);
   const [sort, setSort] = useState('popular');
+  // Mobile: filters collapse behind a toggle so products lead the page.
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Resolve stage meta
   const stageMeta = useMemo(
@@ -116,9 +118,22 @@ export default function Shop() {
           <p className="shop-count">{sorted.length} {t('results')}</p>
         </header>
 
+        <button
+          type="button"
+          className="shop-filter-toggle btn btn-outline"
+          onClick={() => setFiltersOpen((v) => !v)}
+          aria-expanded={filtersOpen}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 6h16M7 12h10m-7 6h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+          {t('filtersLabel')}
+          {(catFilter || availableOnly || stage) && <span className="filter-toggle-dot" aria-hidden="true" />}
+        </button>
+
         <div className="shop-layout">
           {/* Sidebar filters */}
-          <aside className="shop-filters">
+          <aside className={`shop-filters ${filtersOpen ? 'open' : ''}`}>
             <div className="filter-group">
               <h3 className="filter-title">{t('filterCategory')}</h3>
               <ul className="filter-list">

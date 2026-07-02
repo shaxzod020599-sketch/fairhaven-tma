@@ -2454,7 +2454,45 @@ a.contact-channel:hover { transform: translateY(-2px); }
 .account-empty { text-align: center; padding: 26px 0; color: var(--ink-faint); }
 .account-empty .btn { margin-top: 14px; }
 
-.logo-mark-img { border-radius: 50%; display: block; }
+.logo-wordmark { display: block; height: 28px; width: auto; }
+@media (max-width: 640px) { .logo-wordmark { height: 23px; } }
 
 .tg-login-stage { min-height: 96px; display: flex; align-items: center; justify-content: center; }
 .tg-login-btn { display: inline-flex; align-items: center; gap: 10px; }
+
+/* ── Mobile shop: products first, filters behind a toggle ─────────────── */
+.shop-filter-toggle { display: none; }
+.filter-toggle-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--plum);
+  margin-left: 8px;
+}
+@media (max-width: 900px) {
+  .shop-filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 16px;
+    height: 44px;
+    padding: 0 18px;
+  }
+  .shop-filters { display: none; }
+  .shop-filters.open {
+    display: flex;
+    margin-bottom: 8px;
+    padding: 16px;
+    background: var(--paper);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-md);
+  }
+}
+
+/* Mobile hero: compact visual, no fixed 460px column */
+@media (max-width: 1023px) {
+  .hero-visual { height: auto; min-height: 0; padding: 8px 0 0; }
+  .hero-product-static { width: min(240px, 62%); }
+  .hero-glow { display: none; }
+  .hero-section.journey-hero { min-height: 0; padding: 40px 0 44px; }
+}

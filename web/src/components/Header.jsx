@@ -87,17 +87,14 @@ export default function Header({ onOpenCart }) {
           <span />
         </button>
 
-        <Link to="/" className="logo" onClick={closeAll}>
+        <Link to="/" className="logo" onClick={closeAll} aria-label="Fairhaven Health">
           <img
-            className="logo-mark-img"
-            src="/fh-mark.png"
-            alt=""
-            width="30"
+            className="logo-wordmark"
+            src="/fh-wordmark.svg"
+            alt="Fairhaven Health"
+            width="174"
             height="30"
           />
-          <span className="logo-text">
-            Fairhaven<span className="logo-accent">Health</span>
-          </span>
         </Link>
 
         <nav className="main-nav" aria-label="Primary">
