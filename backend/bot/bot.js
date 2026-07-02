@@ -1,6 +1,8 @@
+const crypto = require('crypto');
 const { Telegraf, Markup } = require('telegraf');
 const User = require('../models/User');
 const Order = require('../models/Order');
+const WebLoginToken = require('../models/WebLoginToken');
 const { formatOrderReceipt } = require('../utils/helpers');
 const { errorLabel } = require('../utils/http');
 const {
@@ -101,6 +103,81 @@ const T = {
 
 function shortOrderId(order) {
   return order._id.toString().slice(-6).toUpperCase();
+}
+
+// -----------------------------------------------------------------------------
+// Web-site login handshake (t.me/<bot>?start=web_<token>)
+// -----------------------------------------------------------------------------
+const WEB_LOGIN_PAYLOAD_RE = /^web_([A-Za-z0-9_-]{20,64})$/;
+
+function hashWebToken(raw) {
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
+/** Marks a pending web login token as ready for the given Telegram user. */
+async function claimWebLoginToken(tokenHash, telegramId) {
+  if (!tokenHash) return false;
+  const doc = await WebLoginToken.findOneAndUpdate(
+    { tokenHash, status: 'pending', expiresAt: { $gt: new Date() } },
+    { status: 'ready', telegramId, claimedAt: new Date() },
+    { new: true }
+  );
+  return Boolean(doc);
+}
+
+function webLoginSuccessText() {
+  return (
+    `🌐 <b>Saytga kirish tasdiqlandi! / Вход на сайт подтверждён!</b>\n\n` +
+    `Endi sayt yorlig‘iga qayting — hisobingiz ochiladi.\n` +
+    `Вернитесь на вкладку сайта — ваш аккаунт уже активен.`
+  );
+}
+
+function webLoginExpiredText() {
+  return (
+    `⌛️ <b>Kirish havolasi eskirgan / Ссылка для входа устарела</b>\n\n` +
+    `Saytdagi «Telegram orqali kirish» tugmasini qayta bosing.\n` +
+    `Нажмите кнопку «Войти через Telegram» на сайте ещё раз.`
+  );
+}
+
+/**
+ * Handles a /start deep-link coming from the web site.
+ * Returns true when the payload was a web-login token (message already sent).
+ */
+async function handleWebLoginPayload(ctx, user) {
+  const payload = (ctx.startPayload || '').toString();
+  const match = payload.match(WEB_LOGIN_PAYLOAD_RE);
+  if (!match) return false;
+
+  const tokenHash = hashWebToken(match[1]);
+
+  if (user.isRegistered()) {
+    const claimed = await claimWebLoginToken(tokenHash, user.telegramId);
+    await ctx.replyWithHTML(claimed ? webLoginSuccessText() : webLoginExpiredText());
+    return true;
+  }
+
+  // Not registered yet — remember the token and finish it after consent.
+  user.pendingWebLoginToken = tokenHash;
+  await user.save();
+  await ctx.replyWithHTML(
+    `🌐 Saytga kirish uchun avval qisqa ro‘yxatdan o‘ting.\n` +
+    `🌐 Для входа на сайт сначала пройдите короткую регистрацию.`
+  );
+  return true;
+}
+
+/** Called right after registration completes — finishes a stored web login. */
+async function finishPendingWebLogin(ctx, user) {
+  if (!user.pendingWebLoginToken) return;
+  const tokenHash = user.pendingWebLoginToken;
+  user.pendingWebLoginToken = '';
+  await user.save();
+  const claimed = await claimWebLoginToken(tokenHash, user.telegramId);
+  if (claimed) {
+    await ctx.replyWithHTML(webLoginSuccessText());
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -493,8 +570,16 @@ function createBot(token, frontendUrl) {
     syncRegistrationUser(user, tg);
     await user.save();
 
-    const firstName = escapeRegistrationName(user.firstName || tg.first_name || 'друг');
-    await ctx.replyWithHTML(T.welcome(firstName));
+    // Web-site login deep-link: confirm (or queue) and keep the shop flow.
+    const wasWebLogin = await handleWebLoginPayload(ctx, user);
+    if (wasWebLogin && user.isRegistered()) {
+      return sendOpenShop(ctx, user, FRONTEND);
+    }
+
+    if (!wasWebLogin) {
+      const firstName = escapeRegistrationName(user.firstName || tg.first_name || 'друг');
+      await ctx.replyWithHTML(T.welcome(firstName));
+    }
 
     if (user.isRegistered()) {
       return sendOpenShop(ctx, user, FRONTEND);
@@ -598,6 +683,10 @@ function createBot(token, frontendUrl) {
       await user.save();
       await ctx.answerCbQuery('✅');
       try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (_) {}
+      // A web login started before registration finishes here.
+      try { await finishPendingWebLogin(ctx, user); } catch (err) {
+        console.error('web login finish:', errorLabel(err));
+      }
       return sendOpenShop(ctx, user, FRONTEND);
     } catch (err) {
       console.error('consent callback:', errorLabel(err));

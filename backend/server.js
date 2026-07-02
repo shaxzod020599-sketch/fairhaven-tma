@@ -8,12 +8,14 @@ require('dns').setDefaultResultOrder('ipv4first');
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const { createBot } = require('./bot/bot');
 const productRoutes = require('./routes/productRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const userRoutes = require('./routes/userRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const publicRoutes = require('./routes/publicRoutes');
+const webRoutes = require('./routes/webRoutes');
 const oferta = require('./legal/oferta');
 const { FAIRHAVEN_PRODUCTS } = require('./seed/products');
 const {
@@ -39,6 +41,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(securityHeaders);
+app.use(cookieParser());
 app.use(express.json({ limit: '6mb' }));
 
 // Request logger (dev)
@@ -53,6 +56,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/public', publicRoutes);
+app.use('/api/web', webRoutes);
 
 // Uploaded images (admin-added product photos) — served publicly.
 app.use(
@@ -189,6 +193,16 @@ async function start() {
           console.error(`[bot] polling stopped permanently: ${reason}`);
         });
         console.log('🤖 Telegram bot launched');
+
+        // The web login deep-link needs the bot's @username.
+        bot.telegram.getMe()
+          .then((me) => {
+            app.locals.botUsername = me.username;
+            console.log(`🤖 Bot username: @${me.username}`);
+          })
+          .catch(() => {
+            app.locals.botUsername = process.env.WEB_BOT_USERNAME || '';
+          });
       }
     } catch (botErr) {
       console.warn('⚠️  Bot launch failed (non-critical):', botErr.message);

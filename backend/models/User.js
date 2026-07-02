@@ -56,6 +56,11 @@ const userSchema = new mongoose.Schema({
   notificationsEnabled: { type: Boolean, default: true },
 
   promoCodesUsed: [{ type: String }],
+
+  // SHA-256 hash of a pending web login token — set when the visitor opened
+  // the site's t.me deep-link before finishing bot registration. Claimed and
+  // cleared right after consent is accepted.
+  pendingWebLoginToken: { type: String, default: '' },
 }, {
   timestamps: true,
 });

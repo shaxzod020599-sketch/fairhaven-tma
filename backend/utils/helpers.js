@@ -37,18 +37,31 @@ function formatOrderReceipt(order) {
     )
     .join('\n');
 
-  const mapLink = googleMapsLink(order.location.lat, order.location.lng);
-  const yMapLink = yandexMapsLink(order.location.lat, order.location.lng);
+  // Web orders may carry a text-only address (lat/lng = 0) or no location.
+  const loc = order.location || null;
+  const hasCoords = Boolean(loc) && Number.isFinite(loc.lat) && Number.isFinite(loc.lng) &&
+    (loc.lat !== 0 || loc.lng !== 0);
+  const mapLink = hasCoords ? googleMapsLink(loc.lat, loc.lng) : null;
+  const yMapLink = hasCoords ? yandexMapsLink(loc.lat, loc.lng) : null;
   const shortId = order._id.toString().slice(-6).toUpperCase();
   const createdAt = new Date(order.createdAt || Date.now())
     .toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' });
 
+  const sourceLabel = order.source === 'web' ? '🌐 Сайт'
+    : order.source === 'web-guest' ? '🌐 Сайт (гость)'
+    : '';
+
   const parts = [];
-  parts.push(`🧾 <b>Yangi buyurtma / Новый заказ</b>  #${shortId}`);
+  parts.push(`🧾 <b>Yangi buyurtma / Новый заказ</b>  #${shortId}${sourceLabel ? `  ·  ${sourceLabel}` : ''}`);
   parts.push('');
   parts.push(`👤 <b>Mijoz / Клиент:</b> ${escapeHtml(order.customerName) || '—'}`);
   parts.push(`📞 <b>Telefon / Телефон:</b> ${escapeHtml(order.customerPhone) || '—'}`);
-  parts.push(`🆔 <b>Telegram ID:</b> <code>${order.telegramId}</code>`);
+  if (order.telegramId) {
+    parts.push(`🆔 <b>Telegram ID:</b> <code>${order.telegramId}</code>`);
+  }
+  if (order.email) {
+    parts.push(`✉️ <b>Email:</b> ${escapeHtml(order.email)}`);
+  }
   parts.push('');
   parts.push(`📦 <b>Mahsulotlar / Товары:</b>`);
   parts.push(itemLines || '  —');
@@ -69,8 +82,10 @@ function formatOrderReceipt(order) {
   }
   parts.push(`💳 <b>To‘lov / Оплата:</b> ${paymentLabel(order.paymentMethod)}`);
   parts.push('');
-  parts.push(`📍 <b>Manzil / Адрес:</b> ${escapeHtml(order.location.addressString) || '—'}`);
-  parts.push(`🗺 <a href="${yMapLink}">Yandex Maps</a> · <a href="${mapLink}">Google Maps</a>`);
+  parts.push(`📍 <b>Manzil / Адрес:</b> ${escapeHtml(loc ? loc.addressString : '') || '—'}`);
+  if (hasCoords) {
+    parts.push(`🗺 <a href="${yMapLink}">Yandex Maps</a> · <a href="${mapLink}">Google Maps</a>`);
+  }
   if (order.notes) {
     parts.push('');
     parts.push(`📝 <b>Izoh / Комментарий:</b> ${escapeHtml(order.notes)}`);

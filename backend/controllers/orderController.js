@@ -352,3 +352,15 @@ function normalizePhone(phone) {
 function normalizeText(value, maxLength) {
   return String(value || '').trim().slice(0, maxLength);
 }
+
+// Shared with webOrderController — the public site checkout applies the same
+// validation and pricing rules. Not part of the HTTP surface.
+exports._internal = {
+  resolvePromo,
+  normalizeItems,
+  normalizePhone,
+  normalizeText,
+  messageForError,
+  FREE_DELIVERY_THRESHOLD,
+  DELIVERY_FEE,
+};

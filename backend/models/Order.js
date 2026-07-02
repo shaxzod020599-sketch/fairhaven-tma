@@ -65,6 +65,17 @@ const orderSchema = new mongoose.Schema({
   },
   notes: { type: String, default: '' },
 
+  // Where the order was placed. Mini-app orders predate this field and keep
+  // the default; web orders are tagged explicitly for the channel receipt.
+  source: {
+    type: String,
+    enum: ['miniapp', 'web', 'web-guest'],
+    default: 'miniapp',
+  },
+  // Random capability token for guest web orders — lets the success page
+  // fetch its own order without exposing /orders/:id publicly.
+  accessToken: { type: String, default: '' },
+
   channelMessageId: { type: Number, default: null },
 }, {
   timestamps: true,
