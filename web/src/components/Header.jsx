@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { AnimatePresence, m } from 'motion/react';
 import { useI18n } from '../i18n/index.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -105,8 +106,17 @@ export default function Header({ onOpenCart }) {
             >
               {t('navCatalog')} <span className="nav-caret">▾</span>
             </button>
+            <AnimatePresence>
             {megaOpen && (
-              <div className="mega-menu mega-menu-wide" onMouseLeave={() => setMegaOpen(false)}>
+              <m.div
+                className="mega-menu mega-menu-wide"
+                onMouseLeave={() => setMegaOpen(false)}
+                initial={{ opacity: 0, y: -12, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, transition: { duration: 0.15, ease: 'easeIn' } }}
+                transition={{ type: 'spring', stiffness: 460, damping: 34 }}
+                style={{ transformOrigin: 'top center' }}
+              >
                 <div className="mega-columns">
                   <div className="mega-col">
                     <div className="mega-col-title">{t('navStage')}</div>
@@ -148,8 +158,9 @@ export default function Header({ onOpenCart }) {
                     </Link>
                   </div>
                 </div>
-              </div>
+              </m.div>
             )}
+            </AnimatePresence>
           </div>
 
           <NavLink to="/shop" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
@@ -216,8 +227,16 @@ export default function Header({ onOpenCart }) {
         </div>
       </div>
 
+      <AnimatePresence>
       {mobileOpen && (
-        <div className="mobile-nav" id="mobile-nav">
+        <m.div
+          className="mobile-nav"
+          id="mobile-nav"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8, transition: { duration: 0.14, ease: 'easeIn' } }}
+          transition={{ duration: 0.22, ease: 'easeOut' }}
+        >
           <div className="container">
             <div className="mobile-nav-group-title">{t('navStage')}</div>
             <div className="mobile-nav-sub">
@@ -261,8 +280,9 @@ export default function Header({ onOpenCart }) {
               <button type="submit" className="btn btn-sm btn-primary">{t('search')}</button>
             </form>
           </div>
-        </div>
+        </m.div>
       )}
+      </AnimatePresence>
     </header>
   );
 }

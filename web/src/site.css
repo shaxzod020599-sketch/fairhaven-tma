@@ -2237,3 +2237,18 @@ a.contact-channel:hover { transform: translateY(-2px); }
   .header-signin-label { display: none; }
   .header-signin { padding: 6px; }
 }
+
+/* Motion-owned overlays/drawers: neutralize the CSS class transitions so the
+   spring fully controls transform/opacity (no double-easing lag). */
+.motion-owned { transition: none !important; visibility: visible !important; }
+
+/* Hover: shadow/border only — transform belongs to the scroll driver. */
+.cascade-full .voice-card {
+  transition: box-shadow 240ms var(--ease-out), border-color 240ms var(--ease-out);
+}
+.cascade-full .voice-card:hover {
+  box-shadow:
+    0 40px 80px -26px rgba(125, 47, 80, 0.34),
+    0 8px 22px rgba(26, 28, 29, 0.06);
+  border-color: rgba(151, 57, 97, 0.3);
+}

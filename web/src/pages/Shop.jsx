@@ -222,8 +222,8 @@ export default function Shop() {
               </div>
             ) : (
               <div className="product-grid">
-                {sorted.map((p) => (
-                  <ProductCard key={p._id} product={p} />
+                {sorted.map((p, i) => (
+                  <ProductCard key={p._id} product={p} index={i} />
                 ))}
               </div>
             )}

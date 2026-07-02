@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
+import { LazyMotion, domAnimation, MotionConfig, m } from 'motion/react';
 import { I18nProvider } from './i18n/index.jsx';
 import { CartProvider } from './context/CartContext.jsx';
 import { SettingsProvider } from './context/SettingsContext.jsx';
@@ -49,11 +50,21 @@ export default function App() {
       <SettingsProvider>
         <AuthProvider>
         <CartProvider>
+        {/* Motion: subset features for bundle size; honor prefers-reduced-motion. */}
+        <LazyMotion features={domAnimation} strict>
+        <MotionConfig reducedMotion="user">
           <ScrollToTop />
           <AnnouncementBar />
           <Header onOpenCart={openCart} />
           <main className="site-main">
             <Suspense fallback={<RouteFallback />}>
+            {/* Crossfade content on route change — light, no exit phase. */}
+            <m.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.26, ease: 'easeOut' }}
+            >
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/shop" element={<Shop />} />
@@ -70,10 +81,13 @@ export default function App() {
               <Route path="/account" element={<Account />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </m.div>
             </Suspense>
           </main>
           <Footer />
           <CartDrawer open={cartOpen} onClose={closeCart} />
+        </MotionConfig>
+        </LazyMotion>
         </CartProvider>
         </AuthProvider>
       </SettingsProvider>

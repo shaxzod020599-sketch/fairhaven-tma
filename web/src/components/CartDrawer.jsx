@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { AnimatePresence, m } from 'motion/react';
 import { useI18n } from '../i18n/index.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import { formatPrice } from '../helpers.js';
 import { Cart as CartIcon, Bottle } from './Icons.jsx';
+
+// Spring tuned per MD motion: entrance ~320ms, exit faster (~65%).
+const drawerSpring = { type: 'spring', stiffness: 380, damping: 34, mass: 0.9 };
 
 export default function CartDrawer({ open, onClose }) {
   const { t, lang } = useI18n();
@@ -23,14 +27,26 @@ export default function CartDrawer({ open, onClose }) {
   }, [open, onClose]);
 
   return (
-    <>
-      <div className={`cart-overlay ${open ? 'open' : ''}`} onClick={onClose} aria-hidden={!open} />
-      <aside
-        className={`cart-drawer ${open ? 'open' : ''}`}
+    <AnimatePresence>
+      {open && (
+      <React.Fragment key="cart-drawer">
+      <m.div
+        className="cart-overlay open motion-owned"
+        onClick={onClose}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0, transition: { duration: 0.18, ease: 'easeIn' } }}
+        transition={{ duration: 0.26, ease: 'easeOut' }}
+      />
+      <m.aside
+        className="cart-drawer open motion-owned"
         role="dialog"
         aria-modal="true"
         aria-label={t('cart')}
-        aria-hidden={!open}
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%', transition: { duration: 0.22, ease: 'easeIn' } }}
+        transition={drawerSpring}
       >
         <div className="cart-drawer-head">
           <h2 className="cart-drawer-title">{t('cart')} ({items.length})</h2>
@@ -89,7 +105,9 @@ export default function CartDrawer({ open, onClose }) {
             </div>
           </>
         )}
-      </aside>
-    </>
+      </m.aside>
+      </React.Fragment>
+      )}
+    </AnimatePresence>
   );
 }

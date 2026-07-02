@@ -35,9 +35,9 @@ export default function BestSellers({ limit = 8 }) {
     <div className="best-sellers-wrap">
       <button className="rail-nav prev" onClick={() => scroll(-1)} aria-label="←" type="button">‹</button>
       <div className="product-rail" ref={railRef}>
-        {products.map((p) => (
+        {products.map((p, i) => (
           <div className="rail-item" key={p._id}>
-            <ProductCard product={p} />
+            <ProductCard product={p} index={i} />
           </div>
         ))}
       </div>

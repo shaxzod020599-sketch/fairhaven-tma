@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { m } from 'motion/react';
 import { useI18n } from '../i18n/index.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import { formatPrice, getDiscountInfo, productName } from '../helpers.js';
 import { Bottle } from './Icons.jsx';
 
-const ProductCard = React.memo(function ProductCard({ product }) {
+const MotionLink = m.create(Link);
+
+const ProductCard = React.memo(function ProductCard({ product, index = 0 }) {
   const { t, lang } = useI18n();
   const { add } = useCart();
   const [added, setAdded] = useState(false);
@@ -31,7 +34,19 @@ const ProductCard = React.memo(function ProductCard({ product }) {
   const thumb = product?.imageUrl;
 
   return (
-    <Link to={`/product/${product._id}`} className="product-card">
+    <MotionLink
+      to={`/product/${product._id}`}
+      className="product-card"
+      initial={{ opacity: 0, y: 22 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '0px 0px -40px 0px' }}
+      transition={{
+        duration: 0.45,
+        ease: [0.22, 1, 0.36, 1],
+        // Grid stagger: 40ms per column position, capped to one row's worth.
+        delay: Math.min(index % 4, 3) * 0.04,
+      }}
+    >
       <div className="product-card-media">
         {disc.hasDiscount && <span className="product-badge sale">−{disc.percent}%</span>}
         {!available && <span className="product-badge out">{t('out')}</span>}
@@ -63,7 +78,7 @@ const ProductCard = React.memo(function ProductCard({ product }) {
           {added ? t('added') : t('addToCart')}
         </button>
       </div>
-    </Link>
+    </MotionLink>
   );
 });
 

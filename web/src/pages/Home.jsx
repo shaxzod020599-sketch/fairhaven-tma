@@ -6,6 +6,7 @@ import React, {
   useRef,
 } from 'react';
 import { Link } from 'react-router-dom';
+import { m } from 'motion/react';
 import { useI18n } from '../i18n/index.jsx';
 import TestimonialCascade from '../components/home/TestimonialCascade.jsx';
 import { scrollBus, resetScrollBus } from '../components/home/scrollBus.js';
@@ -14,6 +15,20 @@ import { scrollBus, resetScrollBus } from '../components/home/scrollBus.js';
 const Scene3D = lazy(() => import('../components/home/Scene3D.jsx'));
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
+
+/* Hero entrance — one orchestrated stagger (35ms/child, spring rise). */
+const heroStagger = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.07, delayChildren: 0.08 } },
+};
+const heroRise = {
+  hidden: { opacity: 0, y: 26 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 190, damping: 26, mass: 0.9 },
+  },
+};
 
 /** Desktop + fine pointer + WebGL + motion allowed → full 3D journey. */
 function useFullExperience() {
@@ -131,18 +146,23 @@ export default function Home() {
       {/* ── Act I · Hero — original fairhavenhealth.com composition ────── */}
       <section className="hero-section journey-hero" aria-labelledby="home-hero-title">
         <div className="container hero-inner">
-          <div className="hero-copy">
-            <div className="hero-eyebrow">{t('heroEyebrow')}</div>
-            <h1 className="hero-title" id="home-hero-title">
+          <m.div
+            className="hero-copy"
+            variants={heroStagger}
+            initial="hidden"
+            animate="show"
+          >
+            <m.div className="hero-eyebrow" variants={heroRise}>{t('heroEyebrow')}</m.div>
+            <m.h1 className="hero-title" id="home-hero-title" variants={heroRise}>
               {t('heroTitlePre')} <em>{t('heroTitleEm')}</em> {t('heroTitlePost')}
-            </h1>
-            <p className="hero-desc">{t('heroDesc')}</p>
-            <div className="hero-cta-row">
+            </m.h1>
+            <m.p className="hero-desc" variants={heroRise}>{t('heroDesc')}</m.p>
+            <m.div className="hero-cta-row" variants={heroRise}>
               <Link to="/shop" className="btn btn-primary btn-lg">
                 {t('heroCta')} <span aria-hidden="true">→</span>
               </Link>
-            </div>
-            <div className="hero-stats">
+            </m.div>
+            <m.div className="hero-stats" variants={heroRise}>
               <div className="hero-stat">
                 <strong>{t('heroStat1')}</strong>
                 <span>{t('heroStat1Label')}</span>
@@ -151,8 +171,8 @@ export default function Home() {
                 <strong>{t('heroStat2')}</strong>
                 <span>{t('heroStat2Label')}</span>
               </div>
-            </div>
-          </div>
+            </m.div>
+          </m.div>
           <div className="hero-visual" aria-hidden="true">
             <div className="hero-glow" />
             {simple && (
