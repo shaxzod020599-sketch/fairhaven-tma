@@ -22,7 +22,10 @@ function retryDelay(err, fallback) {
 }
 
 async function withTelegramRetry(operation, options = {}) {
-  const delays = options.delays || [300, 1000];
+  // VPS egress to api.telegram.org is throttled (~60% failure rate per
+  // call from UZ networks). 5 retries with widening backoff lift effective
+  // success rate to ~99% while keeping worst-case latency under ~30s.
+  const delays = options.delays || [500, 1500, 3500, 7500, 15000];
 
   for (let attempt = 0; ; attempt += 1) {
     try {
