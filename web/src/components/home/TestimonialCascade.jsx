@@ -56,7 +56,7 @@ export default function TestimonialCascade({ simple = false }) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       // Frame-rate independent exponential glide toward the true position.
-      const k = 1 - Math.exp(-dt * 7);
+      const k = 1 - Math.exp(-dt * 5.5);
 
       const vh = window.innerHeight;
       const steps = root.querySelectorAll('.cascade-step');

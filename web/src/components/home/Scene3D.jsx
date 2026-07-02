@@ -228,34 +228,35 @@ function Motes() {
 /* ── Descending gallery ─────────────────────────────────────────────────── */
 
 const GALLERY = [
-  // Hero bottle keeps the real photo label; the rest carry printed labels.
-  { x: 2.15, d: 0.02, z: -1.15, scale: 0.92, tiltZ: -0.05, phase: 0.0, photo: true },
-  { x: -2.4, d: 0.20, z: -2.4, scale: 0.82, tiltZ: 0.07, phase: 1.3, spec: LABEL_SPECS[0] },
-  { x: 2.5, d: 0.38, z: -3.0, scale: 0.75, tiltZ: -0.06, phase: 2.1, spec: LABEL_SPECS[1] },
-  { x: -2.5, d: 0.56, z: -2.2, scale: 0.85, tiltZ: 0.05, phase: 3.4, spec: LABEL_SPECS[2] },
-  { x: 2.4, d: 0.74, z: -2.6, scale: 0.8, tiltZ: -0.07, phase: 4.2, spec: LABEL_SPECS[3] },
-  { x: -2.6, d: 0.92, z: -2.0, scale: 0.88, tiltZ: 0.06, phase: 5.0, spec: LABEL_SPECS[4] },
+  // Standard showcase composition: upright bottles alternating left/right at
+  // a consistent distance, fully in frame. Hero keeps the real photo label.
+  { x: 2.15, d: 0.02, z: -1.15, scale: 0.92, phase: 0.0, photo: true },
+  { x: -1.85, d: 0.20, z: -2.3, scale: 0.85, phase: 1.3, spec: LABEL_SPECS[0] },
+  { x: 1.95, d: 0.38, z: -2.5, scale: 0.82, phase: 2.1, spec: LABEL_SPECS[1] },
+  { x: -1.9, d: 0.56, z: -2.3, scale: 0.85, phase: 3.4, spec: LABEL_SPECS[2] },
+  { x: 1.9, d: 0.74, z: -2.4, scale: 0.83, phase: 4.2, spec: LABEL_SPECS[3] },
+  { x: -1.85, d: 0.92, z: -2.2, scale: 0.86, phase: 5.0, spec: LABEL_SPECS[4] },
 ];
 
 /**
- * Gentle sway instead of a full spin — the label always stays readable.
- * Bottles on the left face slightly right (toward center) and vice versa.
+ * Upright product-shot pose with a slow, barely-there sway — labels stay
+ * readable and the motion reads as calm, not busy. Bottles angle gently
+ * toward the center copy.
  */
 function GalleryBottle({ conf }) {
   const swayRef = useRef();
-  const faceCenter = conf.x > 0 ? -0.35 : 0.35;
+  const faceCenter = conf.x > 0 ? -0.28 : 0.28;
 
   useFrame(({ clock }) => {
     const g = swayRef.current;
     if (!g) return;
     const t = clock.elapsedTime;
-    g.rotation.y = faceCenter + Math.sin(t * 0.35 + conf.phase) * 0.22;
-    g.rotation.x = Math.sin(t * 0.28 + conf.phase * 1.7) * 0.03;
+    g.rotation.y = faceCenter + Math.sin(t * 0.25 + conf.phase) * 0.13;
   });
 
   return (
-    <group position={[conf.x, -conf.d * JOURNEY_DEPTH, conf.z]} rotation={[0, 0, conf.tiltZ]}>
-      <Float speed={0.9} rotationIntensity={0.03} floatIntensity={0.22}>
+    <group position={[conf.x, -conf.d * JOURNEY_DEPTH, conf.z]}>
+      <Float speed={0.7} rotationIntensity={0.02} floatIntensity={0.14}>
         <group ref={swayRef} scale={conf.scale}>
           <BottleShell />
           {conf.photo ? (
@@ -291,18 +292,18 @@ function CameraRig({ reducedMotion }) {
     const s = smooth.current;
     // Exponential smoothing (frame-rate independent). The scroll bus value
     // is itself eased by the DOM driver, so the camera glides butter-smooth.
-    const kJourney = 1 - Math.exp(-delta * 3.2);
-    const kMouse = 1 - Math.exp(-delta * 4.5);
+    const kJourney = 1 - Math.exp(-delta * 2.4);
+    const kMouse = 1 - Math.exp(-delta * 4);
     s.journey += (scrollBus.journey - s.journey) * kJourney;
     s.mx += (mouse.current.x - s.mx) * kMouse;
     s.my += (mouse.current.y - s.my) * kMouse;
 
-    const sway = Math.sin(s.journey * Math.PI * 2.2) * 0.42;
+    // Straight, calm descent: tiny lateral drift, no roll, fixed gaze line.
+    const sway = Math.sin(s.journey * Math.PI * 2) * 0.2;
     camera.position.y = -s.journey * JOURNEY_DEPTH;
-    camera.position.x = sway + s.mx * 0.18;
-    camera.position.z = 5.05 + Math.sin(s.journey * Math.PI) * 0.55;
-    camera.rotation.z = Math.sin(s.journey * Math.PI * 2) * 0.012;
-    camera.lookAt(0, camera.position.y - 0.3, -1.4);
+    camera.position.x = sway + s.mx * 0.14;
+    camera.position.z = 5.05 + Math.sin(s.journey * Math.PI) * 0.25;
+    camera.lookAt(0, camera.position.y - 0.25, -1.6);
   });
 
   return null;

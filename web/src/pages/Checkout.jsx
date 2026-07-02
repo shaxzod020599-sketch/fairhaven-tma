@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { createOrder } from '../api.js';
 import { formatPrice } from '../helpers.js';
 import Breadcrumbs from '../components/Breadcrumbs.jsx';
+import YandexMapPicker from '../components/YandexMapPicker.jsx';
 import { Cart as CartIcon, Bottle } from '../components/Icons.jsx';
 
 const DELIVERY_FEE = 25000;
@@ -41,6 +42,10 @@ export default function Checkout() {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
+  const [mapOpen, setMapOpen] = useState(false);
+  // Pin coordinates from the map picker — forwarded so the operators'
+  // channel receipt gets working Yandex/Google map links.
+  const [mapCoords, setMapCoords] = useState(null);
 
   const threshold = Number(get('free_delivery_threshold')) || 500000;
   const deliveryFee = subtotal >= threshold ? 0 : DELIVERY_FEE;
@@ -79,10 +84,12 @@ export default function Checkout() {
       notes: form.comment.trim(),
       promoCode: appliedPromo?.code || '',
       location: {
-        // Lat/lng optional for guest (street address delivery); backend allows nulls in guest path
-        lat: 0,
-        lng: 0,
-        addressString: `${form.city}, ${form.address}`,
+        // Coordinates come from the map picker when used; 0/0 = text-only.
+        lat: mapCoords ? mapCoords.lat : 0,
+        lng: mapCoords ? mapCoords.lng : 0,
+        addressString: form.address.startsWith(form.city)
+          ? form.address
+          : `${form.city}, ${form.address}`,
       },
     };
 
@@ -191,13 +198,27 @@ export default function Checkout() {
                 <input
                   type="text"
                   value={form.address}
-                  onChange={set('address')}
+                  onChange={(e) => {
+                    set('address')(e);
+                    setMapCoords(null); // manual edits detach the old pin
+                  }}
                   className={errors.address ? 'error' : ''}
                   autoComplete="street-address"
                 />
                 {errors.address && <small className="form-err">{errors.address}</small>}
               </label>
             </div>
+            <button
+              type="button"
+              className={`btn btn-outline map-open-btn ${mapCoords ? 'map-picked' : ''}`}
+              onClick={() => setMapOpen(true)}
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11z" stroke="currentColor" strokeWidth="1.8"/>
+                <circle cx="12" cy="10" r="2.6" stroke="currentColor" strokeWidth="1.8"/>
+              </svg>
+              {mapCoords ? t('mapPicked') : t('mapPickCta')}
+            </button>
             <label className="form-field">
               <span>{t('comment')}</span>
               <textarea
@@ -288,6 +309,17 @@ export default function Checkout() {
             </button>
           </aside>
         </form>
+
+        <YandexMapPicker
+          open={mapOpen}
+          onClose={() => setMapOpen(false)}
+          onConfirm={({ lat, lng, address }) => {
+            setMapCoords({ lat, lng });
+            setForm((f) => ({ ...f, address }));
+            setErrors((er) => ({ ...er, address: '' }));
+            setMapOpen(false);
+          }}
+        />
       </div>
     </div>
   );

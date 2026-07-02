@@ -2252,3 +2252,204 @@ a.contact-channel:hover { transform: translateY(-2px); }
     0 8px 22px rgba(26, 28, 29, 0.06);
   border-color: rgba(151, 57, 97, 0.3);
 }
+
+/* ── Delivery-address map picker (matches the mini-app flow) ──────────── */
+.map-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 2px;
+  height: 44px;
+  padding: 0 20px;
+}
+.map-open-btn.map-picked {
+  border-color: var(--instock);
+  color: var(--instock);
+}
+.map-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(26, 28, 29, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+.map-modal {
+  width: min(760px, 100%);
+  max-height: min(86vh, 720px);
+  background: var(--paper);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.map-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.map-modal-head h3 { margin: 0; font-size: 1.1rem; }
+.map-modal-close {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: var(--paper-soft);
+  border-radius: 50%;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ink-soft);
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.map-modal-close:hover { background: var(--plum-wash); color: var(--plum-deep); }
+.map-modal-canvas {
+  position: relative;
+  height: min(52vh, 460px);
+  background: var(--paper-soft);
+}
+.map-modal-map { width: 100%; height: 100%; }
+.map-modal-pin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  filter: drop-shadow(0 6px 8px rgba(125, 47, 80, 0.35));
+}
+.map-modal-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper-soft);
+  color: var(--ink-faint);
+}
+.map-modal-foot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line-soft);
+}
+.map-modal-address {
+  flex: 1;
+  font-size: 0.95rem;
+  color: var(--ink);
+  line-height: 1.4;
+}
+@media (max-width: 640px) {
+  .map-modal-overlay { padding: 0; align-items: stretch; }
+  .map-modal { width: 100%; max-height: none; border-radius: 0; }
+  .map-modal-canvas { flex: 1; height: auto; }
+  .map-modal-foot { flex-direction: column; align-items: stretch; gap: 10px; }
+}
+
+/* ── Telegram login panel (account page) ──────────────────────────────── */
+.tg-login-panel {
+  max-width: 520px;
+  margin: 8px auto 40px;
+  padding: 38px 34px;
+  background: var(--paper);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}
+.tg-login-art { margin-bottom: 6px; }
+.tg-login-title { font-size: 1.45rem; margin: 0 0 10px; }
+.tg-login-desc { color: var(--ink-soft); margin: 0 0 22px; line-height: 1.6; }
+.tg-login-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 4px;
+  color: var(--ink-soft);
+}
+.tg-login-relink { color: var(--plum); text-decoration: underline; }
+.tg-login-spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid var(--plum-wash);
+  border-top-color: var(--plum);
+  animation: tg-spin 0.9s linear infinite;
+}
+@keyframes tg-spin { to { transform: rotate(360deg); } }
+.tg-login-steps {
+  margin: 26px 0 0;
+  padding: 18px 0 0 22px;
+  border-top: 1px dashed var(--line);
+  text-align: left;
+  color: var(--ink-faint);
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
+.account-profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 22px;
+  background: var(--paper);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-xs);
+  margin-bottom: 28px;
+}
+.account-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--plum-wash);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--plum-deep);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.account-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.account-identity { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.account-identity strong { font-size: 1.08rem; }
+.account-identity span { color: var(--ink-faint); font-size: 0.92rem; }
+.account-orders { display: flex; flex-direction: column; gap: 14px; }
+.account-order-card {
+  padding: 16px 18px;
+  background: var(--paper);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-xs);
+}
+.account-order-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.order-status { font-size: 0.82rem; font-weight: var(--fw-bold); }
+.order-status-pending { color: var(--lowstock); }
+.order-status-confirmed, .order-status-preparing, .order-status-delivering,
+.order-status-delivered { color: var(--instock); }
+.order-status-cancelled { color: var(--price-discounted); }
+.account-order-items {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  color: var(--ink-soft);
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+.account-order-foot {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-faint);
+  font-size: 0.9rem;
+}
+.account-order-foot strong { color: var(--ink); font-size: 1rem; }
+.account-empty { text-align: center; padding: 26px 0; color: var(--ink-faint); }
+.account-empty .btn { margin-top: 14px; }

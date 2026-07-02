@@ -75,7 +75,7 @@ function useJourneyDriver(rootRef, enabled) {
       raf = requestAnimationFrame(frame);
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      const k = 1 - Math.exp(-dt * 6);
+      const k = 1 - Math.exp(-dt * 4.5);
 
       const rect = root.getBoundingClientRect();
       const vh = window.innerHeight;
