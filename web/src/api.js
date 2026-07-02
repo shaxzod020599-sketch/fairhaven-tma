@@ -1,8 +1,8 @@
 /**
  * API client for the standalone web site.
- * Same backend (/api) the Telegram mini-app uses — no auth needed for reads.
- * Guest checkout writes orders WITHOUT a telegram user (guest branch in
- * backend orderController.create).
+ * Reads share the same /api the mini-app uses; writes go through the
+ * web-specific /api/web/* surface (guest checkout + Telegram-bot login).
+ * The session cookie is httpOnly — always send credentials.
  */
 
 const API_BASE = '/api';
@@ -10,6 +10,7 @@ const API_BASE = '/api';
 async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
   const config = {
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     ...options,
   };
@@ -47,22 +48,45 @@ export function fetchCategories() {
   return request('/products/categories');
 }
 
-/* ---------------- Orders ---------------- */
+/* ---------------- Web orders ---------------- */
 export function createOrder(orderData) {
-  return request('/orders', { method: 'POST', body: orderData });
+  return request('/web/orders', { method: 'POST', body: orderData });
 }
 
-export function fetchOrder(orderId) {
-  return request(`/orders/${orderId}`);
+export function fetchOrder(orderId, accessToken = '') {
+  const q = accessToken ? `?t=${encodeURIComponent(accessToken)}` : '';
+  return request(`/web/orders/${orderId}${q}`);
+}
+
+export function fetchMyOrders() {
+  return request('/web/my/orders');
 }
 
 export function validatePromo({ code, subtotal }) {
-  // No telegramId — guest path. Backend treats missing telegramId as first-order.
-  return request('/orders/validate-promo', {
+  return request('/web/promo/validate', {
     method: 'POST',
     body: { code, subtotal },
     allowError: true,
   });
+}
+
+/* ---------------- Telegram-bot web auth ---------------- */
+export function authStart() {
+  return request('/web/auth/start', { method: 'POST' });
+}
+
+export function authStatus(token) {
+  return request(`/web/auth/status?token=${encodeURIComponent(token)}`, {
+    allowError: true,
+  });
+}
+
+export function authMe() {
+  return request('/web/auth/me', { allowError: true });
+}
+
+export function authLogout() {
+  return request('/web/auth/logout', { method: 'POST' });
 }
 
 /* ---------------- Public (collections & settings) ---------------- */

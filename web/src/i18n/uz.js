@@ -200,4 +200,22 @@ export const uz = {
   notFoundTitle: 'Sahifa topilmadi',
   notFoundDesc: 'Afsuski, bunday sahifa mavjud emas.',
   goHome: 'Bosh sahifaga',
+
+  /* telegram auth */
+  tgLoginTitle: 'Telegram orqali kirish',
+  tgLoginDesc: 'Sayt va Telegram-bot uchun yagona hisob: buyurtmalar, tarix va holatlar — bir joyda.',
+  tgLoginCta: 'Telegram orqali kirish',
+  tgLoginWaiting: 'Botda tasdiqlashni kutmoqdamiz…',
+  tgLoginReopen: 'Botni qayta ochish',
+  tgLoginExpired: 'Havola eskirdi. «Telegram orqali kirish» tugmasini qayta bosing.',
+  tgLoginStep1: 'Tugmani bosing — Telegram’da botimiz ochiladi',
+  tgLoginStep2: '«Start» bosing (birinchi kirishda — qisqa ro‘yxatdan o‘tish)',
+  tgLoginStep3: 'Saytga qayting — kirish avtomatik bajariladi',
+  logout: 'Chiqish',
+  myOrders: 'Buyurtmalarim',
+  noOrdersYet: 'Hozircha buyurtmalar yo‘q.',
+  statusPending: 'Ko‘rib chiqilmoqda',
+  statusConfirmed: 'Qabul qilindi',
+  statusDelivered: 'Yetkazildi',
+  statusCancelled: 'Bekor qilindi',
 };

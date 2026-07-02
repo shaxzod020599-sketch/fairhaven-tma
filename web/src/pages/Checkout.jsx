@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n/index.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { createOrder } from '../api.js';
 import { formatPrice } from '../helpers.js';
 import Breadcrumbs from '../components/Breadcrumbs.jsx';
@@ -14,6 +15,7 @@ export default function Checkout() {
   const { t, lang } = useI18n();
   const { items, subtotal, clear, appliedPromo } = useCart();
   const { get } = useSettings();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
@@ -25,6 +27,17 @@ export default function Checkout() {
     payment: 'cash',
     comment: '',
   });
+
+  // Logged-in Telegram users get their profile prefilled (only into
+  // fields they haven't typed in yet).
+  useEffect(() => {
+    if (!user) return;
+    setForm((f) => ({
+      ...f,
+      name: f.name || [user.firstName, user.lastName].filter(Boolean).join(' '),
+      phone: f.phone || user.phone || '',
+    }));
+  }, [user]);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
@@ -53,12 +66,10 @@ export default function Checkout() {
     setServerError('');
     if (!validate()) return;
 
-    // Guest order — no telegramId. Backend guest branch handles this.
+    // Server resolves names and prices from the DB — send ids + quantities only.
     const payload = {
       items: items.map((i) => ({
         productId: i._id,
-        name: i.name,
-        price: i.price,
         quantity: i.quantity,
       })),
       customerName: form.name.trim(),
@@ -78,6 +89,10 @@ export default function Checkout() {
     setSubmitting(true);
     try {
       const res = await createOrder(payload);
+      // One-time capability token — lets the success page read this order.
+      if (res.data?.accessToken) {
+        sessionStorage.setItem(`order_t_${res.data._id}`, res.data.accessToken);
+      }
       clear();
       navigate(`/order/${res.data._id}`);
     } catch (err) {

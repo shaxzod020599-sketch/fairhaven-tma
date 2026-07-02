@@ -216,4 +216,22 @@ export const ru = {
   notFoundTitle: 'Страница не найдена',
   notFoundDesc: 'К сожалению, такой страницы не существует.',
   goHome: 'На главную',
+
+  /* telegram auth */
+  tgLoginTitle: 'Вход через Telegram',
+  tgLoginDesc: 'Один аккаунт для сайта и Telegram-бота: заказы, история и статусы — всё в одном месте.',
+  tgLoginCta: 'Войти через Telegram',
+  tgLoginWaiting: 'Ожидаем подтверждение в боте…',
+  tgLoginReopen: 'Открыть бот ещё раз',
+  tgLoginExpired: 'Ссылка устарела. Нажмите «Войти через Telegram» ещё раз.',
+  tgLoginStep1: 'Нажмите кнопку — откроется наш бот в Telegram',
+  tgLoginStep2: 'Нажмите «Start» (при первом входе — короткая регистрация)',
+  tgLoginStep3: 'Вернитесь на сайт — вход выполнится автоматически',
+  logout: 'Выйти',
+  myOrders: 'Мои заказы',
+  noOrdersYet: 'Заказов пока нет.',
+  statusPending: 'В обработке',
+  statusConfirmed: 'Принят',
+  statusDelivered: 'Доставлен',
+  statusCancelled: 'Отменён',
 };

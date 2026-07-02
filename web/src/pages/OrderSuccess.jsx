@@ -13,7 +13,9 @@ export default function OrderSuccess() {
 
   useEffect(() => {
     let mounted = true;
-    fetchOrder(id)
+    // Guest orders are fetched with the one-time access token saved at checkout.
+    const accessToken = sessionStorage.getItem(`order_t_${id}`) || '';
+    fetchOrder(id, accessToken)
       .then((res) => { if (mounted) setOrder(res?.data || null); })
       .catch(() => {})
       .finally(() => { if (mounted) setLoading(false); });

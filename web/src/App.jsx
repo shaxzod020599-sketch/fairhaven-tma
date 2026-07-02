@@ -3,6 +3,7 @@ import { Routes, Route, useLocation } from 'react-router-dom';
 import { I18nProvider } from './i18n/index.jsx';
 import { CartProvider } from './context/CartContext.jsx';
 import { SettingsProvider } from './context/SettingsContext.jsx';
+import { AuthProvider } from './context/AuthContext.jsx';
 import Header from './components/Header.jsx';
 import Footer from './components/Footer.jsx';
 import AnnouncementBar from './components/AnnouncementBar.jsx';
@@ -46,6 +47,7 @@ export default function App() {
   return (
     <I18nProvider>
       <SettingsProvider>
+        <AuthProvider>
         <CartProvider>
           <ScrollToTop />
           <AnnouncementBar />
@@ -73,6 +75,7 @@ export default function App() {
           <Footer />
           <CartDrawer open={cartOpen} onClose={closeCart} />
         </CartProvider>
+        </AuthProvider>
       </SettingsProvider>
     </I18nProvider>
   );
