@@ -2179,3 +2179,35 @@ a.contact-channel:hover { transform: translateY(-2px); }
 /* The scrolly root forms a stacking context (isolation) whose fixed canvas
    would otherwise paint over the static footer — lift the footer above it. */
 .site-footer { position: relative; z-index: 1; }
+
+/* ── Original-look corrections (stay close to fairhavenhealth.com) ────── */
+
+/* Hero keeps the classic composition; in full 3D mode the section goes
+   transparent so the fixed canvas shows through where hero-visual sits. */
+.hero-section.journey-hero {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: calc(100vh - var(--header-h) - var(--announce-h));
+  position: relative;
+}
+.hero-section.journey-hero .container { width: 100%; }
+.scrolly-full .hero-section.journey-hero {
+  background: transparent;
+  background-image: none;
+}
+.scrolly-full .hero-visual .hero-glow { opacity: 0.35; }
+
+/* Headings stay brand Arial-bold like the original site; the serif lives
+   only inside the testimonial quotes. */
+.journey-cascade-title,
+.journey-finale-title {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-heading);
+}
+.journey-stat strong,
+.voice-stat strong {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+}

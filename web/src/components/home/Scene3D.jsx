@@ -1,7 +1,6 @@
 import React, { Suspense, useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import {
-  ContactShadows,
   Environment,
   Float,
   Lightformer,
@@ -11,8 +10,9 @@ import * as THREE from 'three';
 
 import { bottleSpec } from '../fhProModel.mjs';
 import { scrollBus } from './scrollBus.js';
+import { makeLabelTexture, LABEL_SPECS } from './bottleLabels.js';
 
-/* ── Geometry (shared with the product-hero bottle) ─────────────────────── */
+/* ── Geometry (photo-accurate, shared with the product-hero bottle) ─────── */
 
 const BODY_POINTS = [
   [0, bottleSpec.baseY],
@@ -60,21 +60,35 @@ function createCurvedLabelGeometry() {
   return geometry;
 }
 
-function Bottle({ sleeveColor = '#8d1748', withPhotoLabel = false, scale = 1 }) {
-  const labelGeometry = useMemo(
-    () => (withPhotoLabel ? createCurvedLabelGeometry() : null),
-    [withPhotoLabel]
+function createRibbedCapGeometry() {
+  const height = 0.36;
+  const geometry = new THREE.CylinderGeometry(
+    bottleSpec.capRadius, bottleSpec.capRadius, height, 192, 1, false
   );
-  useEffect(() => () => { if (labelGeometry) labelGeometry.dispose(); }, [labelGeometry]);
+  const positions = geometry.attributes.position;
+  for (let i = 0; i < positions.count; i += 1) {
+    const x = positions.getX(i);
+    const z = positions.getZ(i);
+    const angle = Math.atan2(z, x);
+    const ridge = 1 + 0.014 * (0.5 + 0.5 * Math.cos(angle * 48));
+    positions.setX(i, x * ridge);
+    positions.setZ(i, z * ridge);
+  }
+  positions.needsUpdate = true;
+  geometry.computeVertexNormals();
+  return geometry;
+}
 
-  const splitY = -0.245;
-  const whiteHeight = bottleSpec.labelTop - splitY;
-  const berryHeight = splitY - bottleSpec.labelBottom;
+/* ── Bottle: body + ribbed cap + white sleeve + printed label ───────────── */
+
+function BottleShell() {
+  const capGeometry = useMemo(createRibbedCapGeometry, []);
+  useEffect(() => () => capGeometry.dispose(), [capGeometry]);
 
   return (
-    <group scale={scale}>
+    <>
       <mesh castShadow>
-        <latheGeometry args={[BODY_POINTS, 72]} />
+        <latheGeometry args={[BODY_POINTS, 96]} />
         <meshPhysicalMaterial
           color="#fbfbfa"
           roughness={0.58}
@@ -83,35 +97,46 @@ function Bottle({ sleeveColor = '#8d1748', withPhotoLabel = false, scale = 1 }) 
           clearcoatRoughness={0.72}
         />
       </mesh>
-      {/* cap */}
-      <mesh position={[0, 1.19, 0]} castShadow>
-        <cylinderGeometry args={[bottleSpec.capRadius, bottleSpec.capRadius, 0.36, 72]} />
-        <meshPhysicalMaterial color="#ffffff" roughness={0.42} clearcoat={0.12} />
+      <mesh position={[0, 1.19, 0]} geometry={capGeometry} castShadow>
+        <meshPhysicalMaterial color="#ffffff" roughness={0.42} clearcoat={0.12} clearcoatRoughness={0.65} />
       </mesh>
       <mesh position={[0, 1.015, 0]}>
-        <cylinderGeometry args={[0.495, 0.495, 0.095, 72]} />
+        <cylinderGeometry args={[0.495, 0.495, 0.095, 96]} />
         <meshStandardMaterial color="#f7f7f6" roughness={0.46} />
       </mesh>
-      {/* label sleeve: white top + tinted bottom */}
-      <mesh position={[0, splitY + whiteHeight / 2, 0]}>
-        <cylinderGeometry args={[0.683, 0.683, whiteHeight, 72, 1, true]} />
+      <mesh position={[0, 1.376, 0]}>
+        <cylinderGeometry args={[0.487, 0.487, 0.018, 96]} />
+        <meshStandardMaterial color="#ffffff" roughness={0.48} />
+      </mesh>
+      {/* full-wrap white sleeve under the printed face */}
+      <mesh position={[0, (bottleSpec.labelTop + bottleSpec.labelBottom) / 2, 0]}>
+        <cylinderGeometry
+          args={[0.683, 0.683, bottleSpec.labelTop - bottleSpec.labelBottom, 96, 1, true]}
+        />
         <meshStandardMaterial color="#ffffff" roughness={0.64} side={THREE.DoubleSide} />
       </mesh>
-      <mesh position={[0, bottleSpec.labelBottom + berryHeight / 2, 0]}>
-        <cylinderGeometry args={[0.683, 0.683, berryHeight, 72, 1, true]} />
-        <meshStandardMaterial color={sleeveColor} roughness={0.6} side={THREE.DoubleSide} />
-      </mesh>
-      {withPhotoLabel && labelGeometry && (
-        <Suspense fallback={null}>
-          <PhotoLabel geometry={labelGeometry} />
-        </Suspense>
-      )}
-    </group>
+    </>
   );
 }
 
-function PhotoLabel({ geometry }) {
+function PrintedLabel({ spec }) {
+  const geometry = useMemo(createCurvedLabelGeometry, []);
+  const texture = useMemo(() => makeLabelTexture(spec), [spec]);
+  useEffect(() => () => {
+    geometry.dispose();
+    texture.dispose();
+  }, [geometry, texture]);
+
+  return (
+    <mesh geometry={geometry} renderOrder={2}>
+      <meshBasicMaterial map={texture} toneMapped={false} polygonOffset polygonOffsetFactor={-2} />
+    </mesh>
+  );
+}
+
+function PhotoLabel() {
   const texture = useTexture('/assets/fh-pro-women-label.jpg');
+  const geometry = useMemo(createCurvedLabelGeometry, []);
   const { gl } = useThree();
 
   useEffect(() => {
@@ -121,6 +146,7 @@ function PhotoLabel({ geometry }) {
     texture.anisotropy = Math.min(8, gl.capabilities.getMaxAnisotropy());
     texture.needsUpdate = true;
   }, [gl, texture]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
 
   return (
     <mesh geometry={geometry} renderOrder={2}>
@@ -131,8 +157,8 @@ function PhotoLabel({ geometry }) {
 
 /* ── Atmosphere: slow-drifting pollen motes ─────────────────────────────── */
 
-const MOTE_COUNT = 220;
-const JOURNEY_DEPTH = 15; // world units the camera descends over the journey
+const MOTE_COUNT = 200;
+const JOURNEY_DEPTH = 15;
 
 function Motes() {
   const pointsRef = useRef();
@@ -147,9 +173,7 @@ function Motes() {
   }, []);
 
   useFrame(({ clock }) => {
-    const points = pointsRef.current;
-    if (!points) return;
-    points.rotation.y = clock.elapsedTime * 0.012;
+    if (pointsRef.current) pointsRef.current.rotation.y = clock.elapsedTime * 0.01;
   });
 
   return (
@@ -159,10 +183,10 @@ function Motes() {
       </bufferGeometry>
       <pointsMaterial
         color="#c98bab"
-        size={0.055}
+        size={0.05}
         sizeAttenuation
         transparent
-        opacity={0.5}
+        opacity={0.45}
         depthWrite={false}
         blending={THREE.AdditiveBlending}
       />
@@ -170,41 +194,57 @@ function Motes() {
   );
 }
 
-/* ── Descending gallery of bottles ──────────────────────────────────────── */
+/* ── Descending gallery ─────────────────────────────────────────────────── */
 
 const GALLERY = [
-  // [x, journey-depth 0..1, z, sleeve, spin, scale, photo]
-  // Kept clear of the centered copy: hero bottle right, the rest drift by
-  // along the edges as the camera descends.
-  { x: 2.15, d: 0.02, z: -1.15, sleeve: '#8d1748', spin: 0.10, scale: 0.92, photo: true },
-  { x: -2.4, d: 0.20, z: -2.4, sleeve: '#1e4d92', spin: -0.14, scale: 0.82 },
-  { x: 2.5, d: 0.38, z: -3.0, sleeve: '#2f6f5e', spin: 0.12, scale: 0.75 },
-  { x: -2.5, d: 0.56, z: -2.2, sleeve: '#5f4a8f', spin: 0.16, scale: 0.85 },
-  { x: 2.4, d: 0.74, z: -2.6, sleeve: '#7d2f50', spin: -0.11, scale: 0.8 },
-  { x: -2.6, d: 0.92, z: -2.0, sleeve: '#8d1748', spin: 0.13, scale: 0.88 },
+  // Hero bottle keeps the real photo label; the rest carry printed labels.
+  { x: 2.15, d: 0.02, z: -1.15, scale: 0.92, tiltZ: -0.05, phase: 0.0, photo: true },
+  { x: -2.4, d: 0.20, z: -2.4, scale: 0.82, tiltZ: 0.07, phase: 1.3, spec: LABEL_SPECS[0] },
+  { x: 2.5, d: 0.38, z: -3.0, scale: 0.75, tiltZ: -0.06, phase: 2.1, spec: LABEL_SPECS[1] },
+  { x: -2.5, d: 0.56, z: -2.2, scale: 0.85, tiltZ: 0.05, phase: 3.4, spec: LABEL_SPECS[2] },
+  { x: 2.4, d: 0.74, z: -2.6, scale: 0.8, tiltZ: -0.07, phase: 4.2, spec: LABEL_SPECS[3] },
+  { x: -2.6, d: 0.92, z: -2.0, scale: 0.88, tiltZ: 0.06, phase: 5.0, spec: LABEL_SPECS[4] },
 ];
 
-function SpinningBottle({ conf }) {
-  const ref = useRef();
+/**
+ * Gentle sway instead of a full spin — the label always stays readable.
+ * Bottles on the left face slightly right (toward center) and vice versa.
+ */
+function GalleryBottle({ conf }) {
+  const swayRef = useRef();
+  const faceCenter = conf.x > 0 ? -0.35 : 0.35;
+
   useFrame(({ clock }) => {
-    if (ref.current) ref.current.rotation.y = clock.elapsedTime * conf.spin;
+    const g = swayRef.current;
+    if (!g) return;
+    const t = clock.elapsedTime;
+    g.rotation.y = faceCenter + Math.sin(t * 0.35 + conf.phase) * 0.22;
+    g.rotation.x = Math.sin(t * 0.28 + conf.phase * 1.7) * 0.03;
   });
+
   return (
-    <group
-      position={[conf.x, -conf.d * JOURNEY_DEPTH, conf.z]}
-      ref={ref}
-    >
-      <Float speed={1.1} rotationIntensity={0.04} floatIntensity={0.25}>
-        <Bottle sleeveColor={conf.sleeve} withPhotoLabel={conf.photo} scale={conf.scale} />
+    <group position={[conf.x, -conf.d * JOURNEY_DEPTH, conf.z]} rotation={[0, 0, conf.tiltZ]}>
+      <Float speed={0.9} rotationIntensity={0.03} floatIntensity={0.22}>
+        <group ref={swayRef} scale={conf.scale}>
+          <BottleShell />
+          {conf.photo ? (
+            <Suspense fallback={null}>
+              <PhotoLabel />
+            </Suspense>
+          ) : (
+            <PrintedLabel spec={conf.spec} />
+          )}
+        </group>
       </Float>
     </group>
   );
 }
 
-/* ── Camera rig driven by the scroll bus ────────────────────────────────── */
+/* ── Camera rig — critically damped, no stepping ────────────────────────── */
 
 function CameraRig({ reducedMotion }) {
   const mouse = useRef({ x: 0, y: 0 });
+  const smooth = useRef({ journey: 0, mx: 0, my: 0 });
 
   useEffect(() => {
     if (reducedMotion) return undefined;
@@ -217,20 +257,21 @@ function CameraRig({ reducedMotion }) {
   }, [reducedMotion]);
 
   useFrame(({ camera }, delta) => {
-    const ease = 1 - Math.exp(-delta * 5);
-    const journey = scrollBus.journey;
-    const targetY = -journey * JOURNEY_DEPTH;
-    const sway = Math.sin(journey * Math.PI * 2.2) * 0.55;
-    const targetX = sway + mouse.current.x * 0.22;
+    const s = smooth.current;
+    // Exponential smoothing (frame-rate independent). The scroll bus value
+    // is itself eased by the DOM driver, so the camera glides butter-smooth.
+    const kJourney = 1 - Math.exp(-delta * 3.2);
+    const kMouse = 1 - Math.exp(-delta * 4.5);
+    s.journey += (scrollBus.journey - s.journey) * kJourney;
+    s.mx += (mouse.current.x - s.mx) * kMouse;
+    s.my += (mouse.current.y - s.my) * kMouse;
 
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetY, ease);
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetX, ease);
-    camera.position.z = THREE.MathUtils.lerp(
-      camera.position.z,
-      5.05 + Math.sin(journey * Math.PI) * 0.7,
-      ease
-    );
-    camera.lookAt(0, camera.position.y - 0.35, -1.2);
+    const sway = Math.sin(s.journey * Math.PI * 2.2) * 0.42;
+    camera.position.y = -s.journey * JOURNEY_DEPTH;
+    camera.position.x = sway + s.mx * 0.18;
+    camera.position.z = 5.05 + Math.sin(s.journey * Math.PI) * 0.55;
+    camera.rotation.z = Math.sin(s.journey * Math.PI * 2) * 0.012;
+    camera.lookAt(0, camera.position.y - 0.3, -1.4);
   });
 
   return null;
@@ -252,24 +293,18 @@ function StudioEnvironment() {
 function SceneContents({ reducedMotion }) {
   return (
     <>
+      {/* Cream fog — distant bottles melt into the atmosphere. */}
+      <fog attach="fog" args={['#fdfaf7', 6.5, 13.5]} />
       <ambientLight intensity={0.72} />
       <directionalLight position={[3.5, 5.5, 3]} intensity={1.6} />
       <directionalLight position={[-3, 2, 2]} intensity={0.38} color="#dcebe8" />
 
       {GALLERY.map((conf, i) => (
-        <SpinningBottle conf={conf} key={i} />
+        <GalleryBottle conf={conf} key={i} />
       ))}
 
       <Motes />
       <CameraRig reducedMotion={reducedMotion} />
-      <ContactShadows
-        position={[0, bottleSpec.baseY - 0.05, 0]}
-        opacity={0.28}
-        scale={6}
-        blur={2.6}
-        far={3.5}
-        color="#5d3543"
-      />
       <Suspense fallback={null}>
         <StudioEnvironment />
       </Suspense>

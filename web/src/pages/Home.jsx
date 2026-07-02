@@ -38,7 +38,11 @@ function useFullExperience() {
   return mode;
 }
 
-/** Writes journey/hero progress into the scroll bus (full mode only). */
+/**
+ * Continuous eased journey driver (full mode only). The bus carries a
+ * glide-smoothed 0→1 progress; the 3D camera adds its own damping on top,
+ * so even harsh wheel jumps travel as one fluid descent.
+ */
 function useJourneyDriver(rootRef, enabled) {
   useEffect(() => {
     if (!enabled) return undefined;
@@ -46,33 +50,40 @@ function useJourneyDriver(rootRef, enabled) {
     if (!root) return undefined;
 
     let raf = 0;
-    let scheduled = false;
+    let running = true;
+    let last = performance.now();
+    let journey = 0;
+    let hero = 0;
 
-    const update = () => {
-      scheduled = false;
+    const frame = (now) => {
+      if (!running) return;
+      raf = requestAnimationFrame(frame);
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const k = 1 - Math.exp(-dt * 6);
+
       const rect = root.getBoundingClientRect();
       const vh = window.innerHeight;
       const total = rect.height - vh;
-      scrollBus.journey = total > 0 ? clamp01(-rect.top / total) : 0;
-      scrollBus.hero = clamp01(-rect.top / vh);
-      root.style.setProperty('--journey', scrollBus.journey.toFixed(4));
-      root.style.setProperty('--hero-p', scrollBus.hero.toFixed(4));
+      const journeyTarget = total > 0 ? clamp01(-rect.top / total) : 0;
+      const heroTarget = clamp01(-rect.top / vh);
+
+      journey += (journeyTarget - journey) * k;
+      hero += (heroTarget - hero) * k;
+
+      scrollBus.journey = journey;
+      scrollBus.hero = hero;
+      root.style.setProperty('--journey', journey.toFixed(4));
+      root.style.setProperty('--hero-p', hero.toFixed(4));
     };
 
-    const onScroll = () => {
-      if (!scheduled) {
-        scheduled = true;
-        raf = requestAnimationFrame(update);
-      }
-    };
-
-    update();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
+    raf = requestAnimationFrame(frame);
+    const onVisibility = () => { last = performance.now(); };
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
+      running = false;
       cancelAnimationFrame(raf);
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
+      document.removeEventListener('visibilitychange', onVisibility);
       resetScrollBus();
     };
   }, [rootRef, enabled]);
@@ -117,36 +128,47 @@ export default function Home() {
       {/* Atmosphere wash behind everything (CSS-only, both modes) */}
       <div className="scrolly-atmosphere" aria-hidden="true" />
 
-      {/* ── Act I · Hero statement ────────────────────────────────────── */}
-      <section className="journey-hero" aria-labelledby="home-hero-title">
-        <div className="container journey-hero-inner">
-          <p className="journey-eyebrow">
-            <span className="journey-eyebrow-rule" aria-hidden="true" />
-            {t('heroEyebrow')}
-          </p>
-          <h1 className="journey-title" id="home-hero-title">
-            <span className="journey-title-line">{t('journeyTitle1')}</span>
-            <span className="journey-title-line journey-title-em">{t('journeyTitle2')}</span>
-          </h1>
-          <p className="journey-sub">{t('journeySub')}</p>
-          <div className="journey-cta-row">
-            <Link to="/shop" className="btn btn-primary btn-lg">
-              {t('heroCta')} <span aria-hidden="true">→</span>
-            </Link>
-          </div>
-          {simple && (
-            <div className="journey-hero-visual" aria-hidden="true">
-              <img
-                src="/assets/fh-pro-women.avif"
-                alt=""
-                width="1600"
-                height="1600"
-                loading="eager"
-                fetchpriority="high"
-                decoding="async"
-              />
+      {/* ── Act I · Hero — original fairhavenhealth.com composition ────── */}
+      <section className="hero-section journey-hero" aria-labelledby="home-hero-title">
+        <div className="container hero-inner">
+          <div className="hero-copy">
+            <div className="hero-eyebrow">{t('heroEyebrow')}</div>
+            <h1 className="hero-title" id="home-hero-title">
+              {t('heroTitlePre')} <em>{t('heroTitleEm')}</em> {t('heroTitlePost')}
+            </h1>
+            <p className="hero-desc">{t('heroDesc')}</p>
+            <div className="hero-cta-row">
+              <Link to="/shop" className="btn btn-primary btn-lg">
+                {t('heroCta')} <span aria-hidden="true">→</span>
+              </Link>
             </div>
-          )}
+            <div className="hero-stats">
+              <div className="hero-stat">
+                <strong>{t('heroStat1')}</strong>
+                <span>{t('heroStat1Label')}</span>
+              </div>
+              <div className="hero-stat">
+                <strong>{t('heroStat2')}</strong>
+                <span>{t('heroStat2Label')}</span>
+              </div>
+            </div>
+          </div>
+          <div className="hero-visual" aria-hidden="true">
+            <div className="hero-glow" />
+            {simple && (
+              <div className="hero-product-static">
+                <img
+                  src="/assets/fh-pro-women.avif"
+                  alt=""
+                  width="1600"
+                  height="1600"
+                  loading="eager"
+                  fetchpriority="high"
+                  decoding="async"
+                />
+              </div>
+            )}
+          </div>
         </div>
         <div className="journey-scroll-hint" aria-hidden="true">
           <span className="journey-scroll-hint-label">{t('journeyScrollHint')}</span>

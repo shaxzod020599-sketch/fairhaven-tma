@@ -39,44 +39,54 @@ export default function TestimonialCascade({ simple = false }) {
     return () => io.disconnect();
   }, [simple]);
 
-  /* Full mode: scroll-driven cascade. */
+  /* Full mode: continuous eased loop — wheel jumps glide instead of snap. */
   useEffect(() => {
     if (simple) return undefined;
     const root = rootRef.current;
     if (!root) return undefined;
 
+    const eased = new Array(TESTIMONIALS.length).fill(0);
     let raf = 0;
-    let scheduled = false;
+    let running = true;
+    let last = performance.now();
 
-    const update = () => {
-      scheduled = false;
+    const frame = (now) => {
+      if (!running) return;
+      raf = requestAnimationFrame(frame);
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      // Frame-rate independent exponential glide toward the true position.
+      const k = 1 - Math.exp(-dt * 7);
+
       const vh = window.innerHeight;
-      const steps = Array.from(root.querySelectorAll('.cascade-step'));
+      const steps = root.querySelectorAll('.cascade-step');
 
       let active = -1;
       let activeProgress = 0;
 
       steps.forEach((step, i) => {
         const rect = step.getBoundingClientRect();
-        // 0 when the step's top reaches the viewport bottom, 0.5 when the
-        // step is centered, 1 when its bottom clears the viewport top.
-        const p = clamp01((vh - rect.top) / (vh + rect.height));
+        // 0 = step top at viewport bottom · 0.5 = centered · 1 = gone above.
+        const target = clamp01((vh - rect.top) / (vh + rect.height));
+        eased[i] += (target - eased[i]) * k;
+        const p = eased[i];
+
         const card = cardRefs.current[i];
         if (card) {
           // enter: 0→0.38 rises+fades in · hold: 0.38→0.62 · exit: 0.62→1
           const enter = clamp01(p / 0.38);
           const exit = clamp01((p - 0.62) / 0.38);
-          const y = (1 - enter) * 14 - exit * 10; // vh units
-          const scale = 0.94 + enter * 0.06 - exit * 0.03;
+          const y = (1 - enter) * 10 - exit * 8; // vh units
+          const scale = 0.95 + enter * 0.05 - exit * 0.025;
           const opacity = enter * (1 - exit);
-          const blur = (1 - enter) * 6 + exit * 4;
+          const blur = (1 - enter) * 4 + exit * 3;
           card.style.transform = `translate3d(0, ${y}vh, 0) scale(${scale})`;
           card.style.opacity = opacity.toFixed(3);
-          card.style.filter = `blur(${blur.toFixed(2)}px)`;
+          card.style.filter = blur > 0.05 ? `blur(${blur.toFixed(2)}px)` : 'none';
         }
-        if (p > 0.25 && p < 0.75) {
+        if (target > 0.25 && target < 0.75) {
           active = i;
-          activeProgress = p;
+          activeProgress = target;
         }
       });
 
@@ -88,20 +98,24 @@ export default function TestimonialCascade({ simple = false }) {
       });
     };
 
-    const onScroll = () => {
-      if (!scheduled) {
-        scheduled = true;
-        raf = requestAnimationFrame(update);
+    // Only burn frames while the cascade is anywhere near the viewport.
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && !running) {
+        running = true;
+        last = performance.now();
+        raf = requestAnimationFrame(frame);
+      } else if (!entry.isIntersecting && running) {
+        running = false;
+        cancelAnimationFrame(raf);
       }
-    };
+    }, { rootMargin: '30% 0px' });
+    io.observe(root);
 
-    update();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
+    raf = requestAnimationFrame(frame);
     return () => {
+      running = false;
       cancelAnimationFrame(raf);
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
+      io.disconnect();
     };
   }, [simple]);
 
