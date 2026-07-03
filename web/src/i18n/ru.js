@@ -32,7 +32,7 @@ export const ru = {
   announce3: 'Консультация специалиста — ежедневно с 9:00 до 21:00',
 
   /* ---------- header / nav ---------- */
-  navCatalog: 'Каталог и сервисы',
+  navCatalog: 'Каталог',
   navProducts: 'Продукты',
   navStage: 'По стадии жизни',
   navDifference: 'Наше отличие',

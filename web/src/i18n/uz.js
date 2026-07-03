@@ -32,7 +32,7 @@ export const uz = {
   announce3: 'Mutaxassis maslahati — har kuni 9:00 dan 21:00 gacha',
 
   /* ---------- header / nav ---------- */
-  navCatalog: 'Katalog va xizmatlar',
+  navCatalog: 'Katalog',
   navProducts: 'Mahsulotlar',
   navStage: 'Hayot bosqichi bo‘yicha',
   navDifference: 'Bizning farqimiz',
