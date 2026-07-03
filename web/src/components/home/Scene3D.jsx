@@ -86,18 +86,20 @@ function ProductVitrine({ conf, shadowTex }) {
       t.rotation.y += (targetY - t.rotation.y) * k;
       t.rotation.x += (targetX - t.rotation.x) * k;
     }
-    // Fade discipline: the hero vitrine dissolves within the first screen
-    // (before the same-side step-0 product arrives); step vitrines dissolve
-    // by camera distance — two products never stack visually.
+    // Fade discipline: the hero vitrine is fully gone by half the first
+    // screen; step vitrines only materialise near their own quote — the
+    // windows never intersect, so the top pair can't stack. Dissolves pair
+    // with a gentle shrink so hand-offs read as staged, not layered.
     if (g) {
       const camY = -scrollBus.journey * JOURNEY_DEPTH;
       const dy = Math.abs(camY - g.position.y);
       const target = conf.hero
-        ? 1 - clamp01((scrollBus.hero - 0.22) / 0.42)
-        : clamp01((2.9 - dy) / 1.1);
+        ? 1 - clamp01((scrollBus.hero - 0.12) / 0.33)
+        : clamp01((2.15 - dy) / 0.95);
       fadeRef.current += (target - fadeRef.current) * (1 - Math.exp(-delta * 6));
       const f = fadeRef.current;
       g.visible = f > 0.02;
+      g.scale.setScalar(0.9 + 0.1 * f);
       g.traverse((child) => {
         if (child.isMesh && child.material) {
           const base = child.userData.baseOpacity ??
