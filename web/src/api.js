@@ -97,3 +97,16 @@ export function fetchPublicCollections() {
 export function fetchPublicSettings() {
   return request('/public/settings');
 }
+
+/* ---------------- Editable site content ---------------- */
+export function fetchSiteContent() {
+  return request('/public/site-content', { allowError: true });
+}
+
+export function saveSiteContent(data) {
+  return request('/web/admin/site-content', { method: 'PUT', body: { data } });
+}
+
+export function adminUploadImage(dataUrl) {
+  return request('/web/admin/upload', { method: 'POST', body: { dataUrl } });
+}

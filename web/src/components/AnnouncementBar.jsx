@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useI18n } from '../i18n/index.jsx';
+import { useSiteContent } from '../context/SiteContentContext.jsx';
 
-/** Rotating promo strip — matches fairhavenhealth.com top announcement bar. */
+/** Rotating promo strip — lines are editable from the admin panel. */
 export default function AnnouncementBar() {
-  const { t } = useI18n();
-  const messages = [t('announce1'), t('announce2'), t('announce3')];
+  const { lang } = useI18n();
+  const content = useSiteContent();
+  const messages = (content.announce[lang] || content.announce.ru).filter(Boolean);
   const [idx, setIdx] = useState(0);
 
   useEffect(() => {

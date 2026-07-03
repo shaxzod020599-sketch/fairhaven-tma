@@ -32,6 +32,7 @@ function publicUser(user) {
     phone: user.phone,
     photoUrl: user.photoUrl,
     languageCode: user.languageCode,
+    role: user.role || 'user',
   };
 }
 

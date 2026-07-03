@@ -2,22 +2,23 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../i18n/index.jsx';
 import { Baby, Leaf, User } from './Icons.jsx';
+import { useSiteContent } from '../context/SiteContentContext.jsx';
 
-const POSTS_RU = [
-  { slug: 'brand-story', title: 'Fairhaven Health: 20 лет заботы о репродуктивном здоровье', read: 6, tag: 'Бренд', Icon: Leaf },
-  { slug: 'family-story', title: 'История одной семьи: два года ожидания — и наша Мадина', read: 8, tag: 'Истории семей', Icon: Baby },
-  { slug: 'doctor-interview', title: 'Интервью с акушером-гинекологом: добавки до и во время беременности', read: 9, tag: 'Интервью', Icon: User },
-];
-
-const POSTS_UZ = [
-  { slug: 'brand-story', title: 'Fairhaven Health: reproduktiv salomatlikka 20 yillik gʻamxoʻrlik', read: 6, tag: 'Brend', Icon: Leaf },
-  { slug: 'family-story', title: 'Bir oila hikoyasi: ikki yillik intizorlik — va bizning Madinamiz', read: 8, tag: 'Oilalar hikoyasi', Icon: Baby },
-  { slug: 'doctor-interview', title: 'Akusher-ginekolog bilan intervyu: qoʻshimchalar haqida', read: 9, tag: 'Intervyu', Icon: User },
-];
+const CONTENT_ICONS = { 'brand-story': Leaf, 'family-story': Baby, 'doctor-interview': User };
 
 export default function BlogTeaser() {
   const { t, lang } = useI18n();
-  const posts = lang === 'uz' ? POSTS_UZ : POSTS_RU;
+  const content = useSiteContent();
+  const posts = content.blog.slice(0, 3).map((post) => {
+    const loc = lang === 'uz' ? post.uz : post.ru;
+    return {
+      slug: post.slug,
+      read: post.read,
+      tag: loc.tag,
+      title: loc.title,
+      Icon: CONTENT_ICONS[post.slug] || Leaf,
+    };
+  });
 
   return (
     <div className="blog-teaser-grid">

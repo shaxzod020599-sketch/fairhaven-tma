@@ -5,6 +5,7 @@ import { I18nProvider } from './i18n/index.jsx';
 import { CartProvider } from './context/CartContext.jsx';
 import { SettingsProvider } from './context/SettingsContext.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
+import { SiteContentProvider } from './context/SiteContentContext.jsx';
 import Header from './components/Header.jsx';
 import Footer from './components/Footer.jsx';
 import AnnouncementBar from './components/AnnouncementBar.jsx';
@@ -27,6 +28,7 @@ const Blog = lazy(() => import('./pages/Blog.jsx'));
 const BlogPost = lazy(() => import('./pages/BlogPost.jsx'));
 const Account = lazy(() => import('./pages/Account.jsx'));
 const NotFound = lazy(() => import('./pages/NotFound.jsx'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel.jsx'));
 
 // Minimal Suspense fallback — keeps header/footer, just blanks main.
 function RouteFallback() {
@@ -49,6 +51,7 @@ export default function App() {
     <I18nProvider>
       <SettingsProvider>
         <AuthProvider>
+        <SiteContentProvider>
         <CartProvider>
         {/* Motion: subset features for bundle size; honor prefers-reduced-motion. */}
         <LazyMotion features={domAnimation} strict>
@@ -79,6 +82,7 @@ export default function App() {
               <Route path="/learn" element={<Blog />} />
               <Route path="/learn/:slug" element={<BlogPost />} />
               <Route path="/account" element={<Account />} />
+              <Route path="/admin" element={<AdminPanel />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             </m.div>
@@ -89,6 +93,7 @@ export default function App() {
         </MotionConfig>
         </LazyMotion>
         </CartProvider>
+        </SiteContentProvider>
         </AuthProvider>
       </SettingsProvider>
     </I18nProvider>

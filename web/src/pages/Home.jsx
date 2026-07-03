@@ -8,6 +8,7 @@ import React, {
 import { Link } from 'react-router-dom';
 import { m } from 'motion/react';
 import { useI18n } from '../i18n/index.jsx';
+import { useSiteContent } from '../context/SiteContentContext.jsx';
 import TestimonialCascade from '../components/home/TestimonialCascade.jsx';
 import { scrollBus, resetScrollBus } from '../components/home/scrollBus.js';
 
@@ -130,7 +131,9 @@ function useJourneyDriver(rootRef, enabled) {
  * No catalogue sections here by design — every service lives in the header.
  */
 export default function Home() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const content = useSiteContent();
+  const heroCopy = content.hero[lang] || content.hero.ru;
   const mode = useFullExperience();
   const rootRef = useRef(null);
   const [canvasActive, setCanvasActive] = useState(true);
@@ -156,7 +159,7 @@ export default function Home() {
     <div className={`scrolly-root ${simple ? 'scrolly-simple' : 'scrolly-full'}`} ref={rootRef}>
       {mode === 'full' && (
         <Suspense fallback={null}>
-          <Scene3D active={canvasActive} />
+          <Scene3D active={canvasActive} products={content.products3d} />
         </Suspense>
       )}
 
@@ -177,9 +180,9 @@ export default function Home() {
               {t('announce2')}
             </m.div>
             <m.h1 className="hero-title" id="home-hero-title" variants={heroRise}>
-              {t('heroTitlePre')}{' '}
+              {heroCopy.titlePre}{' '}
               <span className="hero-swash-wrap">
-                <em>{t('heroTitleEm')}</em>
+                <em>{heroCopy.titleEm}</em>
                 <svg
                   className="hero-swash"
                   viewBox="0 0 220 14"
@@ -195,12 +198,12 @@ export default function Home() {
                   />
                 </svg>
               </span>{' '}
-              {t('heroTitlePost')}
+              {heroCopy.titlePost}
             </m.h1>
-            <m.p className="hero-desc" variants={heroRise}>{t('heroDesc')}</m.p>
+            <m.p className="hero-desc" variants={heroRise}>{heroCopy.desc}</m.p>
             <m.div className="hero-cta-row" variants={heroRise}>
               <Link to="/shop" className="btn btn-primary btn-lg">
-                {t('heroCta')} <span aria-hidden="true">→</span>
+                {heroCopy.cta || t('heroCta')} <span aria-hidden="true">→</span>
               </Link>
               <button
                 type="button"
@@ -214,24 +217,17 @@ export default function Home() {
               </button>
             </m.div>
             <m.div className="hero-stats hero-stats-lux" variants={heroRise}>
-              <div className="hero-stat">
-                <strong>{t('heroStat1')}</strong>
-                <span>{t('heroStat1Label')}</span>
-              </div>
-              <div className="hero-stat">
-                <strong>{t('heroStat2')}</strong>
-                <span>{t('heroStat2Label')}</span>
-              </div>
-              <div className="hero-stat">
-                <strong>2003</strong>
-                <span>{t('journeyStatFounded')}</span>
-              </div>
+              {content.hero.stats.map((st, i) => (
+                <div className="hero-stat" key={i}>
+                  <strong>{st.value}</strong>
+                  <span>{lang === 'uz' ? st.uz : st.ru}</span>
+                </div>
+              ))}
             </m.div>
             <m.div className="hero-trust-chips" variants={heroRise} aria-label={t('trustTitle')}>
-              <span>cGMP</span>
-              <span>NON-GMO</span>
-              <span>MADE IN USA</span>
-              <span>MOM’S CHOICE AWARDS®</span>
+              {content.hero.chips.map((chip, i) => (
+                <span key={i}>{chip}</span>
+              ))}
             </m.div>
           </m.div>
           <div className="hero-visual" aria-hidden="true">

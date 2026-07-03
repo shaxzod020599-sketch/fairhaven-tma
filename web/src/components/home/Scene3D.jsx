@@ -15,14 +15,24 @@ import { scrollBus } from './scrollBus.js';
 const JOURNEY_DEPTH = 15;
 
 /* Cards alternate L,R,L,R,L,R — each vitrine shares its quote's scroll
-   moment on the OPPOSITE side (neighbours are a full step away). */
-const PRODUCTS = [
-  { img: '/assets/p3d/fhpro-women.png', x: 1.9, d: 0.02, z: -1.15, h: 2.75, hero: true },
-  { img: '/assets/p3d/fhpro-men.png', x: 2.05, step: 0, z: -1.9, h: 2.35 },
-  { img: '/assets/p3d/prenatal.png', x: -2.05, step: 1, z: -1.9, h: 2.3 },
-  { img: '/assets/p3d/fertilaid-men.png', x: 2.05, step: 2, z: -2.0, h: 2.3 },
-  { img: '/assets/p3d/lactation.png', x: -2.05, step: 3, z: -1.9, h: 2.35 },
-  { img: '/assets/p3d/fertilaid-women.png', x: 2.05, step: 4, z: -2.0, h: 2.3 },
+   moment on the OPPOSITE side (neighbours are a full step away). Layout
+   slots are fixed; the images come from the admin-editable content. */
+const SLOTS = [
+  { x: 1.9, d: 0.02, z: -1.15, h: 2.75, hero: true },
+  { x: 2.05, step: 0, z: -1.9, h: 2.35 },
+  { x: -2.05, step: 1, z: -1.9, h: 2.3 },
+  { x: 2.05, step: 2, z: -2.0, h: 2.3 },
+  { x: -2.05, step: 3, z: -1.9, h: 2.35 },
+  { x: 2.05, step: 4, z: -2.0, h: 2.3 },
+];
+
+const FALLBACK_IMAGES = [
+  '/assets/p3d/fhpro-women.png',
+  '/assets/p3d/fhpro-men.png',
+  '/assets/p3d/prenatal.png',
+  '/assets/p3d/fertilaid-men.png',
+  '/assets/p3d/lactation.png',
+  '/assets/p3d/fertilaid-women.png',
 ];
 
 /* Boutique arch backdrop for the hero product — tall rounded-top panel in
@@ -313,9 +323,14 @@ function CameraRig({ reducedMotion }) {
   return null;
 }
 
-function SceneContents({ reducedMotion }) {
+function SceneContents({ reducedMotion, products }) {
   const shadowTex = useMemo(makeShadowTexture, []);
   useEffect(() => () => shadowTex.dispose(), [shadowTex]);
+
+  const gallery = SLOTS.map((slot, i) => ({
+    ...slot,
+    img: products?.[i]?.img || FALLBACK_IMAGES[i],
+  }));
 
   return (
     <>
@@ -326,8 +341,8 @@ function SceneContents({ reducedMotion }) {
       <DepthOrbs />
       <HeroArch />
       <Suspense fallback={null}>
-        {PRODUCTS.map((conf, i) => (
-          <ProductVitrine conf={conf} shadowTex={shadowTex} key={i} />
+        {gallery.map((conf) => (
+          <ProductVitrine conf={conf} shadowTex={shadowTex} key={conf.img + (conf.step ?? 'h')} />
         ))}
       </Suspense>
       <Motes />
@@ -340,7 +355,7 @@ function SceneContents({ reducedMotion }) {
  * Fixed full-viewport canvas behind the scrollytelling homepage.
  * Pauses rendering whenever the scrolly root leaves the viewport.
  */
-export default function Scene3D({ active = true, reducedMotion = false }) {
+export default function Scene3D({ active = true, reducedMotion = false, products }) {
   return (
     <div className="scrolly-canvas" aria-hidden="true">
       <Canvas
@@ -349,7 +364,7 @@ export default function Scene3D({ active = true, reducedMotion = false }) {
         camera={{ position: [0, 0.08, 5.05], fov: 33 }}
         gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
       >
-        <SceneContents reducedMotion={reducedMotion} />
+        <SceneContents reducedMotion={reducedMotion} products={products} />
       </Canvas>
     </div>
   );

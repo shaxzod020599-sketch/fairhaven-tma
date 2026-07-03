@@ -2674,3 +2674,139 @@ a.contact-channel:hover { transform: translateY(-2px); }
   .hero-trust-chips { justify-content: flex-start; }
   .hero-stats-lux { flex-wrap: wrap; }
 }
+
+/* ── Admin panel — Telegram-simple ────────────────────────────────────── */
+.ap-page { padding-bottom: 70px; }
+.ap-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 8px 0 22px;
+}
+.ap-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 26px;
+  align-items: start;
+}
+.ap-nav {
+  position: sticky;
+  top: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--paper);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  padding: 10px;
+}
+.ap-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border: none;
+  background: none;
+  border-radius: 12px;
+  font-size: 0.98rem;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--t-fast);
+}
+.ap-nav-item:hover { background: var(--paper-soft); }
+.ap-nav-item.active { background: rgba(151, 57, 97, 0.1); color: var(--plum-deep); font-weight: var(--fw-bold); }
+.ap-nav-icon { font-size: 1.1rem; }
+.ap-nav-chev { margin-left: auto; color: var(--ink-faint); }
+.ap-nav-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+  border-top: 1px dashed var(--line);
+  line-height: 1.5;
+}
+.ap-editor {
+  background: var(--paper);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  padding: 22px;
+  min-height: 400px;
+}
+.ap-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.ap-field span { font-size: 0.82rem; color: var(--ink-faint); }
+.ap-field input, .ap-field textarea, .ap-card-tools select {
+  border: 1px solid var(--line-form);
+  border-radius: 10px;
+  padding: 11px 12px;
+  font-size: 0.98rem;
+  font-family: inherit;
+  background: #fff;
+}
+.ap-field textarea { resize: vertical; line-height: 1.55; }
+.ap-field input:focus, .ap-field textarea:focus { outline: 2px solid var(--plum); outline-offset: 1px; }
+.ap-row3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.ap-subhead { margin: 22px 0 10px; font-size: 1.02rem; }
+.ap-card {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  padding: 16px;
+  margin-bottom: 16px;
+  background: var(--cream);
+}
+.ap-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.ap-card-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ap-mini {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 9px;
+  padding: 7px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color var(--t-fast), color var(--t-fast);
+}
+.ap-mini:hover:not(:disabled) { border-color: var(--plum); color: var(--plum-deep); }
+.ap-mini:disabled { opacity: 0.4; cursor: default; }
+.ap-danger:hover { border-color: #c81824 !important; color: #c81824 !important; }
+.ap-avatar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.ap-langtabs { display: flex; gap: 8px; margin-bottom: 18px; }
+.ap-langtabs button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: var(--r-pill);
+  padding: 8px 22px;
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+}
+.ap-langtabs button.active { background: var(--plum); border-color: var(--plum); color: #fff; }
+.ap-hint { color: var(--ink-faint); font-size: 0.9rem; margin: 0 0 16px; line-height: 1.55; }
+.ap-p3d-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+.ap-p3d-cell { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--ink-faint); text-align: center; }
+.ap-p3d-frame {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: linear-gradient(160deg, #fff, var(--paper-soft));
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+.ap-p3d-frame img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.ap-gate { text-align: center; padding-top: 40px; }
+.ap-gate p { color: var(--ink-soft); margin: 12px 0 22px; }
+@media (max-width: 900px) {
+  .ap-layout { grid-template-columns: 1fr; }
+  .ap-nav { position: static; flex-direction: row; overflow-x: auto; }
+  .ap-nav-item { white-space: nowrap; }
+  .ap-nav-chev, .ap-nav-note { display: none; }
+}

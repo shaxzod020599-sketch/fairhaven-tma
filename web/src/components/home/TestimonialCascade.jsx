@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { m } from 'motion/react';
 import { useI18n } from '../../i18n/index.jsx';
-import { TESTIMONIALS } from './testimonialsData.js';
 import { scrollBus } from './scrollBus.js';
+import { useSiteContent } from '../../context/SiteContentContext.jsx';
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
@@ -31,13 +31,14 @@ const innerRise = {
  */
 export default function TestimonialCascade({ simple = false }) {
   const { lang } = useI18n();
+  const TESTIMONIALS = useSiteContent().testimonials;
   const rootRef = useRef(null);
   const cardRefs = useRef([]);
   const dotRefs = useRef([]);
 
   useEffect(() => {
     scrollBus.stepCount = TESTIMONIALS.length;
-  }, []);
+  }, [TESTIMONIALS.length]);
 
   /* Simple mode: reveal-on-intersect. */
   useEffect(() => {
@@ -53,7 +54,7 @@ export default function TestimonialCascade({ simple = false }) {
     );
     cards.forEach((c) => io.observe(c));
     return () => io.disconnect();
-  }, [simple]);
+  }, [simple, TESTIMONIALS.length]);
 
   /* Full mode: continuous eased loop — wheel jumps glide instead of snap. */
   useEffect(() => {
@@ -133,7 +134,7 @@ export default function TestimonialCascade({ simple = false }) {
       cancelAnimationFrame(raf);
       io.disconnect();
     };
-  }, [simple]);
+  }, [simple, TESTIMONIALS.length]);
 
   return (
     <div
