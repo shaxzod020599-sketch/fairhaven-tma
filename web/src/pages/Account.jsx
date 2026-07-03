@@ -214,6 +214,17 @@ export default function Account() {
               </button>
             </section>
 
+            {user.role === 'admin' && (
+              <Link to="/admin" className="account-admin-row">
+                <span className="account-admin-ic" aria-hidden="true">🛠</span>
+                <span className="account-admin-txt">
+                  <strong>Админ-панель</strong>
+                  <span>Тексты, отзывы, 3D товары, блог</span>
+                </span>
+                <span aria-hidden="true">›</span>
+              </Link>
+            )}
+
             <section className="account-history">
               <h2 className="summary-title">{t('myOrders')}</h2>
               <OrdersList />

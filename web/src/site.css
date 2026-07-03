@@ -2810,3 +2810,37 @@ a.contact-channel:hover { transform: translateY(-2px); }
   .ap-nav-item { white-space: nowrap; }
   .ap-nav-chev, .ap-nav-note { display: none; }
 }
+
+/* Admin entry — visible only to server-confirmed admins (navigation sugar,
+   real enforcement lives in webAdminAuth on every request). */
+.header-admin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(151, 57, 97, 0.35);
+  color: var(--plum-deep);
+  font-size: 0.85rem;
+  font-weight: var(--fw-bold);
+  background: rgba(151, 57, 97, 0.06);
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.header-admin-chip:hover { background: rgba(151, 57, 97, 0.14); }
+@media (max-width: 1250px) { .header-admin-label { display: none; } .header-admin-chip { padding: 7px 9px; } }
+.account-admin-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  margin-bottom: 26px;
+  background: linear-gradient(135deg, rgba(151, 57, 97, 0.07), rgba(233, 197, 212, 0.16));
+  border: 1px solid rgba(151, 57, 97, 0.2);
+  border-radius: var(--r-md);
+  color: var(--ink);
+  transition: border-color var(--t-fast), transform var(--t-fast);
+}
+.account-admin-row:hover { border-color: var(--plum); transform: translateY(-1px); }
+.account-admin-ic { font-size: 1.3rem; }
+.account-admin-txt { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.account-admin-txt span:last-child { font-size: 0.85rem; color: var(--ink-faint); }
