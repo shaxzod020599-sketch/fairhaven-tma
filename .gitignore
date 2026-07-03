@@ -7,3 +7,7 @@ dist/
 .agent/
 .claude/
 backend/uploads/
+
+*.MOV
+*.mov
+*.mp4
