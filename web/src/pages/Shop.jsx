@@ -10,10 +10,7 @@ import { Sprout } from '../components/Icons.jsx';
 const CATEGORIES = [
   { key: 'supplements', ru: 'Добавки', uz: "Qo'shimchalar" },
   { key: 'vitamins', ru: 'Витамины', uz: 'Vitaminlar' },
-  { key: 'parapharmaceuticals', ru: 'Парафармация', uz: 'Parafarmatsiya' },
-  { key: 'drinks', ru: 'Напитки', uz: 'Ichimliklar' },
   { key: 'hygiene', ru: 'Гигиена', uz: 'Gigiyena' },
-  { key: 'cosmetics', ru: 'Косметика', uz: 'Kosmetika' },
 ];
 
 export default function Shop() {

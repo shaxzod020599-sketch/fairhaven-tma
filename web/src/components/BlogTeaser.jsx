@@ -1,18 +1,18 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../i18n/index.jsx';
-import { Flower, Baby, Bottle } from './Icons.jsx';
+import { Baby, Leaf, User } from './Icons.jsx';
 
 const POSTS_RU = [
-  { slug: 'fertility-guide', title: 'Как подготовиться к зачатию: гайд по фертильности', read: 7, tag: 'Фертильность', Icon: Flower },
-  { slug: 'prenatal-vitamins', title: 'Какие витамины нужны при беременности', read: 5, tag: 'Беременность', Icon: Baby },
-  { slug: 'lactation-support', title: '5 способов увеличить лактацию', read: 6, tag: 'Лактация', Icon: Bottle },
+  { slug: 'brand-story', title: 'Fairhaven Health: 20 лет заботы о репродуктивном здоровье', read: 6, tag: 'Бренд', Icon: Leaf },
+  { slug: 'family-story', title: 'История одной семьи: два года ожидания — и наша Мадина', read: 8, tag: 'Истории семей', Icon: Baby },
+  { slug: 'doctor-interview', title: 'Интервью с акушером-гинекологом: добавки до и во время беременности', read: 9, tag: 'Интервью', Icon: User },
 ];
 
 const POSTS_UZ = [
-  { slug: 'fertility-guide', title: 'Homilador bo‘lishga tayyorgarlik: fertillik bo‘yicha qo‘llanma', read: 7, tag: 'Fertillik', Icon: Flower },
-  { slug: 'prenatal-vitamins', title: 'Homiladorlikda qaysi vitaminlar kerak', read: 5, tag: 'Homiladorlik', Icon: Baby },
-  { slug: 'lactation-support', title: 'Emizishni oshirishning 5 usuli', read: 6, tag: 'Emizish', Icon: Bottle },
+  { slug: 'brand-story', title: 'Fairhaven Health: reproduktiv salomatlikka 20 yillik gʻamxoʻrlik', read: 6, tag: 'Brend', Icon: Leaf },
+  { slug: 'family-story', title: 'Bir oila hikoyasi: ikki yillik intizorlik — va bizning Madinamiz', read: 8, tag: 'Oilalar hikoyasi', Icon: Baby },
+  { slug: 'doctor-interview', title: 'Akusher-ginekolog bilan intervyu: qoʻshimchalar haqida', read: 9, tag: 'Intervyu', Icon: User },
 ];
 
 export default function BlogTeaser() {

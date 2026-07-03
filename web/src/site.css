@@ -2535,3 +2535,17 @@ a.contact-channel:hover { transform: translateY(-2px); }
 .voice-accent-mint .voice-author:not(:has(.voice-avatar)) { border-left-color: var(--tile-mint-deep); }
 .voice-accent-blue .voice-author:not(:has(.voice-avatar)) { border-left-color: var(--tile-blue-deep); }
 .voice-accent-lavender .voice-author:not(:has(.voice-avatar)) { border-left-color: var(--tile-lavender-deep); }
+
+
+/* Hero statement scaled to carry the full-viewport composition */
+.hero-section.journey-hero .hero-title {
+  font-size: clamp(2.7rem, 1.55rem + 3.6vw, 5.6rem);
+  line-height: 1.04;
+  letter-spacing: -0.028em;
+  margin-bottom: 26px;
+}
+.hero-section.journey-hero .hero-eyebrow { font-size: 0.92rem; letter-spacing: 0.24em; }
+.hero-section.journey-hero .hero-desc {
+  font-size: clamp(1.05rem, 1rem + 0.35vw, 1.25rem);
+  max-width: 580px;
+}
