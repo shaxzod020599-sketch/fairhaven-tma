@@ -167,22 +167,53 @@ export default function Home() {
       <section className="hero-section journey-hero" aria-labelledby="home-hero-title">
         <div className="container hero-inner">
           <m.div
-            className="hero-copy"
+            className="hero-copy hero-lux"
             variants={heroStagger}
             initial="hidden"
             animate="show"
           >
-            <m.div className="hero-eyebrow" variants={heroRise}>{t('heroEyebrow')}</m.div>
+            <m.div className="hero-lux-eyebrow" variants={heroRise}>
+              <span className="hero-lux-dot" aria-hidden="true" />
+              {t('announce2')}
+            </m.div>
             <m.h1 className="hero-title" id="home-hero-title" variants={heroRise}>
-              {t('heroTitlePre')} <em>{t('heroTitleEm')}</em> {t('heroTitlePost')}
+              {t('heroTitlePre')}{' '}
+              <span className="hero-swash-wrap">
+                <em>{t('heroTitleEm')}</em>
+                <svg
+                  className="hero-swash"
+                  viewBox="0 0 220 14"
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M3 10.5C60 3.5 150 2.5 217 7.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="4.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </span>{' '}
+              {t('heroTitlePost')}
             </m.h1>
             <m.p className="hero-desc" variants={heroRise}>{t('heroDesc')}</m.p>
             <m.div className="hero-cta-row" variants={heroRise}>
               <Link to="/shop" className="btn btn-primary btn-lg">
                 {t('heroCta')} <span aria-hidden="true">→</span>
               </Link>
+              <button
+                type="button"
+                className="hero-ghost-link"
+                onClick={() => {
+                  document.querySelector('.journey-cascade-head')
+                    ?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                {t('journeyVoicesTitle')} ↓
+              </button>
             </m.div>
-            <m.div className="hero-stats" variants={heroRise}>
+            <m.div className="hero-stats hero-stats-lux" variants={heroRise}>
               <div className="hero-stat">
                 <strong>{t('heroStat1')}</strong>
                 <span>{t('heroStat1Label')}</span>
@@ -191,6 +222,16 @@ export default function Home() {
                 <strong>{t('heroStat2')}</strong>
                 <span>{t('heroStat2Label')}</span>
               </div>
+              <div className="hero-stat">
+                <strong>2003</strong>
+                <span>{t('journeyStatFounded')}</span>
+              </div>
+            </m.div>
+            <m.div className="hero-trust-chips" variants={heroRise} aria-label={t('trustTitle')}>
+              <span>cGMP</span>
+              <span>NON-GMO</span>
+              <span>MADE IN USA</span>
+              <span>MOM’S CHOICE AWARDS®</span>
             </m.div>
           </m.div>
           <div className="hero-visual" aria-hidden="true">
@@ -214,6 +255,7 @@ export default function Home() {
           <span className="journey-scroll-hint-label">{t('journeyScrollHint')}</span>
           <span className="journey-scroll-hint-line" />
         </div>
+        <div className="hero-side-note" aria-hidden="true">EST. 2003 · SEATTLE, USA</div>
       </section>
 
       {/* ── Act II · Voices of trust ──────────────────────────────────── */}

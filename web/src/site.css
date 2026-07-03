@@ -2549,3 +2549,128 @@ a.contact-channel:hover { transform: translateY(-2px); }
   font-size: clamp(1.05rem, 1rem + 0.35vw, 1.25rem);
   max-width: 580px;
 }
+
+/* ── Hero lux pass — boutique detailing on the brand palette ──────────── */
+
+/* fine grain texture, hero only */
+.hero-section.journey-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+}
+
+.hero-lux { position: relative; z-index: 1; }
+
+.hero-lux-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 18px 9px 14px;
+  border: 1px solid rgba(151, 57, 97, 0.28);
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 0.78rem;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--plum-deep);
+  margin-bottom: 30px;
+  width: fit-content;
+}
+.hero-lux-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--plum);
+  box-shadow: 0 0 0 4px rgba(151, 57, 97, 0.15);
+}
+
+/* swash under the accent word */
+.hero-swash-wrap { position: relative; display: inline-block; }
+.hero-swash {
+  position: absolute;
+  left: -2%;
+  bottom: -0.12em;
+  width: 104%;
+  height: 0.22em;
+  color: var(--plum);
+  opacity: 0.85;
+}
+.hero-swash path {
+  stroke-dasharray: 230;
+  stroke-dashoffset: 230;
+  animation: swash-draw 0.9s 0.9s var(--ease-out) forwards;
+}
+@keyframes swash-draw { to { stroke-dashoffset: 0; } }
+
+.hero-ghost-link {
+  border: none;
+  background: none;
+  padding: 12px 6px;
+  font-size: 1rem;
+  color: var(--plum-deep);
+  cursor: pointer;
+  border-bottom: 1px solid rgba(151, 57, 97, 0.35);
+  transition: color var(--t-fast), border-color var(--t-fast);
+}
+.hero-ghost-link:hover { color: var(--plum); border-color: var(--plum); }
+
+/* spec-sheet stats: thin top rules, plum numerals, caps labels */
+.hero-stats-lux {
+  border-top: none !important;
+  gap: clamp(28px, 4vw, 56px);
+}
+.hero-stats-lux .hero-stat {
+  padding-top: 14px;
+  border-top: 2px solid var(--plum);
+  min-width: 96px;
+}
+.hero-stats-lux .hero-stat strong {
+  color: var(--plum-deep);
+  font-size: 1.9rem;
+  letter-spacing: -0.02em;
+}
+.hero-stats-lux .hero-stat span {
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.hero-trust-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 30px;
+}
+.hero-trust-chips span {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font-size: 0.68rem;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.16em;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+/* vertical magazine side-note */
+.hero-side-note {
+  position: absolute;
+  left: 26px;
+  top: 50%;
+  transform: translateY(-50%) rotate(180deg);
+  writing-mode: vertical-rl;
+  font-size: 0.68rem;
+  letter-spacing: 0.34em;
+  color: var(--ink-faint);
+  opacity: 0.75;
+}
+@media (max-width: 1200px) { .hero-side-note { display: none; } }
+@media (max-width: 1023px) {
+  .hero-trust-chips { justify-content: flex-start; }
+  .hero-stats-lux { flex-wrap: wrap; }
+}

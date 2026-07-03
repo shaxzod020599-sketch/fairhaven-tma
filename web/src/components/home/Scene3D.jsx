@@ -25,6 +25,74 @@ const PRODUCTS = [
   { img: '/assets/p3d/fertilaid-women.png', x: 2.05, step: 4, z: -2.0, h: 2.3 },
 ];
 
+/* Boutique arch backdrop for the hero product — tall rounded-top panel in
+   plum-wash gradient with a hairline inner frame. Drawn once on canvas. */
+function makeArchTexture() {
+  const W = 512;
+  const H = 760;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext('2d');
+  const r = W / 2 - 8;
+
+  const arch = () => {
+    ctx.beginPath();
+    ctx.moveTo(8, H - 8);
+    ctx.lineTo(8, r + 8);
+    ctx.arc(W / 2, r + 8, r, Math.PI, 0);
+    ctx.lineTo(W - 8, H - 8);
+    ctx.closePath();
+  };
+
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, 'rgba(246, 231, 238, 0.96)');
+  g.addColorStop(0.55, 'rgba(238, 214, 226, 0.94)');
+  g.addColorStop(1, 'rgba(224, 190, 207, 0.96)');
+  arch();
+  ctx.fillStyle = g;
+  ctx.fill();
+
+  // hairline inner frame — the "expensive" detail
+  ctx.save();
+  ctx.translate(0, 14);
+  ctx.scale((W - 56) / W, (H - 44) / H);
+  ctx.translate(28 * (W / (W - 56)), 0);
+  arch();
+  ctx.strokeStyle = 'rgba(151, 57, 97, 0.32)';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  ctx.restore();
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+function HeroArch() {
+  const ref = useRef();
+  const tex = useMemo(makeArchTexture, []);
+  useEffect(() => () => tex.dispose(), [tex]);
+
+  useFrame((_, delta) => {
+    const m = ref.current;
+    if (!m) return;
+    // Dissolve with the hero (slightly earlier), drift slower than the bottle.
+    const f = 1 - clamp01((scrollBus.hero - 0.08) / 0.3);
+    m.material.opacity = f;
+    m.visible = f > 0.02;
+    m.position.y = 0.1 + scrollBus.hero * 1.2;
+  });
+
+  return (
+    <mesh ref={ref} position={[2.05, 0.1, -3.2]}>
+      <planeGeometry args={[3.6, 5.35]} />
+      <meshBasicMaterial map={tex} transparent toneMapped={false} depthWrite={false} />
+    </mesh>
+  );
+}
+
 /* Soft elliptical drop shadow, drawn once. */
 function makeShadowTexture() {
   const c = document.createElement('canvas');
@@ -256,6 +324,7 @@ function SceneContents({ reducedMotion }) {
       <ambientLight intensity={0.9} />
       <directionalLight position={[3, 4, 5]} intensity={0.7} />
       <DepthOrbs />
+      <HeroArch />
       <Suspense fallback={null}>
         {PRODUCTS.map((conf, i) => (
           <ProductVitrine conf={conf} shadowTex={shadowTex} key={i} />
