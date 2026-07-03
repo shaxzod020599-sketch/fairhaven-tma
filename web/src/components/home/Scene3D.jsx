@@ -47,9 +47,12 @@ function makeShadowTexture() {
 /* Shared pointer state for the vitrine banking. */
 const pointer = { x: 0, y: 0 };
 
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
+
 function ProductVitrine({ conf, shadowTex }) {
   const yRef = useRef();
   const tiltRef = useRef();
+  const fadeRef = useRef(1);
   const texture = useTexture(conf.img);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;
@@ -82,6 +85,26 @@ function ProductVitrine({ conf, shadowTex }) {
       const k = 1 - Math.exp(-delta * 4);
       t.rotation.y += (targetY - t.rotation.y) * k;
       t.rotation.x += (targetX - t.rotation.x) * k;
+    }
+    // Fade discipline: the hero vitrine dissolves within the first screen
+    // (before the same-side step-0 product arrives); step vitrines dissolve
+    // by camera distance — two products never stack visually.
+    if (g) {
+      const camY = -scrollBus.journey * JOURNEY_DEPTH;
+      const dy = Math.abs(camY - g.position.y);
+      const target = conf.hero
+        ? 1 - clamp01((scrollBus.hero - 0.22) / 0.42)
+        : clamp01((2.9 - dy) / 1.1);
+      fadeRef.current += (target - fadeRef.current) * (1 - Math.exp(-delta * 6));
+      const f = fadeRef.current;
+      g.visible = f > 0.02;
+      g.traverse((child) => {
+        if (child.isMesh && child.material) {
+          const base = child.userData.baseOpacity ??
+            (child.userData.baseOpacity = child.material.opacity ?? 1);
+          child.material.opacity = base * f;
+        }
+      });
     }
   });
 

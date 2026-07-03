@@ -141,15 +141,26 @@ export default function TestimonialCascade({ simple = false }) {
       ref={rootRef}
     >
       {!simple && (
-        <div className="cascade-rail" aria-hidden="true">
+        <nav className="cascade-rail" aria-label="Testimonials">
           {TESTIMONIALS.map((_, i) => (
-            <span
+            <button
+              type="button"
               className="cascade-dot"
               key={i}
+              aria-label={`${i + 1} / ${TESTIMONIALS.length}`}
               ref={(el) => { dotRefs.current[i] = el; }}
+              onClick={() => {
+                const step = rootRef.current?.querySelectorAll('.cascade-step')[i];
+                if (!step) return;
+                const r = step.getBoundingClientRect();
+                window.scrollTo({
+                  top: r.top + window.scrollY + r.height / 2 - window.innerHeight / 2,
+                  behavior: 'smooth',
+                });
+              }}
             />
           ))}
-        </div>
+        </nav>
       )}
 
       {TESTIMONIALS.map((item, i) => {
@@ -182,8 +193,20 @@ export default function TestimonialCascade({ simple = false }) {
                 </m.blockquote>
 
                 <m.figcaption className="voice-author" variants={innerRise}>
-                  <strong>{copy.name}</strong>
-                  <span>{copy.role}</span>
+                  {item.avatar && (
+                    <img
+                      className="voice-avatar"
+                      src={item.avatar}
+                      alt=""
+                      width="52"
+                      height="52"
+                      loading="lazy"
+                    />
+                  )}
+                  <span className="voice-author-meta">
+                    <strong>{copy.name}</strong>
+                    <span>{copy.role}</span>
+                  </span>
                 </m.figcaption>
               </m.div>
             </figure>

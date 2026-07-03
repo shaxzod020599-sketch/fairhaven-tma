@@ -9,6 +9,7 @@ export const TESTIMONIALS = [
   {
     kind: 'quote',
     accent: 'pink',
+    avatar: '/assets/avatars/doctor-amos.svg',
     ru: {
       text: 'Каждая формула Fairhaven Health создаётся на основе клинических данных — так, как я требовал бы для собственных пациентов.',
       name: 'Доктор Амос Грюнебаум, MD',
@@ -40,6 +41,7 @@ export const TESTIMONIALS = [
   {
     kind: 'quote',
     accent: 'blue',
+    avatar: '/assets/avatars/doctor-tashkent.svg',
     ru: {
       text: 'Своим парам при планировании я советую только препараты с прозрачным составом. FertilAid — из тех, что не стыдно рекомендовать.',
       name: 'Врач акушер-гинеколог',
@@ -68,6 +70,7 @@ export const TESTIMONIALS = [
   {
     kind: 'family',
     accent: 'pink',
+    avatar: '/assets/avatars/anna.svg',
     ru: {
       text: 'Принимали FertilAid с мужем три месяца — результат превзошёл ожидания. Спасибо за оригинал и честную доставку!',
       name: 'Анна',
@@ -82,13 +85,14 @@ export const TESTIMONIALS = [
   {
     kind: 'family',
     accent: 'mint',
+    avatar: '/assets/avatars/dilfuza.svg',
     ru: {
-      text: 'PeaPod пью всю беременность. Врач одобрил состав, а доставка на дом — просто спасение.',
+      text: 'Пренатальные витамины Fairhaven пью всю беременность. Врач одобрил состав, а доставка на дом — просто спасение.',
       name: 'Дилфуза',
       role: 'Самарканд · будущая мама',
     },
     uz: {
-      text: 'PeaPod’ni butun homiladorlik davomida ichyapman. Shifokor tarkibini maʼqulladi, uyga yetkazib berish esa — chinakam najot.',
+      text: 'Fairhaven prenatal vitaminlarini butun homiladorlik davomida ichyapman. Shifokor tarkibini maʼqulladi, uyga yetkazib berish esa — chinakam najot.',
       name: 'Dilfuza',
       role: 'Samarqand · boʻlajak ona',
     },
