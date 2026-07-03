@@ -1,30 +1,28 @@
 import React, { Suspense, useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Float, useTexture } from '@react-three/drei';
+import { Float, RoundedBox, useTexture } from '@react-three/drei';
 import * as THREE from 'three';
 
 import { scrollBus } from './scrollBus.js';
 
 /**
- * The descent gallery is built from the OFFICIAL Fairhaven product
- * photography (bg removed) — pixel-identical to fairhavenhealth.com.
- * Each product is an alpha-keyed billboard with a soft shadow; the camera
- * glides down past them as the testimonials cascade.
+ * Dimensional product vitrines: the shop's own catalog photography
+ * (current packaging, bg removed) mounted on glassy 3D plates with layered
+ * accents. The whole vitrine banks toward the cursor and pitches with
+ * scroll velocity — real depth, zero warped geometry.
  */
 
 const JOURNEY_DEPTH = 15;
 
-/* Each product is paired with ONE testimonial step: same scroll moment,
-   OPPOSITE side of that card (cards alternate L,R,L,R,L,R). Neighbouring
-   products are a full step (~100vh) away — offscreen while a quote reads.
-   `step` aligns via scrollBus.stepCenters (measured from the real DOM). */
+/* Cards alternate L,R,L,R,L,R — each vitrine shares its quote's scroll
+   moment on the OPPOSITE side (neighbours are a full step away). */
 const PRODUCTS = [
-  { img: '/assets/p3d/fhpro-women.png', x: 1.9, d: 0.02, z: -1.15, h: 2.9 }, // hero
-  { img: '/assets/p3d/fertilaid-men.png', x: 2.0, step: 0, z: -1.9, h: 2.45 }, // card L → R
-  { img: '/assets/p3d/peapod.png', x: -2.0, step: 1, z: -1.9, h: 2.5 }, // card R → L
-  { img: '/assets/p3d/lactation.png', x: 2.0, step: 2, z: -2.0, h: 2.4 }, // card L → R
-  { img: '/assets/p3d/menopause.png', x: -2.0, step: 3, z: -1.9, h: 2.45 }, // card R → L
-  { img: '/assets/p3d/ovaboost.png', x: 2.0, step: 4, z: -2.0, h: 2.4 }, // card L → R
+  { img: '/assets/p3d/fhpro-women.png', x: 1.9, d: 0.02, z: -1.15, h: 2.75, hero: true },
+  { img: '/assets/p3d/fhpro-men.png', x: 2.05, step: 0, z: -1.9, h: 2.35 },
+  { img: '/assets/p3d/prenatal.png', x: -2.05, step: 1, z: -1.9, h: 2.3 },
+  { img: '/assets/p3d/fertilaid-men.png', x: 2.05, step: 2, z: -2.0, h: 2.3 },
+  { img: '/assets/p3d/lactation.png', x: -2.05, step: 3, z: -1.9, h: 2.35 },
+  { img: '/assets/p3d/fertilaid-women.png', x: 2.05, step: 4, z: -2.0, h: 2.3 },
 ];
 
 /* Soft elliptical drop shadow, drawn once. */
@@ -34,8 +32,8 @@ function makeShadowTexture() {
   c.height = 128;
   const ctx = c.getContext('2d');
   const g = ctx.createRadialGradient(128, 64, 8, 128, 64, 120);
-  g.addColorStop(0, 'rgba(66, 34, 48, 0.38)');
-  g.addColorStop(0.55, 'rgba(66, 34, 48, 0.16)');
+  g.addColorStop(0, 'rgba(66, 34, 48, 0.36)');
+  g.addColorStop(0.55, 'rgba(66, 34, 48, 0.15)');
   g.addColorStop(1, 'rgba(66, 34, 48, 0)');
   ctx.scale(1, 0.5);
   ctx.translate(0, 64);
@@ -46,56 +44,96 @@ function makeShadowTexture() {
   return tex;
 }
 
-function ProductBillboard({ conf, shadowTex }) {
-  const groupRef = useRef();
+/* Shared pointer state for the vitrine banking. */
+const pointer = { x: 0, y: 0 };
+
+function ProductVitrine({ conf, shadowTex }) {
+  const yRef = useRef();
+  const tiltRef = useRef();
   const texture = useTexture(conf.img);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;
 
   const aspect = texture.image
     ? texture.image.width / texture.image.height
-    : 0.55;
+    : 0.58;
   const w = conf.h * aspect;
+  const plateW = Math.max(w * 1.3, conf.h * 0.78);
+  const plateH = conf.h * 1.14;
+  const side = conf.x >= 0 ? 1 : -1;
+  const baseYaw = -side * 0.16;
+  const prevJourney = useRef(0);
 
-  // Step-paired products track their quote's measured position (resize-safe).
-  useFrame(() => {
-    const g = groupRef.current;
-    if (!g || conf.step == null) return;
-    const center = scrollBus.stepCenters[conf.step];
-    if (center != null) g.position.y = -center * JOURNEY_DEPTH;
+  useFrame(({ clock }, delta) => {
+    // Follow the paired quote's measured position (resize-safe).
+    const g = yRef.current;
+    if (g && conf.step != null) {
+      const center = scrollBus.stepCenters[conf.step];
+      if (center != null) g.position.y = -center * JOURNEY_DEPTH;
+    }
+    // Bank toward the cursor; pitch with scroll velocity — living 3D.
+    const t = tiltRef.current;
+    if (t) {
+      const vel = (scrollBus.journey - prevJourney.current) / Math.max(delta, 0.001);
+      prevJourney.current = scrollBus.journey;
+      const idle = conf.hero ? Math.sin(clock.elapsedTime * 0.32) * 0.07 : 0;
+      const targetY = baseYaw + idle + pointer.x * 0.09;
+      const targetX = THREE.MathUtils.clamp(vel * 1.6, -0.12, 0.12) - pointer.y * 0.05;
+      const k = 1 - Math.exp(-delta * 4);
+      t.rotation.y += (targetY - t.rotation.y) * k;
+      t.rotation.x += (targetX - t.rotation.x) * k;
+    }
   });
 
   return (
     <group
-      ref={groupRef}
+      ref={yRef}
       position={[conf.x, -(conf.d ?? 0) * JOURNEY_DEPTH, conf.z]}
     >
-      <Float speed={0.8} rotationIntensity={0} floatIntensity={0.16}>
-        <mesh renderOrder={1}>
-          <planeGeometry args={[w, conf.h]} />
-          <meshBasicMaterial
-            map={texture}
-            transparent
-            toneMapped={false}
-            depthWrite={false}
-          />
-        </mesh>
+      <Float speed={0.8} rotationIntensity={0} floatIntensity={0.15}>
+        <group ref={tiltRef} rotation={[0, baseYaw, 0]}>
+          {/* glassy backing plate — gives the vitrine its physical body */}
+          <RoundedBox
+            args={[plateW, plateH, 0.09]}
+            radius={0.09}
+            smoothness={3}
+            position={[0, 0, -0.11]}
+          >
+            <meshPhysicalMaterial
+              color="#ffffff"
+              transparent
+              opacity={0.42}
+              roughness={0.16}
+              clearcoat={0.9}
+              clearcoatRoughness={0.3}
+            />
+          </RoundedBox>
+          {/* pastel accent disc floating between plate and product */}
+          <mesh position={[side * plateW * 0.34, plateH * 0.3, -0.06]}>
+            <circleGeometry args={[conf.h * 0.3, 48]} />
+            <meshBasicMaterial color="#e9c5d4" transparent opacity={0.85} toneMapped={false} />
+          </mesh>
+          <mesh position={[-side * plateW * 0.3, -plateH * 0.34, -0.08]}>
+            <circleGeometry args={[conf.h * 0.16, 40]} />
+            <meshBasicMaterial color="#cee2de" transparent opacity={0.7} toneMapped={false} />
+          </mesh>
+          {/* the product — real catalog photography */}
+          <mesh renderOrder={2}>
+            <planeGeometry args={[w, conf.h]} />
+            <meshBasicMaterial map={texture} transparent toneMapped={false} depthWrite={false} />
+          </mesh>
+        </group>
         {/* grounded soft shadow */}
-        <mesh position={[0.05, -conf.h / 2 - 0.06, -0.01]} renderOrder={0}>
-          <planeGeometry args={[w * 1.15, conf.h * 0.22]} />
-          <meshBasicMaterial
-            map={shadowTex}
-            transparent
-            toneMapped={false}
-            depthWrite={false}
-          />
+        <mesh position={[0.04, -plateH / 2 - 0.12, -0.02]} renderOrder={0}>
+          <planeGeometry args={[plateW * 1.05, plateH * 0.2]} />
+          <meshBasicMaterial map={shadowTex} transparent toneMapped={false} depthWrite={false} />
         </mesh>
       </Float>
     </group>
   );
 }
 
-/* ── Atmosphere: slow-drifting pollen motes ─────────────────────────────── */
+/* ── Atmosphere: pollen motes + deep pastel orbs ────────────────────────── */
 
 const MOTE_COUNT = 130;
 
@@ -133,17 +171,32 @@ function Motes() {
   );
 }
 
+const ORBS = [
+  { x: -4.5, dy: 0.15, z: -6, r: 1.4, color: '#e9c5d4', o: 0.35 },
+  { x: 4.8, dy: 0.42, z: -7, r: 1.8, color: '#dbcad4', o: 0.3 },
+  { x: -4.2, dy: 0.7, z: -6.5, r: 1.3, color: '#cee2de', o: 0.32 },
+  { x: 4.4, dy: 0.95, z: -6, r: 1.5, color: '#e9c5d4', o: 0.3 },
+];
+
+function DepthOrbs() {
+  return ORBS.map((orb, i) => (
+    <mesh position={[orb.x, -orb.dy * JOURNEY_DEPTH, orb.z]} key={i}>
+      <circleGeometry args={[orb.r, 48]} />
+      <meshBasicMaterial color={orb.color} transparent opacity={orb.o} toneMapped={false} />
+    </mesh>
+  ));
+}
+
 /* ── Camera rig — critically damped glide, no roll ──────────────────────── */
 
 function CameraRig({ reducedMotion }) {
-  const mouse = useRef({ x: 0, y: 0 });
   const smooth = useRef({ journey: 0, mx: 0, my: 0 });
 
   useEffect(() => {
     if (reducedMotion) return undefined;
     const onMove = (e) => {
-      mouse.current.x = (e.clientX / window.innerWidth) * 2 - 1;
-      mouse.current.y = (e.clientY / window.innerHeight) * 2 - 1;
+      pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+      pointer.y = (e.clientY / window.innerHeight) * 2 - 1;
     };
     window.addEventListener('pointermove', onMove, { passive: true });
     return () => window.removeEventListener('pointermove', onMove);
@@ -154,10 +207,10 @@ function CameraRig({ reducedMotion }) {
     const kJourney = 1 - Math.exp(-delta * 2.4);
     const kMouse = 1 - Math.exp(-delta * 4);
     s.journey += (scrollBus.journey - s.journey) * kJourney;
-    s.mx += (mouse.current.x - s.mx) * kMouse;
-    s.my += (mouse.current.y - s.my) * kMouse;
+    s.mx += (pointer.x - s.mx) * kMouse;
+    s.my += (pointer.y - s.my) * kMouse;
 
-    const sway = Math.sin(s.journey * Math.PI * 2) * 0.16;
+    const sway = Math.sin(s.journey * Math.PI * 2) * 0.15;
     camera.position.y = -s.journey * JOURNEY_DEPTH;
     camera.position.x = sway + s.mx * 0.12;
     camera.position.z = 5.05;
@@ -173,11 +226,14 @@ function SceneContents({ reducedMotion }) {
 
   return (
     <>
-      {/* Distant products melt into the cream atmosphere. */}
       <fog attach="fog" args={['#fdfaf7', 7, 13]} />
+      {/* just enough light for the glass plates; photos are unlit */}
+      <ambientLight intensity={0.9} />
+      <directionalLight position={[3, 4, 5]} intensity={0.7} />
+      <DepthOrbs />
       <Suspense fallback={null}>
         {PRODUCTS.map((conf, i) => (
-          <ProductBillboard conf={conf} shadowTex={shadowTex} key={i} />
+          <ProductVitrine conf={conf} shadowTex={shadowTex} key={i} />
         ))}
       </Suspense>
       <Motes />
@@ -196,7 +252,7 @@ export default function Scene3D({ active = true, reducedMotion = false }) {
       <Canvas
         dpr={[1, 1.75]}
         frameloop={active ? 'always' : 'never'}
-        camera={{ position: [0, 0.08, 5.05], fov: 32 }}
+        camera={{ position: [0, 0.08, 5.05], fov: 33 }}
         gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
       >
         <SceneContents reducedMotion={reducedMotion} />

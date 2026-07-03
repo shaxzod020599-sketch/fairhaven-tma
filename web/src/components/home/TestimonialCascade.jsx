@@ -1,9 +1,25 @@
 import React, { useEffect, useRef } from 'react';
+import { m } from 'motion/react';
 import { useI18n } from '../../i18n/index.jsx';
 import { TESTIMONIALS } from './testimonialsData.js';
 import { scrollBus } from './scrollBus.js';
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
+
+/* Motion.dev: the card's inner content re-reveals each time its quote
+   scrolls into focus — mark, stat, text, author cascade in. */
+const innerStagger = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.09, delayChildren: 0.05 } },
+};
+const innerRise = {
+  hidden: { opacity: 0, y: 18 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 240, damping: 26 },
+  },
+};
 
 /**
  * The descent: one full-viewport sticky step per voice. A rAF-throttled
@@ -148,19 +164,28 @@ export default function TestimonialCascade({ simple = false }) {
                 {item.kind === 'research' ? '§' : item.kind === 'award' ? '✦' : '“'}
               </span>
 
-              {item.kind === 'research' && (
-                <div className="voice-stat" aria-hidden="true">
-                  <strong>{item.stat}</strong>
-                  <span>{copy.statLabel}</span>
-                </div>
-              )}
+              <m.div
+                variants={innerStagger}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ amount: 0.55 }}
+              >
+                {item.kind === 'research' && (
+                  <m.div className="voice-stat" aria-hidden="true" variants={innerRise}>
+                    <strong>{item.stat}</strong>
+                    <span>{copy.statLabel}</span>
+                  </m.div>
+                )}
 
-              <blockquote className="voice-text">{copy.text}</blockquote>
+                <m.blockquote className="voice-text" variants={innerRise}>
+                  {copy.text}
+                </m.blockquote>
 
-              <figcaption className="voice-author">
-                <strong>{copy.name}</strong>
-                <span>{copy.role}</span>
-              </figcaption>
+                <m.figcaption className="voice-author" variants={innerRise}>
+                  <strong>{copy.name}</strong>
+                  <span>{copy.role}</span>
+                </m.figcaption>
+              </m.div>
             </figure>
           </section>
         );
