@@ -15,6 +15,9 @@ export const scrollBus = {
   stepProgress: 0,
   /** Total number of testimonial steps (set by the cascade on mount). */
   stepCount: 0,
+  /** Journey fraction at which each cascade step is viewport-centered
+      (measured from the DOM by the journey driver; resize-aware). */
+  stepCenters: [],
 };
 
 export function resetScrollBus() {

@@ -1,194 +1,103 @@
 import React, { Suspense, useEffect, useMemo, useRef } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import {
-  Environment,
-  Float,
-  Lightformer,
-  useTexture,
-} from '@react-three/drei';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { Float, useTexture } from '@react-three/drei';
 import * as THREE from 'three';
 
-import { bottleSpec } from '../fhProModel.mjs';
 import { scrollBus } from './scrollBus.js';
-import { makeLabelTexture, LABEL_SPECS } from './bottleLabels.js';
 
-/* ── Geometry (photo-accurate, shared with the product-hero bottle) ─────── */
+/**
+ * The descent gallery is built from the OFFICIAL Fairhaven product
+ * photography (bg removed) — pixel-identical to fairhavenhealth.com.
+ * Each product is an alpha-keyed billboard with a soft shadow; the camera
+ * glides down past them as the testimonials cascade.
+ */
 
-const BODY_POINTS = [
-  [0, bottleSpec.baseY],
-  [0.56, bottleSpec.baseY],
-  [0.63, -1.30],
-  [0.675, -1.20],
-  [bottleSpec.bodyRadius, -1.08],
-  [bottleSpec.bodyRadius, 0.42],
-  [0.672, 0.53],
-  [0.635, 0.66],
-  [0.575, 0.78],
-  [0.515, 0.87],
-  [0.475, 0.92],
-  [0.465, bottleSpec.neckTop],
-  [0, bottleSpec.neckTop],
-].map(([x, y]) => new THREE.Vector2(x, y));
+const JOURNEY_DEPTH = 15;
 
-function createCurvedLabelGeometry() {
-  const segments = 64;
-  const positions = [];
-  const uvs = [];
-  const indices = [];
-  const height = bottleSpec.labelTop - bottleSpec.labelBottom;
+/* Each product is paired with ONE testimonial step: same scroll moment,
+   OPPOSITE side of that card (cards alternate L,R,L,R,L,R). Neighbouring
+   products are a full step (~100vh) away — offscreen while a quote reads.
+   `step` aligns via scrollBus.stepCenters (measured from the real DOM). */
+const PRODUCTS = [
+  { img: '/assets/p3d/fhpro-women.png', x: 1.9, d: 0.02, z: -1.15, h: 2.9 }, // hero
+  { img: '/assets/p3d/fertilaid-men.png', x: 2.0, step: 0, z: -1.9, h: 2.45 }, // card L → R
+  { img: '/assets/p3d/peapod.png', x: -2.0, step: 1, z: -1.9, h: 2.5 }, // card R → L
+  { img: '/assets/p3d/lactation.png', x: 2.0, step: 2, z: -2.0, h: 2.4 }, // card L → R
+  { img: '/assets/p3d/menopause.png', x: -2.0, step: 3, z: -1.9, h: 2.45 }, // card R → L
+  { img: '/assets/p3d/ovaboost.png', x: 2.0, step: 4, z: -2.0, h: 2.4 }, // card L → R
+];
 
-  for (let i = 0; i <= segments; i += 1) {
-    const u = i / segments;
-    const angle = (u - 0.5) * bottleSpec.labelArc;
-    const x = Math.sin(angle) * bottleSpec.labelRadius;
-    const z = Math.cos(angle) * bottleSpec.labelRadius;
-    positions.push(x, bottleSpec.labelBottom, z);
-    positions.push(x, bottleSpec.labelBottom + height, z);
-    uvs.push(u, 0, u, 1);
-  }
-  for (let i = 0; i < segments; i += 1) {
-    const bottom = i * 2;
-    const top = bottom + 1;
-    indices.push(bottom, bottom + 2, top, bottom + 2, bottom + 3, top);
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
+/* Soft elliptical drop shadow, drawn once. */
+function makeShadowTexture() {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 128;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(128, 64, 8, 128, 64, 120);
+  g.addColorStop(0, 'rgba(66, 34, 48, 0.38)');
+  g.addColorStop(0.55, 'rgba(66, 34, 48, 0.16)');
+  g.addColorStop(1, 'rgba(66, 34, 48, 0)');
+  ctx.scale(1, 0.5);
+  ctx.translate(0, 64);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
-function createRibbedCapGeometry() {
-  const height = 0.36;
-  const geometry = new THREE.CylinderGeometry(
-    bottleSpec.capRadius, bottleSpec.capRadius, height, 96, 1, false
-  );
-  const positions = geometry.attributes.position;
-  for (let i = 0; i < positions.count; i += 1) {
-    const x = positions.getX(i);
-    const z = positions.getZ(i);
-    const angle = Math.atan2(z, x);
-    const ridge = 1 + 0.014 * (0.5 + 0.5 * Math.cos(angle * 48));
-    positions.setX(i, x * ridge);
-    positions.setZ(i, z * ridge);
-  }
-  positions.needsUpdate = true;
-  geometry.computeVertexNormals();
-  return geometry;
-}
+function ProductBillboard({ conf, shadowTex }) {
+  const groupRef = useRef();
+  const texture = useTexture(conf.img);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
 
-/* ── Bottle: body + ribbed cap + white sleeve + printed label ───────────── */
+  const aspect = texture.image
+    ? texture.image.width / texture.image.height
+    : 0.55;
+  const w = conf.h * aspect;
 
-function BottleShell() {
-  const capGeometry = useMemo(createRibbedCapGeometry, []);
-  useEffect(() => () => capGeometry.dispose(), [capGeometry]);
+  // Step-paired products track their quote's measured position (resize-safe).
+  useFrame(() => {
+    const g = groupRef.current;
+    if (!g || conf.step == null) return;
+    const center = scrollBus.stepCenters[conf.step];
+    if (center != null) g.position.y = -center * JOURNEY_DEPTH;
+  });
 
   return (
-    <>
-      {/* HDPE body — satin plastic with a soft clearcoat so the studio
-          softboxes draw long vertical highlights down the flanks. */}
-      <mesh castShadow>
-        <latheGeometry args={[BODY_POINTS, 64]} />
-        <meshPhysicalMaterial
-          color="#fbfbfa"
-          roughness={0.4}
-          metalness={0}
-          clearcoat={0.35}
-          clearcoatRoughness={0.45}
-          sheen={0.25}
-          sheenColor="#ffffff"
-          envMapIntensity={0.95}
-        />
-      </mesh>
-      <mesh position={[0, 1.19, 0]} geometry={capGeometry} castShadow>
-        <meshPhysicalMaterial
-          color="#ffffff"
-          roughness={0.38}
-          clearcoat={0.2}
-          clearcoatRoughness={0.5}
-          envMapIntensity={0.9}
-        />
-      </mesh>
-      <mesh position={[0, 1.015, 0]}>
-        <cylinderGeometry args={[0.495, 0.495, 0.095, 64]} />
-        <meshStandardMaterial color="#f7f7f6" roughness={0.42} envMapIntensity={0.8} />
-      </mesh>
-      <mesh position={[0, 1.376, 0]}>
-        <cylinderGeometry args={[0.487, 0.487, 0.018, 64]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.44} />
-      </mesh>
-      {/* full-wrap white sleeve under the printed face */}
-      <mesh position={[0, (bottleSpec.labelTop + bottleSpec.labelBottom) / 2, 0]}>
-        <cylinderGeometry
-          args={[0.683, 0.683, bottleSpec.labelTop - bottleSpec.labelBottom, 64, 1, true]}
-        />
-        <meshStandardMaterial
-          color="#ffffff"
-          roughness={0.5}
-          side={THREE.DoubleSide}
-          envMapIntensity={0.7}
-        />
-      </mesh>
-    </>
-  );
-}
-
-function PrintedLabel({ spec }) {
-  const geometry = useMemo(createCurvedLabelGeometry, []);
-  const texture = useMemo(() => makeLabelTexture(spec), [spec]);
-  useEffect(() => () => {
-    geometry.dispose();
-    texture.dispose();
-  }, [geometry, texture]);
-
-  return (
-    <mesh geometry={geometry} renderOrder={2}>
-      {/* Lit paper — the curved face shades around the cylinder instead of
-          reading as a flat unlit sticker. */}
-      <meshStandardMaterial
-        map={texture}
-        roughness={0.42}
-        envMapIntensity={0.55}
-        polygonOffset
-        polygonOffsetFactor={-2}
-      />
-    </mesh>
-  );
-}
-
-function PhotoLabel() {
-  const texture = useTexture('/assets/fh-pro-women-label.jpg');
-  const geometry = useMemo(createCurvedLabelGeometry, []);
-  const { gl } = useThree();
-
-  useEffect(() => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.wrapS = THREE.ClampToEdgeWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    texture.anisotropy = Math.min(8, gl.capabilities.getMaxAnisotropy());
-    texture.needsUpdate = true;
-  }, [gl, texture]);
-  useEffect(() => () => geometry.dispose(), [geometry]);
-
-  return (
-    <mesh geometry={geometry} renderOrder={2}>
-      <meshStandardMaterial
-        map={texture}
-        roughness={0.42}
-        envMapIntensity={0.55}
-        polygonOffset
-        polygonOffsetFactor={-2}
-      />
-    </mesh>
+    <group
+      ref={groupRef}
+      position={[conf.x, -(conf.d ?? 0) * JOURNEY_DEPTH, conf.z]}
+    >
+      <Float speed={0.8} rotationIntensity={0} floatIntensity={0.16}>
+        <mesh renderOrder={1}>
+          <planeGeometry args={[w, conf.h]} />
+          <meshBasicMaterial
+            map={texture}
+            transparent
+            toneMapped={false}
+            depthWrite={false}
+          />
+        </mesh>
+        {/* grounded soft shadow */}
+        <mesh position={[0.05, -conf.h / 2 - 0.06, -0.01]} renderOrder={0}>
+          <planeGeometry args={[w * 1.15, conf.h * 0.22]} />
+          <meshBasicMaterial
+            map={shadowTex}
+            transparent
+            toneMapped={false}
+            depthWrite={false}
+          />
+        </mesh>
+      </Float>
+    </group>
   );
 }
 
 /* ── Atmosphere: slow-drifting pollen motes ─────────────────────────────── */
 
-const MOTE_COUNT = 140;
-const JOURNEY_DEPTH = 15;
+const MOTE_COUNT = 130;
 
 function Motes() {
   const pointsRef = useRef();
@@ -216,7 +125,7 @@ function Motes() {
         size={0.05}
         sizeAttenuation
         transparent
-        opacity={0.45}
+        opacity={0.4}
         depthWrite={false}
         blending={THREE.AdditiveBlending}
       />
@@ -224,54 +133,7 @@ function Motes() {
   );
 }
 
-/* ── Descending gallery ─────────────────────────────────────────────────── */
-
-const GALLERY = [
-  // Standard showcase composition: upright bottles alternating left/right at
-  // a consistent distance, fully in frame. Hero keeps the real photo label.
-  { x: 2.15, d: 0.02, z: -1.15, scale: 0.92, phase: 0.0, photo: true },
-  { x: -1.85, d: 0.20, z: -2.3, scale: 0.85, phase: 1.3, spec: LABEL_SPECS[0] },
-  { x: 1.95, d: 0.38, z: -2.5, scale: 0.82, phase: 2.1, spec: LABEL_SPECS[1] },
-  { x: -1.9, d: 0.56, z: -2.3, scale: 0.85, phase: 3.4, spec: LABEL_SPECS[2] },
-  { x: 1.9, d: 0.74, z: -2.4, scale: 0.83, phase: 4.2, spec: LABEL_SPECS[3] },
-  { x: -1.85, d: 0.92, z: -2.2, scale: 0.86, phase: 5.0, spec: LABEL_SPECS[4] },
-];
-
-/**
- * Upright product-shot pose with a slow, barely-there sway — labels stay
- * readable and the motion reads as calm, not busy. Bottles angle gently
- * toward the center copy.
- */
-function GalleryBottle({ conf }) {
-  const swayRef = useRef();
-  const faceCenter = conf.x > 0 ? -0.28 : 0.28;
-
-  useFrame(({ clock }) => {
-    const g = swayRef.current;
-    if (!g) return;
-    const t = clock.elapsedTime;
-    g.rotation.y = faceCenter + Math.sin(t * 0.25 + conf.phase) * 0.13;
-  });
-
-  return (
-    <group position={[conf.x, -conf.d * JOURNEY_DEPTH, conf.z]}>
-      <Float speed={0.7} rotationIntensity={0.02} floatIntensity={0.14}>
-        <group ref={swayRef} scale={conf.scale}>
-          <BottleShell />
-          {conf.photo ? (
-            <Suspense fallback={null}>
-              <PhotoLabel />
-            </Suspense>
-          ) : (
-            <PrintedLabel spec={conf.spec} />
-          )}
-        </group>
-      </Float>
-    </group>
-  );
-}
-
-/* ── Camera rig — critically damped, no stepping ────────────────────────── */
+/* ── Camera rig — critically damped glide, no roll ──────────────────────── */
 
 function CameraRig({ reducedMotion }) {
   const mouse = useRef({ x: 0, y: 0 });
@@ -289,58 +151,37 @@ function CameraRig({ reducedMotion }) {
 
   useFrame(({ camera }, delta) => {
     const s = smooth.current;
-    // Exponential smoothing (frame-rate independent). The scroll bus value
-    // is itself eased by the DOM driver, so the camera glides butter-smooth.
     const kJourney = 1 - Math.exp(-delta * 2.4);
     const kMouse = 1 - Math.exp(-delta * 4);
     s.journey += (scrollBus.journey - s.journey) * kJourney;
     s.mx += (mouse.current.x - s.mx) * kMouse;
     s.my += (mouse.current.y - s.my) * kMouse;
 
-    // Straight, calm descent: tiny lateral drift, no roll, fixed gaze line.
-    const sway = Math.sin(s.journey * Math.PI * 2) * 0.2;
+    const sway = Math.sin(s.journey * Math.PI * 2) * 0.16;
     camera.position.y = -s.journey * JOURNEY_DEPTH;
-    camera.position.x = sway + s.mx * 0.14;
-    camera.position.z = 5.05 + Math.sin(s.journey * Math.PI) * 0.25;
-    camera.lookAt(0, camera.position.y - 0.25, -1.6);
+    camera.position.x = sway + s.mx * 0.12;
+    camera.position.z = 5.05;
+    camera.lookAt(0, camera.position.y - 0.2, -1.6);
   });
 
   return null;
 }
 
-function StudioEnvironment() {
-  return (
-    <Environment resolution={128}>
-      {/* Product-shot studio: overhead softbox, two tall vertical strips for
-          flank highlights, warm bounce floor. */}
-      <Lightformer intensity={3.2} position={[0, 5, -2]} rotation={[-Math.PI / 3, 0, 0]} scale={[2.5, 7, 1]} />
-      <Lightformer intensity={1.6} position={[-5, 0.5, 1.5]} rotation={[0, Math.PI / 2.6, 0]} scale={[1.2, 8, 1]} />
-      <Lightformer intensity={1.4} position={[5, 0.5, 1]} rotation={[0, -Math.PI / 2.6, 0]} scale={[1.2, 8, 1]} color="#fdf0f5" />
-      <Lightformer intensity={0.7} position={[0, -3, 4]} rotation={[Math.PI / 3, 0, 0]} scale={[10, 4, 1]} color="#f7ece5" />
-      <Lightformer intensity={0.5} position={[0, 1, 6]} scale={[9, 5, 1]} />
-    </Environment>
-  );
-}
-
 function SceneContents({ reducedMotion }) {
+  const shadowTex = useMemo(makeShadowTexture, []);
+  useEffect(() => () => shadowTex.dispose(), [shadowTex]);
+
   return (
     <>
-      {/* Cream fog — distant bottles melt into the atmosphere. */}
-      <fog attach="fog" args={['#fdfaf7', 6.5, 13.5]} />
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[3.5, 5.5, 3]} intensity={1.9} />
-      <directionalLight position={[-4, 3, -2]} intensity={0.85} color="#ffffff" />
-      <directionalLight position={[-3, 2, 2]} intensity={0.3} color="#dcebe8" />
-
-      {GALLERY.map((conf, i) => (
-        <GalleryBottle conf={conf} key={i} />
-      ))}
-
+      {/* Distant products melt into the cream atmosphere. */}
+      <fog attach="fog" args={['#fdfaf7', 7, 13]} />
+      <Suspense fallback={null}>
+        {PRODUCTS.map((conf, i) => (
+          <ProductBillboard conf={conf} shadowTex={shadowTex} key={i} />
+        ))}
+      </Suspense>
       <Motes />
       <CameraRig reducedMotion={reducedMotion} />
-      <Suspense fallback={null}>
-        <StudioEnvironment />
-      </Suspense>
     </>
   );
 }
@@ -353,9 +194,9 @@ export default function Scene3D({ active = true, reducedMotion = false }) {
   return (
     <div className="scrolly-canvas" aria-hidden="true">
       <Canvas
-        dpr={[1, 1.5]}
+        dpr={[1, 1.75]}
         frameloop={active ? 'always' : 'never'}
-        camera={{ position: [0, 0.08, 5.05], fov: 35 }}
+        camera={{ position: [0, 0.08, 5.05], fov: 32 }}
         gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
       >
         <SceneContents reducedMotion={reducedMotion} />

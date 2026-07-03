@@ -70,6 +70,25 @@ function useJourneyDriver(rootRef, enabled) {
     let journey = 0;
     let hero = 0;
 
+    // Where along the journey each testimonial step sits centered — the 3D
+    // gallery aligns every product with its own quote from these.
+    const measureSteps = () => {
+      const vh = window.innerHeight;
+      const rootRect = root.getBoundingClientRect();
+      const rootTop = rootRect.top + window.scrollY;
+      const total = rootRect.height - vh;
+      if (total <= 0) return;
+      scrollBus.stepCenters = Array.from(
+        root.querySelectorAll('.cascade-step')
+      ).map((step) => {
+        const r = step.getBoundingClientRect();
+        const absTop = r.top + window.scrollY;
+        return clamp01((absTop + r.height / 2 - vh / 2 - rootTop) / total);
+      });
+    };
+    measureSteps();
+    window.addEventListener('resize', measureSteps);
+
     const frame = (now) => {
       if (!running) return;
       raf = requestAnimationFrame(frame);
@@ -98,6 +117,7 @@ function useJourneyDriver(rootRef, enabled) {
     return () => {
       running = false;
       cancelAnimationFrame(raf);
+      window.removeEventListener('resize', measureSteps);
       document.removeEventListener('visibilitychange', onVisibility);
       resetScrollBus();
     };
