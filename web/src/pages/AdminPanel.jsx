@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../i18n/index.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { fetchSiteContent, saveSiteContent, adminUploadImage } from '../api.js';
+import { fetchSiteContent, saveSiteContent, adminUploadImage, adminUploadVideo } from '../api.js';
 import { DEFAULT_CONTENT, mergeContent } from '../content/defaults.js';
 
 /**
@@ -115,6 +115,33 @@ export default function AdminPanel() {
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const picker = useImagePicker();
+  const videoInputRef = useRef(null);
+  const videoCbRef = useRef(null);
+  const [videoProgress, setVideoProgress] = useState(null); // null | 0..100
+
+  const pickVideo = (cb) => {
+    videoCbRef.current = cb;
+    videoInputRef.current?.click();
+  };
+
+  const onVideoChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 100 * 1024 * 1024) {
+      alert('Видео больше 100 МБ. Сожмите его или загрузите короче.');
+      return;
+    }
+    setVideoProgress(0);
+    try {
+      const res = await adminUploadVideo(file, setVideoProgress);
+      videoCbRef.current?.(res.data.url);
+    } catch (err) {
+      alert('Не удалось загрузить видео: ' + (err.message || ''));
+    } finally {
+      setVideoProgress(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -357,6 +384,31 @@ export default function AdminPanel() {
                   >✕</button>
                 </div>
               </div>
+              <div className="ap-video-row">
+                {post.video ? (
+                  <>
+                    <video src={post.video} className="ap-video-preview" muted playsInline preload="metadata" />
+                    <button
+                      type="button"
+                      className="ap-mini ap-danger"
+                      onClick={() => patch((d) => { d.blog[i].video = ''; })}
+                    >Убрать видео</button>
+                  </>
+                ) : (
+                  <span className="ap-hint" style={{ margin: 0 }}>Видео не добавлено</span>
+                )}
+                <button
+                  type="button"
+                  className="ap-mini"
+                  disabled={videoProgress !== null}
+                  onClick={() => pickVideo((url) => patch((d) => { d.blog[i].video = url; }))}
+                >
+                  {videoProgress !== null ? `Загрузка… ${videoProgress}%` : (post.video ? 'Заменить видео' : '🎬 Загрузить видео')}
+                </button>
+              </div>
+              {videoProgress !== null && (
+                <div className="ap-progress"><span style={{ width: videoProgress + '%' }} /></div>
+              )}
               <div className="ap-row3">
                 <Field label="Slug (латиницей, для ссылки)" value={post.slug} onChange={(v) => patch((d) => { d.blog[i].slug = v.replace(/[^a-z0-9-]/g, ''); })} />
                 <Field label="Минут чтения" value={String(post.read)} onChange={(v) => patch((d) => { d.blog[i].read = Number(v) || 1; })} />
@@ -394,7 +446,7 @@ export default function AdminPanel() {
     }
 
     return null;
-  }, [data, section, lang, picker.busy]);
+  }, [data, section, lang, picker.busy, videoProgress]);
 
   if (isLoading) return <div className="container ap-page"><p>{t('loading')}</p></div>;
 
@@ -421,6 +473,13 @@ export default function AdminPanel() {
   return (
     <div className="container ap-page">
       {picker.input}
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept="video/mp4,video/webm,video/quicktime"
+        style={{ display: 'none' }}
+        onChange={onVideoChange}
+      />
       <div className="ap-topbar">
         <h1 className="page-title">Админ-панель</h1>
         <button type="button" className="btn btn-primary" onClick={save} disabled={saving || !data}>

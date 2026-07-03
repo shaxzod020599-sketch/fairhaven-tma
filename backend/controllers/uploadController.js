@@ -1,4 +1,5 @@
 const fs = require('fs');
+const multer = require('multer');
 const path = require('path');
 const crypto = require('crypto');
 const { sendError } = require('../utils/http');
@@ -114,3 +115,66 @@ exports.deleteUpload = async (req, res) => {
 
 exports.UPLOAD_DIR = UPLOAD_DIR;
 exports.isValidImageSignature = isValidImageSignature;
+
+/* ── Video uploads (admin) — streamed to disk via multer ──────────────── */
+
+const VIDEO_MAX_BYTES = 100 * 1024 * 1024;
+const VIDEO_MIME_EXT = {
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/webm': 'webm',
+};
+
+const videoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    ensureDir();
+    cb(null, UPLOAD_DIR);
+  },
+  filename: (_req, file, cb) => {
+    const ext = VIDEO_MIME_EXT[file.mimetype] || 'mp4';
+    cb(null, `${Date.now()}-${crypto.randomBytes(10).toString('hex')}.${ext}`);
+  },
+});
+
+const videoUpload = multer({
+  storage: videoStorage,
+  limits: { fileSize: VIDEO_MAX_BYTES, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    cb(null, Boolean(VIDEO_MIME_EXT[file.mimetype]));
+  },
+}).single('video');
+
+function isValidVideoSignature(fd) {
+  const head = Buffer.alloc(12);
+  fs.readSync(fd, head, 0, 12, 0);
+  // mp4/mov: '....ftyp' · webm/mkv: EBML magic
+  if (head.subarray(4, 8).toString('ascii') === 'ftyp') return true;
+  return head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3;
+}
+
+exports.uploadVideo = (req, res) => {
+  videoUpload(req, res, (err) => {
+    try {
+      if (err) {
+        const code = err.code === 'LIMIT_FILE_SIZE' ? 'too_large' : 'upload_failed';
+        return res.status(413).json({ success: false, error: code });
+      }
+      if (!req.file) {
+        return res.status(400).json({ success: false, error: 'video_required' });
+      }
+      const fd = fs.openSync(req.file.path, 'r');
+      const ok = isValidVideoSignature(fd);
+      fs.closeSync(fd);
+      if (!ok) {
+        fs.unlinkSync(req.file.path);
+        return res.status(415).json({ success: false, error: 'invalid_video' });
+      }
+      res.json({
+        success: true,
+        data: { url: `/uploads/${req.file.filename}`, size: req.file.size },
+      });
+    } catch (e) {
+      sendError(res, 500, e);
+    }
+  });
+};

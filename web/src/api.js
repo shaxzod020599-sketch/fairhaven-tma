@@ -110,3 +110,30 @@ export function saveSiteContent(data) {
 export function adminUploadImage(dataUrl) {
   return request('/web/admin/upload', { method: 'POST', body: { dataUrl } });
 }
+
+/** Multipart video upload with real progress (XHR — fetch has no upload progress). */
+export function adminUploadVideo(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_BASE}/web/admin/upload-video`);
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText || '{}');
+        if (xhr.status >= 200 && xhr.status < 300 && data.success) resolve(data);
+        else reject(new Error(data.error || `HTTP ${xhr.status}`));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    xhr.onerror = () => reject(new Error('network_error'));
+    const form = new FormData();
+    form.append('video', file);
+    xhr.send(form);
+  });
+}

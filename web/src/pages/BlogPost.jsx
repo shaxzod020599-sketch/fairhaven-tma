@@ -134,6 +134,7 @@ export default function BlogPost() {
         tag: managedLoc.tag,
         read: managed.read,
         body: managedLoc.body || [],
+        video: managed.video || '',
         Icon: CONTENT_ICONS[slug] || Leaf,
       }
     : source[slug];
@@ -167,6 +168,18 @@ export default function BlogPost() {
               {post.Icon ? <post.Icon width={80} height={80} /> : post.art}
             </div>
           </header>
+
+          {post.video && (
+            <div className="blog-post-video">
+              <video
+                src={post.video}
+                controls
+                playsInline
+                preload="metadata"
+                controlsList="nodownload"
+              />
+            </div>
+          )}
 
           <div className="blog-post-body">
             {post.body.map((para, i) => (

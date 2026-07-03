@@ -23,5 +23,6 @@ router.post('/promo/validate', webAuthOptional, webOrderCtrl.validatePromo);
 // Site admin (Telegram admins signed in through the bot handshake)
 router.put('/admin/site-content', webAdminAuth, siteContentCtrl.update);
 router.post('/admin/upload', webAdminAuth, uploadCtrl.uploadImage);
+router.post('/admin/upload-video', webAdminAuth, uploadCtrl.uploadVideo);
 
 module.exports = router;
