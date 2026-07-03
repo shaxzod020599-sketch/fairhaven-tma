@@ -207,7 +207,7 @@ export const uz = {
   /* scrolly journey — home */
   journeyTitle1: 'Ilm-fan bilan',
   journeyTitle2: 'tasdiqlangan ishonch',
-  journeySub: 'Fertillik, homiladorlik va onalik uchun Fairhaven Health (AQSh) original vitaminlari va qoʻshimchalari — Oʻzbekistondagi rasmiy dilerdan.',
+  journeySub: 'Fertillik, homiladorlik va onalik uchun Fairhaven Health (AQSh) original vitaminlari va qoʻshimchalari — Oʻzbekistondagi rasmiy distribyutordan.',
   journeyScrollHint: 'Pastga aylantiring',
   journeyVoicesTitle: 'Ishonch ovozlari',
   journeyVoicesSub: 'Shifokorlar, tadqiqotlar va oilalar — Fairhaven Health mahsulotlari haqida',

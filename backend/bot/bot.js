@@ -24,8 +24,8 @@ const T = {
   welcome: (name) =>
     `🌿 <b>Assalomu alaykum, ${name}!</b>\n` +
     `🌿 <b>Здравствуйте, ${name}!</b>\n\n` +
-    `<b>Fairhaven Health</b> — O‘zbekistondagi rasmiy diler. Fertillik, homiladorlik va emizish uchun AQSh mahsulotlari.\n` +
-    `<i>Официальный дилер Fairhaven Health в Узбекистане. Фертильность, беременность, лактация — оригинальная продукция из США.</i>\n\n` +
+    `<b>Fairhaven Health</b> — O‘zbekistondagi rasmiy distribyutor. Fertillik, homiladorlik va emizish uchun AQSh mahsulotlari.\n` +
+    `<i>Официальный дистрибьютор Fairhaven Health в Узбекистане. Фертильность, беременность, лактация — оригинальная продукция из США.</i>\n\n` +
     `Do‘konga kirish uchun qisqa ro‘yxatdan o‘ting.\n` +
     `Чтобы открыть магазин — короткая регистрация.`,
 
