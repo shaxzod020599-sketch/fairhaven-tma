@@ -2885,3 +2885,26 @@ a.contact-channel:hover { transform: translateY(-2px); }
   .main-nav { display: none; }
   .menu-toggle { display: flex; }
 }
+
+/* ── Mobile refinement pass ───────────────────────────────────────────── */
+
+/* The eyebrow pill duplicates the announcement bar and wraps into a blob
+   on phones — hero breathes better without it there. */
+@media (max-width: 640px) {
+  .hero-lux-eyebrow { display: none; }
+  .hero-stats-lux { gap: 22px; }
+  .hero-stats-lux .hero-stat strong { font-size: 1.55rem; }
+  .hero-trust-chips { margin-top: 22px; }
+  .journey-cascade-title { font-size: 1.9rem; }
+}
+
+/* Avatars can never go oval — hard square box + cover crop everywhere. */
+.voice-avatar,
+.header-avatar,
+.account-avatar,
+.account-avatar img {
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+.header-avatar { width: 24px; height: 24px; }

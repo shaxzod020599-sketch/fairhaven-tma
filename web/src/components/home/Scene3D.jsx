@@ -92,12 +92,14 @@ function HeroArch() {
     const f = 1 - clamp01((scrollBus.hero - 0.08) / 0.3);
     m.material.opacity = f;
     m.visible = f > 0.02;
-    m.position.y = 0.1 + scrollBus.hero * 1.2;
+    m.position.y = -0.45 + scrollBus.hero * 1.2;
   });
 
   return (
-    <mesh ref={ref} position={[2.05, 0.1, -3.2]}>
-      <planeGeometry args={[3.6, 5.35]} />
+    // Sized to sit fully inside the viewport at ≥1280×800: top clears the
+    // sticky header, bottom kisses the fold, right edge stays on screen.
+    <mesh ref={ref} position={[1.72, -0.45, -3.2]}>
+      <planeGeometry args={[2.85, 4.0]} />
       <meshBasicMaterial map={tex} transparent toneMapped={false} depthWrite={false} />
     </mesh>
   );
