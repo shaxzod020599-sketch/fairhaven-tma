@@ -89,8 +89,8 @@ export default function Header({ onOpenCart }) {
             className="logo-wordmark"
             src="/fh-wordmark.svg"
             alt="Fairhaven Health"
-            width="174"
-            height="30"
+            width="197"
+            height="34"
           />
         </Link>
 
@@ -222,7 +222,11 @@ export default function Header({ onOpenCart }) {
             aria-label={t('account')}
           >
             {user && user.photoUrl
-              ? <img className="header-avatar" src={user.photoUrl} alt="" width="24" height="24" />
+              ? (
+                <span className="header-avatar-wrap" aria-hidden="true">
+                  <img src={user.photoUrl} alt="" />
+                </span>
+              )
               : <User width={20} height={20} />}
             <span className="header-signin-label">
               {user ? (user.firstName || t('account')) : t('signIn')}
