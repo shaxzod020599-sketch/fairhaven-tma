@@ -3,6 +3,7 @@ import {
   listChannelProducts,
   channelSummary,
   updateProductChannel,
+  updateProductChannelMeta,
   bulkUpdateChannel,
   linkProductToBillz,
   searchBillzProducts,
@@ -20,6 +21,8 @@ const PAGE_SIZE = 30;
 const FILTERS = [
   { key: '', label: 'Все', countKey: 'total' },
   { key: 'unlinked', label: 'Без Billz', countKey: 'unlinked', tone: 'warn' },
+  { key: 'awaiting_approval', label: 'Ждёт одобрения', countKey: 'awaiting_approval', tone: 'warn' },
+  { key: 'no_image', label: 'Без фото', countKey: 'no_image', tone: 'warn' },
   { key: 'no_price', label: 'Без цены', countKey: 'no_price', tone: 'warn' },
   { key: 'out_of_stock', label: 'Нет остатка', countKey: 'out_of_stock' },
   { key: 'no_mxik', label: 'Без ИКПУ', countKey: 'no_mxik' },
@@ -98,6 +101,13 @@ export default function Channels({ toast }) {
   /** Optimistic: the card already shows the new value, so re-render in place. */
   const saveChannel = useCallback(async (id, channel, patch) => {
     const res = await updateProductChannel(id, channel, patch);
+    setRows((prev) => prev.map((row) => (row._id === id ? res.data : row)));
+    loadAside();
+    return res.data;
+  }, [loadAside]);
+
+  const saveMeta = useCallback(async (id, patch) => {
+    const res = await updateProductChannelMeta(id, patch);
     setRows((prev) => prev.map((row) => (row._id === id ? res.data : row)));
     loadAside();
     return res.data;
@@ -224,6 +234,7 @@ export default function Channels({ toast }) {
                 selected={selected.has(product._id)}
                 onSelect={toggleSelect}
                 onSave={saveChannel}
+                onMeta={saveMeta}
                 onLink={setLinkFor}
                 toast={toast}
               />

@@ -67,6 +67,29 @@ function availability(product, mirror, channel) {
   };
 }
 
+/**
+ * Why a product is or is not visible in the shop itself.
+ *
+ * Mirrors services/stockReconciler.decide so the panel explains exactly what
+ * the reconciler will do, rather than showing a value it is about to change.
+ */
+function shopVisibility(product, mirror) {
+  const image = Boolean(
+    (product.imageUrl && String(product.imageUrl).trim())
+    || (Array.isArray(product.images) && product.images.some((u) => u && String(u).trim()))
+  );
+
+  if (product.autoStock === false) return { mode: 'manual', reason: 'manual_override', image };
+  if (product.approved === false) return { mode: 'auto', reason: 'awaiting_approval', image };
+  if (!image) return { mode: 'auto', reason: 'no_image', image };
+  if (!product.billzProductId) return { mode: 'auto', reason: 'not_linked', image };
+  if (!mirror || mirror.deletedInBillz) return { mode: 'auto', reason: 'gone_from_billz', image };
+
+  const free = Math.max(0,
+    (mirror.stock || 0) - (mirror.reservedQty || 0) - (mirror.pendingQty || 0));
+  return { mode: 'auto', reason: free > 0 ? 'in_stock' : 'out_of_stock', image };
+}
+
 function serialise(product, mirror) {
   const channels = {};
   for (const channel of CHANNELS) channels[channel] = availability(product, mirror, channel);
@@ -74,6 +97,9 @@ function serialise(product, mirror) {
   return {
     _id: product._id,
     name: product.name,
+    approved: product.approved !== false,
+    autoStock: product.autoStock !== false,
+    shop: shopVisibility(product, mirror),
     brand: product.brand || '',
     sku: product.sku || '',
     barcode: product.barcode || '',
@@ -104,7 +130,10 @@ const POST_JOIN_FILTERS = {
   unlinked: (row) => !row.billzProductId || !row.billz,
   no_price: (row) => CHANNELS.some((c) => row.channels[c].priceMissing),
   no_mxik: (row) => !row.mxikCode,
-  no_image: (row) => !row.imageUrl,
+  // Hidden from the shop for want of a photo — the one blocker an operator can
+  // clear immediately, so it gets its own filter.
+  no_image: (row) => !row.shop.image,
+  awaiting_approval: (row) => !row.approved,
   out_of_stock: (row) => !row.billz || row.billz.available <= 0,
   deleted_in_billz: (row) => Boolean(row.billz && row.billz.deletedInBillz),
 };
@@ -350,6 +379,11 @@ exports.linkBillz = async (req, res) => {
 exports.updateProductMeta = async (req, res) => {
   try {
     const $set = {};
+    // Approving a product is what lets it reach customers, so it lives here
+    // rather than behind the generic product edit form.
+    if (req.body?.approved !== undefined) $set.approved = Boolean(req.body.approved);
+    // Handing a product back to the reconciler after a manual decision.
+    if (req.body?.autoStock !== undefined) $set.autoStock = Boolean(req.body.autoStock);
     if (req.body?.mxikCode !== undefined) {
       const code = String(req.body.mxikCode).trim();
       if (code && !/^\d{6,20}$/.test(code)) {

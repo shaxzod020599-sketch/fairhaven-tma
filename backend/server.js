@@ -27,6 +27,7 @@ const { UPLOAD_DIR } = require('./controllers/uploadController');
 const { launchBotWithRetry } = require('./utils/telegramRetry');
 const { redactPath, securityHeaders } = require('./utils/http');
 const { apiLimiter } = require('./middleware/rateLimit');
+const stockReconciler = require('./services/stockReconciler');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -218,6 +219,13 @@ async function start() {
     app.listen(PORT, HOST, () => {
       console.log(`🚀 Server running on http://${HOST}:${PORT}`);
     });
+
+    // Keeps isAvailable in step with Billz stock, approval and images. Off by
+    // default until the shop has been linked — run scripts/reconcile-stock.js
+    // first to see what it would change, then set STOCK_RECONCILE_ENABLED=true.
+    if (process.env.STOCK_RECONCILE_ENABLED === 'true') {
+      stockReconciler.startScheduler();
+    }
 
     // Start Telegram Bot & expose to controllers via app.locals.
     let bot = null;

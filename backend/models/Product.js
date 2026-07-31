@@ -76,6 +76,15 @@ const productSchema = new mongoose.Schema({
   barcode: { type: String, default: '' },
   tags: [{ type: String }],
 
+  // ── Stock automation ──────────────────────────────────────────────────────
+  // A new product stays hidden until an operator approves it. Absent on
+  // existing documents, and only an explicit `false` hides — so nothing
+  // already in the shop disappears when this field is introduced.
+  approved: { type: Boolean, default: true },
+  // Set to false by the manual availability toggle: once an operator decides,
+  // the reconciler stops touching this product.
+  autoStock: { type: Boolean, default: true },
+
   // ── Sales channels (Medicalka, Uzum Tezkor) ───────────────────────────────
   // Link to the mirrored Billz product. Stock and the reference retail price
   // come from there; the bot's own `price` above is unaffected.

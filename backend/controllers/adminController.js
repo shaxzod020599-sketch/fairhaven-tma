@@ -319,6 +319,10 @@ exports.toggleProductAvailability = async (req, res) => {
     if (!p) return res.status(404).json({ success: false, error: 'not_found' });
     const wasUnavailable = p.isAvailable === false;
     p.isAvailable = !p.isAvailable;
+    // An operator deciding by hand outranks the Billz-driven reconciler, which
+    // would otherwise flip this value back on its next pass. `autoStock` is
+    // turned on again from the Channels page.
+    p.autoStock = false;
     await p.save();
 
     if (wasUnavailable && p.isAvailable) {

@@ -144,8 +144,65 @@ function ChannelRow({ product, channel, onSave, toast }) {
   );
 }
 
+/**
+ * Why the product is or is not in the shop itself, and the one action that
+ * unblocks it. This is separate from the marketplace channels below: a product
+ * can be live on Medicalka while hidden in the bot for want of a photo.
+ */
+const SHOP_STATE = {
+  in_stock: { tone: 'on', text: 'В магазине' },
+  out_of_stock: { tone: 'off', text: 'Скрыт — нет остатка в Billz' },
+  gone_from_billz: { tone: 'warn', text: 'Скрыт — пропал из Billz' },
+  no_image: { tone: 'warn', text: 'Скрыт — нет фото' },
+  awaiting_approval: { tone: 'warn', text: 'Ждёт одобрения' },
+  not_linked: { tone: 'off', text: 'Наличие вручную — не связан с Billz' },
+  manual_override: { tone: 'off', text: 'Наличие задано вручную' },
+};
+
+function ShopStatus({ product, onMeta, toast }) {
+  const [busy, setBusy] = useState(false);
+  const state = SHOP_STATE[product.shop?.reason] || SHOP_STATE.not_linked;
+
+  const act = async (patch, message) => {
+    try {
+      setBusy(true);
+      await onMeta(product._id, patch);
+      toast?.ok(message);
+    } catch (err) {
+      toast?.err(err.message || 'Не сохранилось');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="ap-ch-shop">
+      <span className={`ap-ch-state ap-ch-state--${state.tone}`}>
+        {state.tone !== 'on' && <Icon name="alert" size={13} />}
+        {state.text}
+      </span>
+      {product.shop?.reason === 'awaiting_approval' && (
+        <button
+          type="button" className="ap-btn ap-btn-primary ap-btn-xs" disabled={busy}
+          onClick={() => act({ approved: true }, 'Одобрено — появится в магазине')}
+        >
+          Одобрить
+        </button>
+      )}
+      {product.shop?.mode === 'manual' && (
+        <button
+          type="button" className="ap-btn ap-btn-ghost ap-btn-xs" disabled={busy}
+          onClick={() => act({ autoStock: true }, 'Наличие снова по Billz')}
+        >
+          Вернуть авто
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function ChannelCard({
-  product, channels, selected, onSelect, onSave, onLink, toast,
+  product, channels, selected, onSelect, onSave, onMeta, onLink, toast,
 }) {
   const billz = product.billz;
   // A missing file otherwise renders the browser's broken-image glyph, which
@@ -218,6 +275,8 @@ export default function ChannelCard({
           <Icon name="chevron" size={15} className="ap-ch-unlinked-go" />
         </button>
       )}
+
+      <ShopStatus product={product} onMeta={onMeta} toast={toast} />
 
       <div className="ap-ch-rows">
         {channels.map((channel) => (

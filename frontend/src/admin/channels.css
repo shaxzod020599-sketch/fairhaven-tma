@@ -341,6 +341,26 @@
 .ap-ch-unlinked:hover { border-color: var(--ch-warn); }
 .ap-ch-unlinked-go { opacity: 0.6; }
 
+/* --------------------------------------------------- Shop visibility */
+
+/* Separate from the marketplace rows below: a product can be live on Medicalka
+   while hidden in the bot for want of a photo, and conflating the two states
+   is exactly the confusion this line exists to prevent. */
+.ap-ch-shop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 var(--ch-pad) 10px;
+  padding: 8px 11px;
+  border-radius: 10px;
+  background: var(--paper-soft);
+}
+.ap-ch-shop .ap-ch-state { margin-left: 0; font-size: 12px; }
+.ap-ch-shop .ap-btn { margin-left: auto; }
+
+.ap-ch-state--warn { color: var(--ch-warn); }
+
 /* --------------------------------------------------- Channel rows */
 
 .ap-ch-rows { border-top: 1px solid var(--line-soft); }
