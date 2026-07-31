@@ -19,10 +19,33 @@ test('refuses to define a model on a collection the bot backend owns', () => {
   }
 });
 
-test('the owned-collection list stays limited to this service', () => {
+test('the writable-collection list stays limited to this service', () => {
+  // Growing this list is a deliberate act. If this assertion fails, check that
+  // the new collection is genuinely owned here and not by the bot backend.
   assert.deepEqual(
     [...db.OWNED_COLLECTIONS].sort(),
-    ['billzproducts', 'billztokens', 'synclogs']
+    ['billzproducts', 'billztokens', 'channelcounters', 'channelkeys', 'synclogs']
+  );
+});
+
+test('bot-owned collections are readable but never writable', () => {
+  assert.deepEqual([...db.READABLE_COLLECTIONS].sort(), ['products', 'settings']);
+
+  // Read access must not become a back door to writing.
+  for (const collection of db.READABLE_COLLECTIONS) {
+    assert.equal(db.OWNED_COLLECTIONS.has(collection), false,
+      `"${collection}" must not be writable`);
+  }
+  for (const method of db.READ_METHODS) {
+    assert.equal(/^(update|delete|remove|insert|save|replace|bulk|create)/i.test(method), false,
+      `"${method}" is not a read method`);
+  }
+});
+
+test('a collection with no declared access is refused for reads too', () => {
+  assert.throws(
+    () => db.defineReadModel('Orders', new mongoose.Schema({}), 'orders'),
+    /no read access/
   );
 });
 

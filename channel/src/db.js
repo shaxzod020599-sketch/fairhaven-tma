@@ -24,7 +24,28 @@ const OWNED_COLLECTIONS = new Set([
   'billzproducts',
   'billztokens',
   'synclogs',
+  'channelkeys',
+  'channelcounters',
 ]);
+
+/**
+ * Collections owned by the bot backend that this service may read.
+ *
+ * `products` carries the Fairhaven product card — per-channel price, whether a
+ * channel is enabled, descriptions — which the channel feeds need. Reading is
+ * necessary; writing is not, and `defineReadModel` makes that structural rather
+ * than a convention someone can forget.
+ */
+const READABLE_COLLECTIONS = new Set([
+  'products',
+  'settings',
+]);
+
+// Everything a feed legitimately needs, and nothing that mutates.
+const READ_METHODS = [
+  'find', 'findOne', 'findById', 'countDocuments', 'estimatedDocumentCount',
+  'distinct', 'aggregate', 'exists', 'watch',
+];
 
 let connection = null;
 
@@ -43,6 +64,32 @@ function defineModel(name, schema, collectionName) {
     );
   }
   return getConnection().model(name, schema, collection);
+}
+
+/**
+ * Registers a model on a bot-owned collection and returns a facade exposing
+ * only read methods. `update`, `delete`, `save` and friends are simply not
+ * present, so this service cannot write there even by mistake.
+ */
+function defineReadModel(name, schema, collectionName) {
+  const collection = collectionName || `${name.toLowerCase()}s`;
+  if (!READABLE_COLLECTIONS.has(collection)) {
+    throw new Error(
+      `channel-hub has no read access to "${collection}". ` +
+      `Add it to READABLE_COLLECTIONS if a channel feed genuinely needs it.`
+    );
+  }
+  // Mongoose caches models per connection; reuse on repeat calls.
+  const model = getConnection().models[name]
+    || getConnection().model(name, schema, collection);
+
+  const facade = { modelName: name, collectionName: collection };
+  for (const method of READ_METHODS) {
+    if (typeof model[method] === 'function') {
+      facade[method] = model[method].bind(model);
+    }
+  }
+  return Object.freeze(facade);
 }
 
 async function connect() {
@@ -67,4 +114,13 @@ async function disconnect() {
   connection = null;
 }
 
-module.exports = { connect, disconnect, defineModel, getConnection, OWNED_COLLECTIONS };
+module.exports = {
+  connect,
+  disconnect,
+  defineModel,
+  defineReadModel,
+  getConnection,
+  OWNED_COLLECTIONS,
+  READABLE_COLLECTIONS,
+  READ_METHODS,
+};

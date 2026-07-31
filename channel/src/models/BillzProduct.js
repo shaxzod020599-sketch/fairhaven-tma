@@ -36,6 +36,10 @@ const billzProductSchema = new mongoose.Schema({
   // only — nothing is written to Billz until an operator confirms.
   pendingQty: { type: Number, default: 0, min: 0 },
 
+  // Medicalka's contract types product ids as integers. Allocated once, on
+  // first publication, and then stable for the life of the product.
+  medicalkaId: { type: Number, default: null, index: true, sparse: true },
+
   deletedInBillz: { type: Boolean, default: false, index: true },
   syncedAt: { type: Date, default: null },
 }, { timestamps: true });

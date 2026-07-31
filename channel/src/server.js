@@ -28,6 +28,10 @@ app.use((req, _res, next) => {
   next();
 });
 
+// Channel adapters. Each marketplace gets its own prefix and its own keys, so
+// revoking one never affects another.
+app.use('/medicalka/v1', require('./adapters/medicalka/routes'));
+
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'channel-hub', writeEnabled: config.billzWriteEnabled });
 });
@@ -77,6 +81,7 @@ async function start() {
       `BILLZ_SHOP_ID ${config.billz.shopId} not found among ${shops.length} shop(s) on this key`
     );
   }
+  config.billz.shopName = shop.name || config.billz.shopName;
   logger.info('billz key verified', { shop: shop.name, shopId: shop.id });
 
   const server = app.listen(config.port, config.host, () => {
