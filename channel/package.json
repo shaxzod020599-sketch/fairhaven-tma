@@ -1,0 +1,21 @@
+{
+  "name": "fairhaven-channel-hub",
+  "version": "0.1.0",
+  "description": "Billz mirror and sales-channel gateway (Medicalka, Uzum Tezkor)",
+  "main": "src/server.js",
+  "private": true,
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test 'tests/*.test.js'",
+    "sync": "node scripts/sync-once.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "mongoose": "^8.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

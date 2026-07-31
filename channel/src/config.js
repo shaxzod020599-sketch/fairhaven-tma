@@ -1,0 +1,67 @@
+const path = require('path');
+
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+
+/**
+ * Configuration is read once at startup and validated eagerly, so a missing
+ * secret fails the process instead of surfacing as a confusing 401 hours later.
+ */
+
+function required(name) {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required in channel/.env`);
+  return value;
+}
+
+function number(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) throw new Error(`${name} must be a number, got "${raw}"`);
+  return n;
+}
+
+function bool(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  return raw === 'true';
+}
+
+const config = {
+  env: process.env.NODE_ENV || 'development',
+  port: number('PORT', 3100),
+  host: process.env.HOST || '127.0.0.1',
+
+  mongoUri: required('MONGO_URI'),
+  // Same database as the bot backend so the admin panel can read and write
+  // channel settings directly. This service only ever touches its own
+  // collections — see db.js for the guard that enforces it.
+  dbName: process.env.MONGO_DB_NAME || 'fairhaven',
+
+  billz: {
+    baseUrl: process.env.BILLZ_BASE_URL || 'https://api-admin.billz.ai',
+    secretToken: required('BILLZ_SECRET_TOKEN'),
+    shopId: required('BILLZ_SHOP_ID'),
+    cashboxId: process.env.BILLZ_CASHBOX_ID || '',
+    // Billz allows 2 requests/second per IP and blocks bursty traffic
+    // heuristically. Staying under the documented ceiling is deliberate.
+    requestsPerSecond: number('BILLZ_RPS', 1.5),
+    pageSize: number('BILLZ_PAGE_SIZE', 100),
+    timeoutMs: number('BILLZ_TIMEOUT_MS', 20000),
+  },
+
+  sync: {
+    intervalMs: number('SYNC_INTERVAL_MS', 5 * 60 * 1000),
+    // Guard rail: a sync that suddenly sees far fewer products than last time
+    // usually means a partial Billz response, not a real catalogue change.
+    // Below this ratio the run is rejected instead of marking stock as gone.
+    minCatalogRatio: number('SYNC_MIN_CATALOG_RATIO', 0.5),
+    runOnBoot: bool('SYNC_ON_BOOT', true),
+  },
+
+  // Writing sales back into Billz stays off until the integration key has the
+  // order methods enabled and the flow has been exercised against test data.
+  billzWriteEnabled: bool('BILLZ_WRITE_ENABLED', false),
+};
+
+module.exports = config;
