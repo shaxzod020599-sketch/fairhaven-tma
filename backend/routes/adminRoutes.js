@@ -3,8 +3,10 @@ const router = express.Router();
 const adminAuth = require('../middleware/adminAuth');
 const admin = require('../controllers/adminController');
 const upload = require('../controllers/uploadController');
+const { authLimiter, uploadLimiter } = require('../middleware/rateLimit');
 
-router.get('/whoami', admin.whoami);
+// Unauthenticated probe used by the panel to decide whether to show itself.
+router.get('/whoami', authLimiter, admin.whoami);
 
 // Everything below requires an admin user.
 router.use(adminAuth);
@@ -51,7 +53,7 @@ router.delete('/promos/:id', admin.deletePromo);
 router.patch('/promos/:id/toggle', admin.togglePromo);
 
 // Uploads
-router.post('/uploads', upload.uploadImage);
+router.post('/uploads', uploadLimiter, upload.uploadImage);
 router.get('/uploads', upload.listUploads);
 router.delete('/uploads/:filename', upload.deleteUpload);
 

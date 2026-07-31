@@ -26,6 +26,7 @@ const {
 const { UPLOAD_DIR } = require('./controllers/uploadController');
 const { launchBotWithRetry } = require('./utils/telegramRetry');
 const { redactPath, securityHeaders } = require('./utils/http');
+const { apiLimiter } = require('./middleware/rateLimit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,6 +36,10 @@ const CORS_ORIGIN = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'produ
 // Middleware
 app.disable('x-powered-by');
 app.set('query parser', 'simple');
+// nginx runs on this host and forwards over loopback. Without this, every
+// request looks like it comes from 127.0.0.1 and the rate limiters below would
+// throttle all clients as one.
+app.set('trust proxy', process.env.TRUST_PROXY || 'loopback');
 app.use(cors({
   origin: CORS_ORIGIN,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
@@ -42,7 +47,19 @@ app.use(cors({
 }));
 app.use(securityHeaders);
 app.use(cookieParser());
-app.use(express.json({ limit: '6mb' }));
+
+// Only the two image-upload endpoints receive a base64 dataUrl body; everything
+// else is small JSON. A single global 6mb limit let any unauthenticated POST
+// force a 6mb parse.
+const LARGE_BODY_ROUTES = new Set(['/api/admin/uploads', '/api/web/admin/upload']);
+const parseSmallJson = express.json({ limit: '100kb' });
+const parseLargeJson = express.json({ limit: '6mb' });
+app.use((req, res, next) => {
+  const parse = req.method === 'POST' && LARGE_BODY_ROUTES.has(req.path)
+    ? parseLargeJson
+    : parseSmallJson;
+  return parse(req, res, next);
+});
 
 // Request logger (dev)
 app.use((req, _res, next) => {
@@ -51,6 +68,9 @@ app.use((req, _res, next) => {
 });
 
 // API Routes
+// Broad ceiling for every API caller. Tighter per-endpoint limits (auth,
+// promo guessing, uploads) live next to the routes they protect.
+app.use('/api', apiLimiter);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
@@ -130,19 +150,40 @@ app.get('*', (req, res) => {
 
 // Global error handler
 app.use((err, _req, res, _next) => {
+  // Body-parser rejections are client errors; reporting them as 500 hides a
+  // misconfigured client behind a server fault.
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({ success: false, error: 'payload_too_large' });
+  }
+  if (err?.type === 'entity.parse.failed') {
+    return res.status(400).json({ success: false, error: 'invalid_json' });
+  }
   console.error('Unhandled error:', err?.name || 'Error', err?.code || '');
   res.status(500).json({ success: false, error: 'internal_error' });
 });
 
-// Auto-seed only an empty catalog. Never delete an existing production catalog.
+// Seed an empty catalog only when explicitly asked. Never deletes anything.
+//
+// Opt-in rather than keyed off NODE_ENV: if the process manager does not export
+// NODE_ENV=production, an environment-based check silently re-enables seeding in
+// production. An empty catalog there means the connection landed somewhere
+// unexpected (wrong dbName, restored volume, in-memory fallback) — writing seed
+// rows on top hides the real fault and creates products with no Billz link.
 async function autoSeed() {
   const Product = require('./models/Product');
   const count = await Product.countDocuments();
-  if (count === 0) {
-    console.log('📦 Seeding Fairhaven products...');
-    await Product.insertMany(FAIRHAVEN_PRODUCTS);
-    console.log(`✅ Seeded ${FAIRHAVEN_PRODUCTS.length} products`);
+  if (count > 0) return;
+
+  if (process.env.SEED_ON_EMPTY !== 'true') {
+    console.warn(
+      '⚠️  Catalog is empty and auto-seed is off. Verify MONGO_URI / dbName, ' +
+      'or set SEED_ON_EMPTY=true to populate a fresh development database.'
+    );
+    return;
   }
+  console.log('📦 Seeding Fairhaven products...');
+  await Product.insertMany(FAIRHAVEN_PRODUCTS);
+  console.log(`✅ Seeded ${FAIRHAVEN_PRODUCTS.length} products`);
 }
 
 // Start server
@@ -155,7 +196,12 @@ async function start() {
       console.log('✅ MongoDB connected (external)');
     } catch (_connErr) {
       if (process.env.ALLOW_IN_MEMORY_DB !== 'true') throw _connErr;
+      if (process.env.NODE_ENV === 'production') {
+        console.error('❌ ALLOW_IN_MEMORY_DB is set in production — refusing to start on a throwaway database.');
+        throw _connErr;
+      }
       console.log('⚠️  External MongoDB unavailable, starting in-memory server...');
+      // devDependency: only reachable in dev/test installs.
       const { MongoMemoryServer } = require('mongodb-memory-server');
       const mongod = await MongoMemoryServer.create();
       mongoUri = mongod.getUri();

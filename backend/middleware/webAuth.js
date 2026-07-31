@@ -18,11 +18,25 @@ function signSession(user) {
   );
 }
 
+/**
+ * Whether the session cookie must carry the Secure flag.
+ *
+ * Deriving this from NODE_ENV alone is fragile: if the process manager on the
+ * server does not export NODE_ENV=production, the session cookie silently
+ * downgrades to being sent over plain HTTP. The configured public URL is the
+ * more reliable signal — an https origin means the deployment is TLS-only.
+ */
+function isHttpsDeployment() {
+  const configured = [process.env.WEB_PUBLIC_URL, process.env.FRONTEND_URL];
+  if (configured.some((u) => typeof u === 'string' && u.startsWith('https://'))) return true;
+  return process.env.NODE_ENV === 'production';
+}
+
 function sessionCookieOptions() {
   return {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: isHttpsDeployment(),
     maxAge: SESSION_DAYS * 24 * 60 * 60 * 1000,
     path: '/',
   };

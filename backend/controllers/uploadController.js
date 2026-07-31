@@ -82,16 +82,28 @@ exports.uploadImage = async (req, res) => {
   }
 };
 
+/**
+ * The bot and the HTTP API share one event loop, so a synchronous stat() per
+ * file stalls Telegram handling too once the gallery grows. Read the directory
+ * and stat concurrently instead.
+ */
 exports.listUploads = async (_req, res) => {
   try {
     ensureDir();
-    const files = fs.readdirSync(UPLOAD_DIR)
-      .filter((f) => /\.(jpg|jpeg|png|webp|gif)$/i.test(f))
-      .map((f) => {
-        const stat = fs.statSync(path.join(UPLOAD_DIR, f));
+    const names = (await fs.promises.readdir(UPLOAD_DIR))
+      .filter((f) => /\.(jpg|jpeg|png|webp|gif)$/i.test(f));
+
+    const files = (await Promise.all(names.map(async (f) => {
+      try {
+        const stat = await fs.promises.stat(path.join(UPLOAD_DIR, f));
         return { filename: f, url: `/uploads/${f}`, size: stat.size, createdAt: stat.birthtime };
-      })
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      } catch (_) {
+        // Removed between readdir and stat — skip it rather than fail the list.
+        return null;
+      }
+    }))).filter(Boolean);
+
+    files.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     res.json({ success: true, data: files });
   } catch (err) {
     sendError(res, 500, err);
