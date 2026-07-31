@@ -155,9 +155,15 @@ body:has(.ap-shell.embedded) { padding-bottom: 0; }
 .ap-nav-icon {
   width: 28px;
   display: inline-flex;
+  align-items: center;
   justify-content: center;
-  font-size: 1rem;
+  /* SVG icons inherit colour and sit on the text baseline; the old emoji
+     needed font-size, these need alignment. */
+  opacity: 0.72;
+  transition: opacity var(--t-fast);
 }
+.ap-nav-item.active .ap-nav-icon,
+.ap-nav-item:hover .ap-nav-icon { opacity: 1; }
 
 .ap-user {
   margin-top: auto;
@@ -1017,7 +1023,7 @@ body:has(.ap-modal-backdrop) .ap-bottom-nav { display: none !important; }
 }
 .ap-bn-item:active { transform: scale(0.94); }
 .ap-bn-item.active { color: var(--terracotta); }
-.ap-bn-icon { font-size: 1.1rem; line-height: 1; }
+.ap-bn-icon { display: grid; place-items: center; line-height: 1; }
 .ap-bn-label { line-height: 1; white-space: nowrap; }
 
 /* --------------------------------- Mobile table → cards */

@@ -102,6 +102,30 @@ export const deletePromo = (id) =>
 export const togglePromo = (id) =>
   adminRequest(`/promos/${id}/toggle`, { method: 'PATCH' });
 
+// ──────────────────────── Sales channels (Medicalka, Uzum)
+export const listChannelProducts = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return adminRequest(`/channels/products${qs ? `?${qs}` : ''}`);
+};
+export const channelSummary = () => adminRequest('/channels/summary');
+export const updateProductChannel = (id, channel, body) =>
+  adminRequest(`/channels/products/${id}/${channel}`, { method: 'PATCH', body });
+export const updateProductChannelMeta = (id, body) =>
+  adminRequest(`/channels/products/${id}/meta`, { method: 'PATCH', body });
+export const linkProductToBillz = (id, billzProductId) =>
+  adminRequest(`/channels/products/${id}/link`, { method: 'PATCH', body: { billzProductId } });
+export const bulkUpdateChannel = (channel, body) =>
+  adminRequest(`/channels/bulk/${channel}`, { method: 'POST', body });
+export const searchBillzProducts = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return adminRequest(`/channels/billz${qs ? `?${qs}` : ''}`);
+};
+export const channelSyncStatus = () => adminRequest('/channels/sync');
+export const triggerChannelSync = () => adminRequest('/channels/sync', { method: 'POST' });
+export const channelSettings = () => adminRequest('/channels/settings');
+export const updateChannelSettings = (body) =>
+  adminRequest('/channels/settings', { method: 'PUT', body });
+
 // ──────────────────────── Uploads
 export const uploadImage = (dataUrl) =>
   adminRequest('/uploads', { method: 'POST', body: { dataUrl } });

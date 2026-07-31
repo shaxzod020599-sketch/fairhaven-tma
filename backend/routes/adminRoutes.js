@@ -3,6 +3,7 @@ const router = express.Router();
 const adminAuth = require('../middleware/adminAuth');
 const admin = require('../controllers/adminController');
 const upload = require('../controllers/uploadController');
+const channels = require('../controllers/channelController');
 const { authLimiter, uploadLimiter } = require('../middleware/rateLimit');
 
 // Unauthenticated probe used by the panel to decide whether to show itself.
@@ -51,6 +52,19 @@ router.post('/promos', admin.createPromo);
 router.patch('/promos/:id', admin.updatePromo);
 router.delete('/promos/:id', admin.deletePromo);
 router.patch('/promos/:id/toggle', admin.togglePromo);
+
+// Sales channels (Medicalka, Uzum Tezkor)
+router.get('/channels/products', channels.listProducts);
+router.get('/channels/summary', channels.summary);
+router.patch('/channels/products/:id/meta', channels.updateProductMeta);
+router.patch('/channels/products/:id/link', channels.linkBillz);
+router.patch('/channels/products/:id/:channel', channels.updateProductChannel);
+router.post('/channels/bulk/:channel', channels.bulkUpdate);
+router.get('/channels/billz', channels.searchBillz);
+router.get('/channels/sync', channels.syncStatus);
+router.post('/channels/sync', channels.triggerSync);
+router.get('/channels/settings', channels.getSettings);
+router.put('/channels/settings', channels.updateSettings);
 
 // Uploads
 router.post('/uploads', uploadLimiter, upload.uploadImage);

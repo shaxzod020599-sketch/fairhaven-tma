@@ -32,6 +32,31 @@ app.use((req, _res, next) => {
 // revoking one never affects another.
 app.use('/medicalka/v1', require('./adapters/medicalka/routes'));
 
+/**
+ * Internal control surface for the admin panel.
+ *
+ * The panel never talks to Billz directly — it asks here, so rate limiting and
+ * the single request queue stay in one process. Guarded by a shared token
+ * rather than an admin session: this is service-to-service over loopback, and
+ * nginx does not expose /internal.
+ */
+app.post('/internal/sync', async (req, res) => {
+  const expected = process.env.CHANNEL_INTERNAL_TOKEN;
+  const presented = req.get('X-Internal-Token') || '';
+  if (!expected) return res.status(503).json({ error: 'internal_token_not_configured' });
+  if (presented.length !== expected.length
+    || !require('crypto').timingSafeEqual(Buffer.from(presented), Buffer.from(expected))) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  try {
+    const result = await runCatalogSync({ force: req.query.force === 'true' });
+    res.json(result);
+  } catch (err) {
+    logger.error('manual sync failed', { err });
+    res.status(500).json({ error: 'sync_failed' });
+  }
+});
+
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'channel-hub', writeEnabled: config.billzWriteEnabled });
 });

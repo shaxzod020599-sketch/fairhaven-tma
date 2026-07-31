@@ -14,27 +14,35 @@ import Collections from './pages/Collections';
 import Settings from './pages/Settings';
 import Gallery from './pages/Gallery';
 import PromoCodes from './pages/PromoCodes';
+import Channels from './pages/Channels';
 import AdminToast from './components/Toast';
+import Icon from './components/Icon';
 
+// Icons are SVG rather than emoji: emoji render from the device's own font, so
+// they changed shape between iOS, Android and desktop Telegram, ignored colour
+// and weight, and sat off the text baseline.
 const NAV = [
-  { key: 'dashboard', label: 'Обзор', icon: '◉' },
-  { key: 'orders', label: 'Заказы', icon: '📦' },
-  { key: 'products', label: 'Товары', icon: '🌿' },
-  { key: 'collections', label: 'Подборки', icon: '✦' },
-  { key: 'promos', label: 'Промокоды', icon: '🎟' },
-  { key: 'gallery', label: 'Галерея', icon: '🖼' },
-  { key: 'customers', label: 'Клиенты', icon: '👥' },
-  { key: 'admins', label: 'Админы', icon: '👑' },
-  { key: 'settings', label: 'Настройки', icon: '⚙' },
+  { key: 'dashboard', label: 'Обзор', icon: 'dashboard' },
+  { key: 'orders', label: 'Заказы', icon: 'orders' },
+  { key: 'products', label: 'Товары', icon: 'products' },
+  { key: 'channels', label: 'Каналы', icon: 'channels' },
+  { key: 'collections', label: 'Подборки', icon: 'collections' },
+  { key: 'promos', label: 'Промокоды', icon: 'promos' },
+  { key: 'gallery', label: 'Галерея', icon: 'gallery' },
+  { key: 'customers', label: 'Клиенты', icon: 'customers' },
+  { key: 'admins', label: 'Админы', icon: 'admins' },
+  { key: 'settings', label: 'Настройки', icon: 'settings' },
 ];
 
-// Mobile bottom-nav — the 5 primary sections.
+// Bottom nav stays at five items (Material guidance); everything else lives
+// behind "Ещё". Channels replaces Promo here — it is checked daily, promo codes
+// are not.
 const MOBILE_NAV = [
-  { key: 'dashboard', label: 'Обзор', icon: '◉' },
-  { key: 'orders', label: 'Заказы', icon: '📦' },
-  { key: 'products', label: 'Товары', icon: '🌿' },
-  { key: 'promos', label: 'Промо', icon: '🎟' },
-  { key: 'more', label: 'Ещё', icon: '⋯' },
+  { key: 'dashboard', label: 'Обзор', icon: 'dashboard' },
+  { key: 'orders', label: 'Заказы', icon: 'orders' },
+  { key: 'products', label: 'Товары', icon: 'products' },
+  { key: 'channels', label: 'Каналы', icon: 'channels' },
+  { key: 'more', label: 'Ещё', icon: 'more' },
 ];
 
 export default function AdminApp({ onExit, embedded }) {
@@ -106,6 +114,7 @@ export default function AdminApp({ onExit, embedded }) {
       case 'admins': return <Admins me={me} toast={toastApi} />;
       case 'collections': return <Collections toast={toastApi} />;
       case 'promos': return <PromoCodes toast={toastApi} />;
+      case 'channels': return <Channels toast={toastApi} />;
       case 'gallery': return <Gallery toast={toastApi} />;
       case 'settings': return <Settings toast={toastApi} />;
       default: return <Dashboard onNavigate={navigate} />;
@@ -130,8 +139,9 @@ export default function AdminApp({ onExit, embedded }) {
               key={n.key}
               className={`ap-nav-item ${page === n.key ? 'active' : ''}`}
               onClick={() => navigate(n.key)}
+              aria-current={page === n.key ? 'page' : undefined}
             >
-              <span className="ap-nav-icon">{n.icon}</span>
+              <span className="ap-nav-icon"><Icon name={n.icon} size={19} /></span>
               <span>{n.label}</span>
             </button>
           ))}
@@ -207,25 +217,16 @@ export default function AdminApp({ onExit, embedded }) {
       <nav className="ap-bottom-nav">
         {MOBILE_NAV.map((n) => {
           const isActive = page === n.key;
-          if (n.key === 'more') {
-            return (
-              <button
-                key={n.key}
-                className={`ap-bn-item ${navOpen ? 'active' : ''}`}
-                onClick={() => setNavOpen((v) => !v)}
-              >
-                <span className="ap-bn-icon">{n.icon}</span>
-                <span className="ap-bn-label">{n.label}</span>
-              </button>
-            );
-          }
+          const isMore = n.key === 'more';
           return (
             <button
               key={n.key}
-              className={`ap-bn-item ${isActive ? 'active' : ''}`}
-              onClick={() => navigate(n.key)}
+              className={`ap-bn-item ${(isMore ? navOpen : isActive) ? 'active' : ''}`}
+              onClick={() => (isMore ? setNavOpen((v) => !v) : navigate(n.key))}
+              aria-current={!isMore && isActive ? 'page' : undefined}
+              aria-expanded={isMore ? navOpen : undefined}
             >
-              <span className="ap-bn-icon">{n.icon}</span>
+              <span className="ap-bn-icon"><Icon name={n.icon} size={21} /></span>
               <span className="ap-bn-label">{n.label}</span>
             </button>
           );

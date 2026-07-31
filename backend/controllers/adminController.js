@@ -182,6 +182,16 @@ exports.revertOrder = async (req, res) => {
 // ───────────────────────────────────────────────────────────────────────────
 // Products — full CRUD
 // ───────────────────────────────────────────────────────────────────────────
+const PRODUCT_PAGE_MAX = 200;
+
+/**
+ * Lists products for the admin panel.
+ *
+ * Paginated, but `data` stays a plain array and the page size only shrinks when
+ * a caller asks for it: the existing panel reads `res.data` directly, and the
+ * catalogue grows once Billz products start being added. Callers that want
+ * pages pass `page`/`limit` and read `meta`.
+ */
 exports.listProducts = async (req, res) => {
   try {
     const { search = '', category, availability } = req.query;
@@ -190,15 +200,29 @@ exports.listProducts = async (req, res) => {
     if (availability === 'available') filter.isAvailable = true;
     if (availability === 'unavailable') filter.isAvailable = false;
     if (search.trim()) {
-      const q = search.trim();
+      const q = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
         { name: { $regex: q, $options: 'i' } },
         { brand: { $regex: q, $options: 'i' } },
         { sku: { $regex: q, $options: 'i' } },
       ];
     }
-    const products = await Product.find(filter).sort({ createdAt: -1 });
-    res.json({ success: true, data: products });
+
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const rawLimit = Number(req.query.limit);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0
+      ? Math.min(rawLimit, PRODUCT_PAGE_MAX)
+      : PRODUCT_PAGE_MAX;
+
+    const [products, total] = await Promise.all([
+      Product.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+      Product.countDocuments(filter),
+    ]);
+
+    res.json({ success: true, data: products, meta: { total, page, limit } });
   } catch (err) {
     sendError(res, 500, err);
   }

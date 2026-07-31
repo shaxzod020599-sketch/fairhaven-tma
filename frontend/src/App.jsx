@@ -16,6 +16,7 @@ import Orders from './pages/Orders';
 import OrderDetail from './pages/OrderDetail';
 import AdminApp from './admin/AdminApp';
 import './admin/admin.css';
+import './admin/channels.css';
 
 const AUTH = {
   LOADING: 'loading',
