@@ -241,6 +241,8 @@ faqat biz sotayotgan tovarlar.
 
 ```
 billzProductId   String  unique index     Billz uuid
+medicalkaId      Number  unique sparse    Medicalka butun son ID talab qiladi;
+                                          nashr etilganda bir marta beriladi
 sku, barcode, name, brandName
 billzCategoryId, categoryPath
 measurementUnit                            'шт' / 'мл' / ...
@@ -258,7 +260,7 @@ sayt va kanallar shundan o'qiydi.
 ```
 // yangi maydonlar
 billzProductId   String  unique sparse index    ← Billz bilan bog'lanish, MAJBURIY
-medicalkaId      Number  unique sparse index    auto-increment (Medicalka butun son talab qiladi)
+barcode          String  default ''             Billz'ga bog'lash uchun
 mxikCode         String  default ''             bo'sh bo'lsa settings.defaultMxikCode ishlatiladi
 packageCode      String  default ''
 vatPercent
