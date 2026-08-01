@@ -250,15 +250,40 @@ holda marketpleys bizga qancha to'lanishini o'zi hal qilardi.
 |---|---|---|
 | 1 | **Billz kalitini almashtirish** — chatda ochiq yozilgan | Mijoz, zudlik bilan |
 | 2 | **VPS parolini almashtirish** — chatda ochiq yozilgan | Mijoz, zudlik bilan |
-| 3 | Billz'da zakaz/sotuv metodlari `403` — kalitda ruxsat yo'q | Billz menejeri |
-| 4 | `company_payment_type_id` — haqiqiy qiymat kerak | Billz menejeri |
+| 3 | Billz'da **bekor qilish** metodlariga ruxsat yo'q (quyida) | Billz menejeri |
+| 4 | Bank o'tkazmasi uchun to'lov turi Billz'da yo'q | Buxgalter |
 | 5 | Uzum `measure.unit` enum — dona tovar uchun aniqlash | Uzum menejeri |
 | 6 | Uzum `serviceCodesUz` majburiymi | Uzum menejeri |
 | 7 | `api.fairhaven.uz` + TLS (Uzum IP qabul qilmaydi) | Biz |
 
-**3-band tugamaguncha sotuv oqimi jonli Billz'da sinalmagan.** Kod yozilgan,
-shakllari hujjatga mos, birlik testlari bor — lekin haqiqiy Billz javobi
-ko'rilmagan. Ruxsat berilgach avval **test kompaniyasida** sinaladi.
+### Billz ruxsatlari — 01.08.2026 holati
+
+Jonli kompaniyada tekshirilgan (`medicalka api` foydalanuvchisi):
+
+| Metod | Holat |
+|---|---|
+| `POST /v2/order` — qoralama | ✅ ishlaydi |
+| `POST /v2/order-product/:id` — qator qo'shish | ✅ ishlaydi |
+| `POST /v2/order/create_postpone` — **bron** | ✅ ishlaydi |
+| `GET /v2/order/:id` | ✅ ishlaydi |
+| `GET /v1/company-payment-type` | ✅ ishlaydi |
+| `PUT /v2/order/cancel_postpone` — **bronni bo'shatish** | ❌ `403` |
+| `DELETE /v2/order-item/:id` — qatorni o'chirish | ❌ `403` |
+| `POST /v2/order-payment/:id` — **sotuv** | ⚠️ sinalmagan |
+
+Ya'ni kalit **bron qila oladi, lekin bo'shatolmaydi.** Bu eng yomon kombinatsiya:
+bekor qilingan zakaz tovarni Billz'ning o'z muddati tugagunicha (7 kun) ushlab
+turadi. Shu ikkita metodga ruxsat kerak.
+
+Sotuv metodi ataylab sinalmagan — u ostatokni haqiqatan kamaytiradi va chek
+yozadi. Ruxsatlar to'liq bo'lgach **test kompaniyasida** sinaladi.
+
+### Zond topgan xato
+
+`cancel_postpone` endpointining shakli noto'g'ri yozilgan edi — ID yo'lda emas,
+**tanada** bo'lishi kerak. Dalil: `/cancel_postpone/<id>` → `404` (bunday route
+yo'q), `/cancel_postpone` → `403` (route bor, ruxsat yo'q). Tuzatildi.
+Tuzatilmaganida har bir bekor qilish production'da `404` ga urilardi.
 
 ---
 

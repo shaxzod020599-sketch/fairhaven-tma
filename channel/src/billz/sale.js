@@ -116,11 +116,24 @@ async function reserve(orderId, { expiresAt, comment = '' } = {}) {
   });
 }
 
-/** Releases a reservation. The stock returns to the shop. */
+/**
+ * Releases a reservation. The stock returns to the shop.
+ *
+ * The order id goes in the body, not the path. Probing the live API settled
+ * this: `/v2/order/cancel_postpone/<id>` answers 404 — no such route — while
+ * `/v2/order/cancel_postpone` answers 403, which is a route that exists and a
+ * permission we do not yet hold. A 404 and a 403 from the same host are not the
+ * same kind of "no".
+ *
+ * Untested end to end for that reason. Everything up to here — draft, line,
+ * postpone — has been run against the real company; this call has not, because
+ * the integration key is still refused on it.
+ */
 async function releaseReservation(orderId) {
-  return billz.request('PUT', `/v2/order/cancel_postpone/${orderId}`, {
+  return billz.request('PUT', '/v2/order/cancel_postpone', {
     query: { 'Billz-Response-Channel': 'HTTP' },
     headers: HTTP_CHANNEL,
+    body: { order_id: orderId },
   });
 }
 

@@ -214,12 +214,18 @@ test('every write asks Billz to answer over HTTP', async () => {
   }
 });
 
-test('releasing a reservation targets the same draft', async () => {
+test('releasing a reservation names the draft in the body, not the path', async () => {
+  // Settled by probing the live API: `/cancel_postpone/<id>` answers 404 — no
+  // such route — while `/cancel_postpone` answers 403, a route that exists
+  // behind a permission we do not hold. Putting the id in the path meant every
+  // cancellation would have failed against a 404 in production, and the stock
+  // would have stayed held until Billz's own expiry.
   const rec = recordClient({ '/v2/order/cancel_postpone': {} });
   try {
     await sale.releaseReservation('draft-7');
     assert.equal(rec.calls[0].method, 'PUT');
-    assert.equal(rec.calls[0].path, '/v2/order/cancel_postpone/draft-7');
+    assert.equal(rec.calls[0].path, '/v2/order/cancel_postpone');
+    assert.deepEqual(rec.calls[0].body, { order_id: 'draft-7' });
   } finally {
     rec.restore();
   }
