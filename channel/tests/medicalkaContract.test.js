@@ -107,6 +107,23 @@ test('a card with no Billz mirror is not publishable', () => {
   assert.equal(catalog.isPublishable(card(), undefined, 'medicalka'), false);
 });
 
+test('a product deleted in Billz leaves the catalogue entirely', () => {
+  // Reporting zero stock is not enough: the marketplace would keep listing a
+  // product that can no longer be supplied.
+  assert.equal(catalog.isPublishable(card(), mirror({ deletedInBillz: true }), 'medicalka'), false);
+});
+
+test('the published quantity holds back minStock', () => {
+  // availableStock is what exists; minStock is the cushion kept for the shop
+  // floor. Publishing the former let the channel sell straight through it.
+  const m = mirror({ stock: 10, reservedQty: 2 });
+  assert.equal(catalog.availableStock(m), 8);
+  assert.equal(catalog.sellableStock(card({ minStock: 3 }), m, 'medicalka'), 5);
+  // Never negative, even when the cushion exceeds what is left.
+  assert.equal(catalog.sellableStock(card({ minStock: 99 }), m, 'medicalka'), 0);
+  assert.equal(catalog.sellableStock(card({ minStock: 0 }), m, 'medicalka'), 8);
+});
+
 /* ── Keys ───────────────────────────────────────────────────────────────── */
 
 test('issued keys are url-safe, tagged and high entropy', () => {

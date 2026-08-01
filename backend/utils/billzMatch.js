@@ -74,10 +74,21 @@ function similarity(a, b) {
   const rightGender = genderOf(rightTokens);
   if (leftGender && rightGender && leftGender !== rightGender) return 0;
 
+  // The smaller set of numbers must be contained in the larger one.
+  //
+  // Testing for *any* shared number was not enough: a dosage that both names
+  // carry ("Myo-Inositol 500mg №120" against "Myo-Inositol 500mg №240") shares
+  // 500, which let a 120-count card link to a 240-count Billz row. Subset
+  // containment allows one name to omit the dosage while still rejecting two
+  // names that state different counts.
   const leftPacks = packSizes(leftTokens);
   const rightPacks = packSizes(rightTokens);
-  if (leftPacks.length && rightPacks.length
-    && !leftPacks.some((n) => rightPacks.includes(n))) return 0;
+  if (leftPacks.length && rightPacks.length) {
+    const [smaller, larger] = leftPacks.length <= rightPacks.length
+      ? [leftPacks, rightPacks]
+      : [rightPacks, leftPacks];
+    if (!smaller.every((n) => larger.includes(n))) return 0;
+  }
 
   const left = new Set(leftTokens);
   const right = new Set(rightTokens);

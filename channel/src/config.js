@@ -46,6 +46,9 @@ const config = {
     // Shown to channels as the pharmacy/branch name. Overwritten at boot with
     // the name Billz reports for BILLZ_SHOP_ID.
     shopName: process.env.BILLZ_SHOP_NAME || 'Fairhaven Health',
+    // Reported to channels as the branch creation date. Must be stable across
+    // requests; server.js pins it to the first sync at boot.
+    shopCreatedAt: null,
     // Billz allows 2 requests/second per IP and blocks bursty traffic
     // heuristically. Staying under the documented ceiling is deliberate.
     requestsPerSecond: number('BILLZ_RPS', 1.5),

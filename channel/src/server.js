@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const express = require('express');
 const config = require('./config');
 const logger = require('./logger');
@@ -44,8 +45,7 @@ app.post('/internal/sync', async (req, res) => {
   const expected = process.env.CHANNEL_INTERNAL_TOKEN;
   const presented = req.get('X-Internal-Token') || '';
   if (!expected) return res.status(503).json({ error: 'internal_token_not_configured' });
-  if (presented.length !== expected.length
-    || !require('crypto').timingSafeEqual(Buffer.from(presented), Buffer.from(expected))) {
+  if (!tokensMatch(presented, expected)) {
     return res.status(401).json({ error: 'unauthorized' });
   }
   try {
@@ -56,6 +56,23 @@ app.post('/internal/sync', async (req, res) => {
     res.status(500).json({ error: 'sync_failed' });
   }
 });
+
+/**
+ * Constant-time comparison of two secrets of any length.
+ *
+ * Comparing raw buffers here would be a remote crash: `timingSafeEqual` throws
+ * unless both buffers are the same byte length, and a JavaScript string's
+ * `.length` counts UTF-16 code units, not bytes. One multi-byte character in
+ * the header — "…abcdéf" — passes a character-length check while producing a
+ * 33-byte buffer against a 32-byte secret, and the throw escapes an async
+ * Express handler as an unhandled rejection, which Node terminates on by
+ * default. Hashing first makes both sides 32 bytes whatever arrives.
+ */
+function tokensMatch(presented, expected) {
+  const a = crypto.createHash('sha256').update(String(presented)).digest();
+  const b = crypto.createHash('sha256').update(String(expected)).digest();
+  return crypto.timingSafeEqual(a, b);
+}
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'channel-hub', writeEnabled: config.billzWriteEnabled });
@@ -107,6 +124,14 @@ async function start() {
     );
   }
   config.billz.shopName = shop.name || config.billz.shopName;
+
+  // Channels see this as the pharmacy's `created_at`. It has to be the same
+  // value on every request — leaving it undefined made the serialiser fall back
+  // to "now", so a polling integrator saw the branch recreate itself each time.
+  // The first sync is the oldest durable timestamp available.
+  const firstSync = await SyncLog().findOne({}).sort({ createdAt: 1 }).lean();
+  config.billz.shopCreatedAt = firstSync?.createdAt || new Date();
+
   logger.info('billz key verified', { shop: shop.name, shopId: shop.id });
 
   const server = app.listen(config.port, config.host, () => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { whoami, setAdminTgId, clearAdminTgId } from './adminApi';
 import {
   pushBackButton,
@@ -58,7 +58,15 @@ export default function AdminApp({ onExit, embedded }) {
     setTimeout(() => setToast({ visible: false }), 2800);
   }, []);
 
-  const toastApi = { ok: (m) => showToast(m, 'ok'), err: (m) => showToast(m, 'err') };
+  // Memoised because pages put `toast` in useCallback/useEffect dependency
+  // lists. A fresh object each render made those callbacks unstable, so a page
+  // that refetches on failure and then shows a toast re-rendered this component,
+  // produced a new `toast`, and refetched again — an unbounded loop that only
+  // appeared once a request started failing.
+  const toastApi = useMemo(
+    () => ({ ok: (m) => showToast(m, 'ok'), err: (m) => showToast(m, 'err') }),
+    [showToast]
+  );
 
   const check = useCallback(async () => {
     try {

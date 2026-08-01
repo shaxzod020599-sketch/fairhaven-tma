@@ -29,46 +29,72 @@ function ChannelRow({ product, channel, onSave, toast }) {
   const [focused, setFocused] = useState(false);
   const [state, setState] = useState('idle'); // idle | saving | saved
   const timer = useRef(null);
-  const latest = useRef(cfg.price);
+  const savedTimer = useRef(null);
+  // The value waiting to be written. Non-null means there is an unsaved edit.
+  const pending = useRef(null);
+  const latest = useRef(Number(cfg.price) || 0);
 
   useEffect(() => {
-    // Adopt values that changed elsewhere (bulk edit, reload) but never
-    // overwrite what the operator is currently typing.
-    if (state === 'idle' && Number(cfg.price || 0) !== latest.current) {
-      latest.current = Number(cfg.price || 0);
+    // Adopt values changed elsewhere (bulk edit, reload) but never overwrite
+    // an edit in progress. Keyed off focus and the pending value rather than
+    // `state`, which is 'idle' the whole time someone is typing.
+    if (focused || pending.current !== null) return;
+    const incoming = Number(cfg.price) || 0;
+    if (incoming !== latest.current) {
+      latest.current = incoming;
       setPrice(String(cfg.price || ''));
     }
-  }, [cfg.price, state]);
+  }, [cfg.price, focused]);
 
-  useEffect(() => () => clearTimeout(timer.current), []);
+  useEffect(() => () => {
+    clearTimeout(timer.current);
+    clearTimeout(savedTimer.current);
+  }, []);
 
   const commit = async (patch) => {
     setState('saving');
+    clearTimeout(savedTimer.current);
     try {
       await onSave(channel, patch);
-      latest.current = patch.price ?? latest.current;
+      if (patch.price !== undefined) latest.current = patch.price;
       setState('saved');
-      setTimeout(() => setState('idle'), 1400);
+      savedTimer.current = setTimeout(() => setState('idle'), 1400);
     } catch (err) {
       setState('idle');
+      pending.current = null;
       setPrice(String(cfg.price || ''));
       toast?.err(err.message || 'Не сохранилось');
     }
   };
 
+  /**
+   * Writes the pending edit now.
+   *
+   * Blur used to cancel the debounce timer instead of firing it, so typing a
+   * price and clicking away inside the debounce window discarded the edit —
+   * silently, because the field kept displaying the value that was never saved.
+   */
+  const flushPrice = () => {
+    clearTimeout(timer.current);
+    const next = pending.current;
+    pending.current = null;
+    if (next === null || next === latest.current) return;
+    commit({ price: next });
+  };
+
   const onPriceChange = (event) => {
     const raw = event.target.value.replace(/[^\d]/g, '');
     setPrice(raw);
+    pending.current = Number(raw) || 0;
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      const next = Number(raw) || 0;
-      if (next === latest.current) return;
-      commit({ price: next });
-    }, 700);
+    timer.current = setTimeout(flushPrice, 700);
   };
 
   const setStatus = (forceStatus) => {
     if (forceStatus === cfg.forceStatus) return;
+    // A status change is a deliberate action; do not let it race a half-typed
+    // price that has not been written yet.
+    flushPrice();
     commit({ forceStatus });
   };
 
@@ -113,7 +139,7 @@ function ChannelRow({ product, channel, onSave, toast }) {
             value={focused ? price : (price ? money(price) : '')}
             onChange={onPriceChange}
             onFocus={() => setFocused(true)}
-            onBlur={() => { setFocused(false); clearTimeout(timer.current); }}
+            onBlur={() => { setFocused(false); flushPrice(); }}
             placeholder="не задана"
             aria-label={`Цена для ${CHANNEL_LABEL[channel]}, сум`}
           />

@@ -31,6 +31,18 @@ function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * First value of a query parameter, as a string.
+ *
+ * Express hands back an array when a parameter is repeated
+ * (`?search=a&search=b`), and calling a string method on that threw, turning a
+ * malformed request into a 500.
+ */
+function queryString(value) {
+  if (Array.isArray(value)) return String(value[0] ?? '');
+  return value === undefined || value === null ? '' : String(value);
+}
+
 function channelOf(product, channel) {
   return (product.channels && product.channels[channel]) || {};
 }
@@ -147,14 +159,19 @@ const POST_JOIN_FILTERS = {
   // clear immediately, so it gets its own filter.
   no_image: (row) => !row.shop.image,
   awaiting_approval: (row) => !row.approved,
-  out_of_stock: (row) => !row.billz || row.billz.available <= 0,
+  // Only meaningful for a linked product. A card with no Billz counterpart has
+  // no stock figure at all, and counting it here made the chip claim most of
+  // the catalogue was out of stock.
+  out_of_stock: (row) => Boolean(row.billz) && row.billz.available <= 0,
   deleted_in_billz: (row) => Boolean(row.billz && row.billz.deletedInBillz),
 };
 
 exports.listProducts = async (req, res) => {
   try {
     const { page, limit, skip } = parsePaging(req.query);
-    const { search = '', channel, filter } = req.query;
+    const search = queryString(req.query.search);
+    const channel = queryString(req.query.channel);
+    const filter = queryString(req.query.filter);
 
     const query = {};
     if (search.trim()) {
@@ -175,7 +192,12 @@ exports.listProducts = async (req, res) => {
     const byBillzId = new Map(mirrors.map((m) => [m.billzProductId, m]));
 
     let rows = products.map((p) => serialise(p, byBillzId.get(p.billzProductId)));
-    if (filter && POST_JOIN_FILTERS[filter]) rows = rows.filter(POST_JOIN_FILTERS[filter]);
+    // hasOwnProperty, not a bare lookup: `?filter=__proto__` resolved to an
+    // object and crashed Array.filter, and `?filter=constructor` resolved to a
+    // function that silently passed every row through.
+    if (filter && Object.prototype.hasOwnProperty.call(POST_JOIN_FILTERS, filter)) {
+      rows = rows.filter(POST_JOIN_FILTERS[filter]);
+    }
 
     res.json({
       success: true,
@@ -439,7 +461,7 @@ exports.updateProductMeta = async (req, res) => {
 exports.searchBillz = async (req, res) => {
   try {
     const { limit } = parsePaging(req.query);
-    const search = String(req.query.search || '').trim();
+    const search = queryString(req.query.search).trim();
 
     const query = { deletedInBillz: false };
     if (search) {

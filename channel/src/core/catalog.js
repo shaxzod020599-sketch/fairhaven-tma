@@ -53,9 +53,25 @@ function priceFor(card, channel) {
 
 function isPublishable(card, mirror, channel) {
   if (!card || !mirror) return false;
+  // A product Billz no longer carries must leave the catalogue, not merely
+  // report zero stock: leaving it listed means the marketplace keeps showing a
+  // product that cannot be supplied.
+  if (mirror.deletedInBillz) return false;
   const cfg = channelConfig(card, channel);
   if (!cfg.enabled) return false;
   return priceFor(card, channel) > 0;
+}
+
+/**
+ * Units a channel may actually be told about.
+ *
+ * `availableStock` is what exists after reservations; `minStock` is the
+ * cushion held back for the shop floor. Publishing the former let a channel
+ * sell straight through the cushion, which is the one thing it exists to stop.
+ */
+function sellableStock(card, mirror, channel) {
+  const cfg = channelConfig(card, channel);
+  return Math.max(0, availableStock(mirror) - (Number(cfg.minStock) || 0));
 }
 
 /**
@@ -134,4 +150,5 @@ module.exports = {
   isPublishable,
   listForChannel,
   priceFor,
+  sellableStock,
 };

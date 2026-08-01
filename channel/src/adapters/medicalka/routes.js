@@ -116,7 +116,7 @@ router.get('/inventory', read, async (req, res, next) => {
       return S.inventoryRow({
         pharmacyId: PHARMACY_ID,
         medicalkaId: decorated.medicalkaId,
-        quantity: catalog.availableStock(entry.mirror),
+        quantity: catalog.sellableStock(entry.card, entry.mirror, CHANNEL),
         price: decorated.price,
       });
     }));
@@ -150,7 +150,7 @@ router.get('/stock', read, async (req, res, next) => {
     res.json(S.inventoryRow({
       pharmacyId: PHARMACY_ID,
       medicalkaId: productId,
-      quantity: catalog.availableStock(entry.mirror),
+      quantity: catalog.sellableStock(entry.card, entry.mirror, CHANNEL),
       price: catalog.priceFor(entry.card, CHANNEL),
     }));
   } catch (err) { next(err); }

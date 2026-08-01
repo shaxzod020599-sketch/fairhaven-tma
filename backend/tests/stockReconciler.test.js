@@ -144,6 +144,19 @@ test('a conflicting pack size is never a match', () => {
   assert.equal(similarity('Myo-Inositol №120', 'Fairhaven Myo-Inositol, №240'), 0);
 });
 
+test('a shared dosage does not excuse a different pack size', () => {
+  // Testing for *any* shared number let 500 (the dosage, present in both) wave
+  // through a 120-count card matching a 240-count Billz row.
+  assert.equal(similarity('Myo-Inositol 500mg №120', 'Myo-Inositol 500mg №240'), 0);
+  // The same dosage with the same count still matches.
+  assert.ok(similarity('Myo-Inositol 500mg №120', 'Myo-Inositol 500mg №120') > 0.6);
+});
+
+test('a name that omits the dosage still matches one that states it', () => {
+  // Subset containment, not equality: one side may simply say less.
+  assert.ok(similarity('Myo-Inositol №120', 'Fairhaven Myo-Inositol 500mg, №120') > 0.5);
+});
+
 test('two pack sizes with no size on the card is reported, not guessed', () => {
   const hit = proposeMatch({ name: 'Myo-Inositol Powder' }, billz);
   assert.equal(hit.method, 'ambiguous');
