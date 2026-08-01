@@ -287,6 +287,18 @@ async function cancelOrder(internalOrderId, { reason = '' } = {}) {
   if (order.billz.draftOrderId) {
     try {
       await sale.releaseReservation(order.billz.draftOrderId);
+      // Releasing turns the reservation back into a draft rather than removing
+      // it. Without this second step every cancelled marketplace order would
+      // leave an empty draft in the operator's sales list, permanently.
+      // Non-fatal on its own: the stock is already back, and a stray draft is
+      // clutter rather than a stock error.
+      try {
+        await sale.deleteDraft(order.billz.draftOrderId);
+      } catch (err) {
+        logger.warn('released the reservation but could not remove the draft', {
+          internalOrderId, billzOrderId: order.billz.draftOrderId, err,
+        });
+      }
     } catch (err) {
       // The stock still has to come back on our side. Billz keeps its own
       // expiry on the postpone, so a stuck draft releases itself eventually,

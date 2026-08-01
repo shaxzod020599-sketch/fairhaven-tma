@@ -66,6 +66,20 @@ keyingi sinxron buni tuzatmaydi. Aynan shu sababdan har bir zakazda
 `reservationApplied` va `pendingApplied` bayroqlari bor: qayta urinish o'sha
 donalarni ikkinchi marta ushlab qolmaydi, bo'shatish ikkinchi marta qaytarmaydi.
 
+### `reservedQty` ni ayirish — majburiy, ehtiyot chorasi emas
+
+Jonli kompaniyada o'lchandi: API orqali **3 dona bron qilindi**, sinxron
+`stock` deb o'qiydigan `active_measurement_value` esa **o'n soniya davomida
+o'zgarmadi** (1080 → 1080 → 1080).
+
+Ya'ni Billz otложканни yozib qo'yadi, lekin uni o'z mahsulot ro'yxatidagi
+qoldiqdan **ayirmaydi**.
+
+Demak «Billz o'zi biladi, shunchaki uning ostatogini o'qiymiz» degan
+soddalashtirish **oversell qiladi**: har bir marketpleys allaqachon band
+donalarni sotishda davom etardi va farq faqat kuryer yo'q tovarga kelganda
+bilinardi.
+
 ### Ko'rinish qoidalari (ustuvorlik tartibida)
 
 1. Rasm yo'q → yashirin. Har doim.
@@ -250,40 +264,52 @@ holda marketpleys bizga qancha to'lanishini o'zi hal qilardi.
 |---|---|---|
 | 1 | **Billz kalitini almashtirish** — chatda ochiq yozilgan | Mijoz, zudlik bilan |
 | 2 | **VPS parolini almashtirish** — chatda ochiq yozilgan | Mijoz, zudlik bilan |
-| 3 | Billz'da **bekor qilish** metodlariga ruxsat yo'q (quyida) | Billz menejeri |
+| 3 | Sotuv metodi test kompaniyada sinalishi kerak | Biz + Billz |
 | 4 | Bank o'tkazmasi uchun to'lov turi Billz'da yo'q | Buxgalter |
 | 5 | Uzum `measure.unit` enum — dona tovar uchun aniqlash | Uzum menejeri |
 | 6 | Uzum `serviceCodesUz` majburiymi | Uzum menejeri |
 | 7 | `api.fairhaven.uz` + TLS (Uzum IP qabul qilmaydi) | Biz |
 
-### Billz ruxsatlari — 01.08.2026 holati
+### Billz metodlari — 01.08.2026 holati
 
 Jonli kompaniyada tekshirilgan (`medicalka api` foydalanuvchisi):
 
 | Metod | Holat |
 |---|---|
-| `POST /v2/order` — qoralama | ✅ ishlaydi |
-| `POST /v2/order-product/:id` — qator qo'shish | ✅ ishlaydi |
-| `POST /v2/order/create_postpone` — **bron** | ✅ ishlaydi |
-| `GET /v2/order/:id` | ✅ ishlaydi |
-| `GET /v1/company-payment-type` | ✅ ishlaydi |
-| `PUT /v2/order/cancel_postpone` — **bronni bo'shatish** | ❌ `403` |
-| `DELETE /v2/order-item/:id` — qatorni o'chirish | ❌ `403` |
-| `POST /v2/order-payment/:id` — **sotuv** | ⚠️ sinalmagan |
+| `POST /v2/order` — qoralama | ✅ |
+| `POST /v2/order-product/:id` — qator | ✅ |
+| `POST /v2/order/create_postpone` — **bron** | ✅ |
+| `POST /v2/order/return-postpone` — **bronni bo'shatish** | ✅ |
+| `DELETE /v2/order/:id` — qoralamani o'chirish | ✅ |
+| `GET /v2/order/:id` | ✅ |
+| `GET /v1/company-payment-type` | ✅ |
+| `POST /v2/order-payment/:id` — **sotuv** | ⚠️ ataylab sinalmagan |
 
-Ya'ni kalit **bron qila oladi, lekin bo'shatolmaydi.** Bu eng yomon kombinatsiya:
-bekor qilingan zakaz tovarni Billz'ning o'z muddati tugagunicha (7 kun) ushlab
-turadi. Shu ikkita metodga ruxsat kerak.
+To'liq zanjir jonli kompaniyada uch marta ishlatildi: qoralama → qator →
+bron → bo'shatish → o'chirish. **Hech narsa qolmadi**, ostatok boshlang'ich
+qiymatiga qaytdi.
 
 Sotuv metodi ataylab sinalmagan — u ostatokni haqiqatan kamaytiradi va chek
-yozadi. Ruxsatlar to'liq bo'lgach **test kompaniyasida** sinaladi.
+yozadi. **Test kompaniyasida** sinaladi, prodda emas.
 
-### Zond topgan xato
+### Endpoint nomini taxmin qilish qimmatga tushdi
 
-`cancel_postpone` endpointining shakli noto'g'ri yozilgan edi — ID yo'lda emas,
-**tanada** bo'lishi kerak. Dalil: `/cancel_postpone/<id>` → `404` (bunday route
-yo'q), `/cancel_postpone` → `403` (route bor, ruxsat yo'q). Tuzatildi.
-Tuzatilmaganida har bir bekor qilish production'da `404` ga urilardi.
+`cancel_postpone` degan endpoint **umuman yo'q**. Bu nom taxmin qilingan edi va
+ikkita turli shaklda ham noto'g'ri chiqdi — ikkalasini ham Billz'ning o'z status
+kodlari ishonarli qilib ko'rsatdi: bir yo'lda `404`, boshqasida `403`, ya'ni
+«route bor, ruxsat yetishmayapti» degan xulosa. Aslida ikkala route ham yo'q edi.
+
+To'g'risi — `POST /v2/order/return-postpone`, tanada `{order_id}`. Rasmiy
+metodlar ro'yxatidan tasdiqlandi, keyin jonli kompaniyada ishlatildi.
+
+Yana ikkita narsa shu yerdan chiqdi:
+
+- **Bo'shatish o'chirmaydi.** Billz bronni qoralamaga qaytaradi, xolos. Ikkinchi
+  qadam qo'shilmaganida har bir bekor qilingan zakaz operatorning sotuvlar
+  ro'yxatida bo'sh qoralama qoldirardi — abadiy.
+- **Qatorni o'chirish hujjatga zid.** Hujjat `measurement_value: 0` deydi, API
+  validatori esa `min_allowed: 0.01` deb rad etadi. Bizga bu metod kerak emas:
+  butun qoralamani o'chirish ishlaydi.
 
 ---
 

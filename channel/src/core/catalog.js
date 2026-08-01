@@ -25,6 +25,17 @@ function channelConfig(card, channel) {
  * orders still awaiting Telegram approval. Subtracting the pending ones is what
  * stops a marketplace from selling a unit that a customer is already waiting on
  * — the reservation itself is only written to Billz after approval.
+ *
+ * **Subtracting `reservedQty` is not belt-and-braces; it is the only thing
+ * doing the job.** Measured against the live company: three units were reserved
+ * through the API and `active_measurement_value` — the field this mirror reads
+ * as `stock` — did not move, over ten seconds. Billz records a postponed order
+ * without deducting it from the number its product list reports.
+ *
+ * So the tempting simplification, "Billz already knows what is reserved, just
+ * read its stock", oversells: every marketplace would keep selling units that
+ * are already spoken for, and the discrepancy only surfaces when a courier
+ * arrives for something that is gone.
  */
 function availableStock(mirror) {
   return Math.max(0, (mirror.stock || 0) - (mirror.reservedQty || 0) - (mirror.pendingQty || 0));

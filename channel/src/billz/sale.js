@@ -117,23 +117,39 @@ async function reserve(orderId, { expiresAt, comment = '' } = {}) {
 }
 
 /**
- * Releases a reservation. The stock returns to the shop.
+ * Releases a reservation. The held units return to the shop's active stock.
  *
- * The order id goes in the body, not the path. Probing the live API settled
- * this: `/v2/order/cancel_postpone/<id>` answers 404 — no such route — while
- * `/v2/order/cancel_postpone` answers 403, which is a route that exists and a
- * permission we do not yet hold. A 404 and a 403 from the same host are not the
- * same kind of "no".
+ * There is no `cancel_postpone` endpoint. That name was a guess and it was
+ * wrong — twice, in two different shapes — and both guesses were wrong in a way
+ * the API's own error codes made look plausible: a 404 for one path and a 403
+ * for another read as "the route exists, we lack permission". Neither route
+ * existed. Verified against the published method list and then run against the
+ * live company.
  *
- * Untested end to end for that reason. Everything up to here — draft, line,
- * postpone — has been run against the real company; this call has not, because
- * the integration key is still refused on it.
+ * **This returns the order to a draft; it does not remove it.** Billz is
+ * explicit about that, and leaving it there means every cancelled marketplace
+ * order deposits an empty draft in the operator's sales list forever. Callers
+ * follow this with `deleteDraft`.
  */
 async function releaseReservation(orderId) {
-  return billz.request('PUT', '/v2/order/cancel_postpone', {
+  return billz.request('POST', '/v2/order/return-postpone', {
     query: { 'Billz-Response-Channel': 'HTTP' },
     headers: HTTP_CHANNEL,
     body: { order_id: orderId },
+  });
+}
+
+/**
+ * Removes a draft outright.
+ *
+ * Only works on a draft: a postponed order is refused with "failed to validate
+ * delete order" until its reservation has been returned, so this always follows
+ * `releaseReservation` rather than replacing it.
+ */
+async function deleteDraft(orderId) {
+  return billz.request('DELETE', `/v2/order/${orderId}`, {
+    query: { 'Billz-Response-Channel': 'HTTP' },
+    headers: HTTP_CHANNEL,
   });
 }
 
@@ -144,7 +160,7 @@ async function releaseReservation(orderId) {
  * are settled by transfer rather than cash, and recording them under the wrong
  * type corrupts the till reconciliation rather than just mislabelling a row.
  */
-async function completeSale(orderId, { paymentTypeId, amount, comment = '' }) {
+async function completeSale(orderId, { paymentTypeId, paymentTypeName, amount, comment = '' }) {
   if (!paymentTypeId) {
     throw new Error('a company payment type is required to complete a sale');
   }
@@ -152,7 +168,16 @@ async function completeSale(orderId, { paymentTypeId, amount, comment = '' }) {
     query: { 'Billz-Response-Channel': 'HTTP' },
     headers: HTTP_CHANNEL,
     body: {
-      payments: [{ company_payment_type_id: paymentTypeId, paid_amount: amount, returned_amount: 0 }],
+      payments: [{
+        company_payment_type_id: paymentTypeId,
+        paid_amount: amount,
+        returned_amount: 0,
+        // Redundant with the id, and every documented example carries it.
+        // Sent when configured because a refused payment leaves an order
+        // reserved but unsold, and this call cannot be rehearsed — the only way
+        // to find out whether Billz requires the field is to sell something.
+        ...(paymentTypeName ? { company_payment_type: { name: paymentTypeName } } : {}),
+      }],
       comment,
       with_cashback: 0,
       without_cashback: false,
@@ -208,6 +233,7 @@ module.exports = {
   addLine,
   completeSale,
   createDraft,
+  deleteDraft,
   formatBillzTime,
   releaseReservation,
   reserve,

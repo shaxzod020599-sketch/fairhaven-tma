@@ -214,18 +214,58 @@ test('every write asks Billz to answer over HTTP', async () => {
   }
 });
 
-test('releasing a reservation names the draft in the body, not the path', async () => {
-  // Settled by probing the live API: `/cancel_postpone/<id>` answers 404 — no
-  // such route — while `/cancel_postpone` answers 403, a route that exists
-  // behind a permission we do not hold. Putting the id in the path meant every
-  // cancellation would have failed against a 404 in production, and the stock
-  // would have stayed held until Billz's own expiry.
-  const rec = recordClient({ '/v2/order/cancel_postpone': {} });
+test('releasing a reservation calls return-postpone, the documented method', async () => {
+  // There is no `cancel_postpone` endpoint at all. That name was guessed and
+  // was wrong in two different shapes, both of which the API's own status codes
+  // made look plausible — a 404 on one path and a 403 on another read as "the
+  // route exists, we lack permission". Either guess meant every cancellation
+  // failed in production and the stock stayed held until Billz's own expiry.
+  const rec = recordClient({ '/v2/order/return-postpone': {} });
   try {
     await sale.releaseReservation('draft-7');
-    assert.equal(rec.calls[0].method, 'PUT');
-    assert.equal(rec.calls[0].path, '/v2/order/cancel_postpone');
+    assert.equal(rec.calls[0].method, 'POST');
+    assert.equal(rec.calls[0].path, '/v2/order/return-postpone');
     assert.deepEqual(rec.calls[0].body, { order_id: 'draft-7' });
+  } finally {
+    rec.restore();
+  }
+});
+
+test('removing a draft is a separate call from releasing it', async () => {
+  // Billz returns a released reservation to draft rather than deleting it, so
+  // a cancellation that stops at the release leaves an empty draft behind
+  // every single time.
+  const rec = recordClient({ '/v2/order/draft-7': {} });
+  try {
+    await sale.deleteDraft('draft-7');
+    assert.equal(rec.calls[0].method, 'DELETE');
+    assert.equal(rec.calls[0].path, '/v2/order/draft-7');
+  } finally {
+    rec.restore();
+  }
+});
+
+test('a completed sale carries the payment type name when one is configured', async () => {
+  // Redundant with the id, and in every documented example. Sent because this
+  // call cannot be rehearsed: a refused payment leaves an order reserved but
+  // unsold, and the only way to learn whether Billz requires the field is to
+  // sell something real.
+  const rec = recordClient({ '/v2/order-payment/draft-9': {} });
+  try {
+    await sale.completeSale('draft-9', {
+      paymentTypeId: 'pt-1', paymentTypeName: 'Карта', amount: 1000,
+    });
+    assert.deepEqual(rec.calls[0].body.payments[0].company_payment_type, { name: 'Карта' });
+  } finally {
+    rec.restore();
+  }
+});
+
+test('the payment type name is omitted rather than invented', async () => {
+  const rec = recordClient({ '/v2/order-payment/draft-9': {} });
+  try {
+    await sale.completeSale('draft-9', { paymentTypeId: 'pt-1', amount: 1000 });
+    assert.equal('company_payment_type' in rec.calls[0].body.payments[0], false);
   } finally {
     rec.restore();
   }
