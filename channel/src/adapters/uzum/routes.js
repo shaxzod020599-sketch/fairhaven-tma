@@ -36,7 +36,11 @@ router.use(authFailureLimiter);
 // Uzum posts the token request as a form, everything else as JSON.
 router.use(express.urlencoded({ extended: false, limit: '16kb' }));
 
-const SETTING_KEYS = ['defaultMxikCode', 'defaultPackageCode'];
+// Exactly the keys the admin panel writes — see the backend's
+// channelController, which owns this collection. A near-miss here reads as
+// "no default configured" and silently falls back to the environment, so the
+// operator's setting would never reach Uzum.
+const SETTING_KEYS = ['channels.defaultMxikCode', 'channels.defaultPackageCode'];
 
 function fail(res, status, description, code = status) {
   return res.status(status).type(S.CONTENT_TYPES.order).json(S.errors({ code, description }));

@@ -124,6 +124,13 @@ export const triggerChannelSync = () => adminRequest('/channels/sync', { method:
 export const channelSettings = () => adminRequest('/channels/settings');
 export const updateChannelSettings = (body) =>
   adminRequest('/channels/settings', { method: 'PUT', body });
+// Marketplace credentials. `issueChannelKey` is the only call that ever returns
+// a secret, and it returns it once — nothing stores the plaintext.
+export const listChannelKeys = () => adminRequest('/channels/keys');
+export const issueChannelKey = (body) =>
+  adminRequest('/channels/keys', { method: 'POST', body });
+export const revokeChannelKey = (id) =>
+  adminRequest(`/channels/keys/${id}/revoke`, { method: 'POST' });
 
 // ──────────────────────── Uploads
 export const uploadImage = (dataUrl) =>

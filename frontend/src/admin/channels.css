@@ -645,3 +645,148 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ─────────────────────────────────────────────── Access & credentials
+
+   A separate job from day-to-day pricing: done once at setup, then rarely.
+   Kept visually quieter than the product list so the revoke buttons are not
+   the first thing an operator's eye lands on. */
+
+.ap-ch-views {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 16px;
+  background: var(--paper-soft);
+  border-radius: var(--r-pill);
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ap-ch-views::-webkit-scrollbar { display: none; }
+
+.ap-ch-view {
+  padding: 8px 16px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 150ms var(--ease-out), background-color 150ms var(--ease-out);
+}
+.ap-ch-view:hover { color: var(--ink); }
+.ap-ch-view.is-active {
+  background: var(--paper-warm);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(14, 43, 31, 0.08));
+}
+
+.ap-ch-keys { display: grid; gap: 16px; }
+.ap-ch-keycard { padding: 20px; }
+
+.ap-ch-keytitle {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.ap-ch-keysub {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-width: 62ch;
+  margin-bottom: 16px;
+}
+
+.ap-ch-issue {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.ap-ch-issuegroup { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ap-ch-issuechannel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.ap-ch-keytable { display: grid; gap: 8px; }
+.ap-ch-keyrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--paper-soft);
+}
+.ap-ch-keychannel { font-weight: 600; font-size: 0.875rem; }
+.ap-ch-keyfp,
+.ap-ch-keyclient {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  border-radius: var(--r-sm, 6px);
+  background: var(--paper-warm);
+  color: var(--ink);
+}
+.ap-ch-keykind {
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ap-ch-keyused { font-size: 0.8rem; color: var(--ink-soft); margin-left: auto; }
+
+.ap-ch-revoked { margin-top: 14px; }
+.ap-ch-revoked summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  padding: 6px 0;
+}
+.ap-ch-revoked .ap-ch-keyrow { opacity: 0.6; }
+
+.ap-ch-mxikrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ap-ch-mxikrow .ap-input { max-width: 260px; font-variant-numeric: tabular-nums; }
+
+/* The one moment a secret exists outside the server. Loud on purpose. */
+.ap-ch-revealwarn {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  border-radius: var(--r-md);
+  background: var(--warn-soft, #fff4e0);
+  color: var(--warn-ink, #7a4a00);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.ap-ch-revealfield { margin-bottom: 14px; }
+.ap-ch-revealrow { display: flex; gap: 8px; align-items: center; }
+.ap-ch-revealvalue {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.8rem;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  background: var(--paper-soft);
+  word-break: break-all;
+  user-select: all;
+}
+
+@media (max-width: 560px) {
+  .ap-ch-keyused { margin-left: 0; width: 100%; }
+}

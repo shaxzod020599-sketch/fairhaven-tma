@@ -13,6 +13,7 @@ import {
 import Icon from '../components/Icon';
 import Modal from '../components/Modal';
 import ChannelCard, { CHANNEL_LABEL, money } from '../components/ChannelCard';
+import ChannelKeys from '../components/ChannelKeys';
 
 const CHANNELS = ['medicalka', 'uzum'];
 const PAGE_SIZE = 30;
@@ -42,6 +43,7 @@ function relativeTime(value) {
 }
 
 export default function Channels({ toast }) {
+  const [view, setView] = useState('products');
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ total: 0, page: 1 });
   const [counts, setCounts] = useState({});
@@ -177,6 +179,32 @@ export default function Channels({ toast }) {
         </div>
       </div>
 
+      {/* Credentials and catalogue defaults are a separate job from pricing —
+          done once at setup, then rarely. Kept behind a switch so the screen an
+          operator opens every day is not the one with the revoke buttons. */}
+      <div className="ap-ch-views" role="tablist" aria-label="Раздел">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'products'}
+          className={`ap-ch-view ${view === 'products' ? 'is-active' : ''}`}
+          onClick={() => setView('products')}
+        >
+          Товары и цены
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'access'}
+          className={`ap-ch-view ${view === 'access' ? 'is-active' : ''}`}
+          onClick={() => setView('access')}
+        >
+          Доступ и ИКПУ
+        </button>
+      </div>
+
+      {view === 'access' ? <ChannelKeys toast={toast} /> : (
+      <>
       <SyncBar sync={sync} syncing={syncing} onSync={runSync} />
 
       <div className="ap-ch-toolbar">
@@ -324,6 +352,8 @@ export default function Channels({ toast }) {
           }}
           toast={toast}
         />
+      )}
+      </>
       )}
     </div>
   );

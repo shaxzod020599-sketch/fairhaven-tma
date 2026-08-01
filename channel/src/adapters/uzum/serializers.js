@@ -166,11 +166,19 @@ function orderStatus(record) {
   };
 }
 
-/** Defaults an operator can change without a deploy. */
+/**
+ * Defaults an operator can change without a deploy.
+ *
+ * Keyed as the admin panel stores them. The environment value is the fallback
+ * for a deployment where nobody has opened that screen yet, not the other way
+ * round — the panel is where this is meant to be set.
+ */
 function defaultsFrom(settings) {
   return {
-    mxikCode: String(settings?.defaultMxikCode || config.defaultMxikCode || '').trim(),
-    packageCode: String(settings?.defaultPackageCode || '').trim(),
+    mxikCode: String(
+      settings?.['channels.defaultMxikCode'] || config.defaultMxikCode || ''
+    ).trim(),
+    packageCode: String(settings?.['channels.defaultPackageCode'] || '').trim(),
   };
 }
 

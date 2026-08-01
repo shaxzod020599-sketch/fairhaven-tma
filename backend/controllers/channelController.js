@@ -1,6 +1,7 @@
 const Product = require('../models/Product');
 const BillzProductView = require('../models/BillzProductView');
 const Setting = require('../models/Setting');
+const channelHub = require('../utils/channelHub');
 const { sendError } = require('../utils/http');
 
 /**
@@ -538,23 +539,88 @@ exports.syncStatus = async (_req, res) => {
 
 /** Asks channel-hub to sync now. The panel never talks to Billz itself. */
 exports.triggerSync = async (_req, res) => {
-  const base = process.env.CHANNEL_HUB_URL;
-  const token = process.env.CHANNEL_INTERNAL_TOKEN;
-  if (!base || !token) {
-    return res.status(503).json({ success: false, error: 'channel_hub_not_configured' });
-  }
   try {
-    const response = await fetch(`${base.replace(/\/+$/, '')}/internal/sync`, {
-      method: 'POST',
-      headers: { 'X-Internal-Token': token },
-      signal: AbortSignal.timeout(30000),
-    });
-    const body = await response.json().catch(() => null);
-    if (!response.ok) {
-      return res.status(502).json({ success: false, error: 'sync_failed', data: body });
+    const result = await channelHub.request('POST', '/internal/sync');
+    if (!result.ok) {
+      return res.status(502).json({ success: false, error: 'sync_failed', data: result.body });
     }
-    res.json({ success: true, data: body });
+    res.json({ success: true, data: result.body });
   } catch (err) {
+    if (err.notConfigured) {
+      return res.status(503).json({ success: false, error: 'channel_hub_not_configured' });
+    }
+    sendError(res, 502, err, 'channel_hub_unreachable');
+  }
+};
+
+/**
+ * Marketplace credentials.
+ *
+ * The keys live in the hub, which is the only process that verifies them. These
+ * three handlers are a thin proxy so an operator can issue and revoke from the
+ * panel instead of over SSH — the practical effect being that a leaked key gets
+ * revoked in the minute somebody notices, rather than whenever the next
+ * deployment happens.
+ */
+exports.listKeys = async (_req, res) => {
+  try {
+    const result = await channelHub.request('GET', '/internal/keys');
+    if (!result.ok) {
+      return res.status(502).json({ success: false, error: 'keys_unavailable' });
+    }
+    res.json({ success: true, data: result.body.keys });
+  } catch (err) {
+    if (err.notConfigured) {
+      return res.status(503).json({ success: false, error: 'channel_hub_not_configured' });
+    }
+    sendError(res, 502, err, 'channel_hub_unreachable');
+  }
+};
+
+exports.issueKey = async (req, res) => {
+  try {
+    const result = await channelHub.request('POST', '/internal/keys', {
+      body: {
+        channel: req.body?.channel,
+        kind: req.body?.kind,
+        label: req.body?.label,
+      },
+    });
+    if (!result.ok) {
+      return res.status(result.status === 422 ? 400 : 502)
+        .json({ success: false, error: result.body?.error || 'issue_failed' });
+    }
+
+    console.log(
+      `[channels] ${req.admin?.telegramId || 'admin'} issued a ${result.body.channel} `
+      + `${result.body.kind} key (${result.body.fingerprint})`
+    );
+    // The secret travels exactly once, in this response. It is not stored here
+    // and cannot be read back from anywhere.
+    res.json({ success: true, data: result.body });
+  } catch (err) {
+    if (err.notConfigured) {
+      return res.status(503).json({ success: false, error: 'channel_hub_not_configured' });
+    }
+    sendError(res, 502, err, 'channel_hub_unreachable');
+  }
+};
+
+exports.revokeKey = async (req, res) => {
+  try {
+    const result = await channelHub.request('POST', `/internal/keys/${req.params.id}/revoke`);
+    if (!result.ok) {
+      return res.status(result.status === 404 ? 404 : 502)
+        .json({ success: false, error: result.body?.error || 'revoke_failed' });
+    }
+    console.warn(
+      `[channels] ${req.admin?.telegramId || 'admin'} revoked key ${req.params.id}`
+    );
+    res.json({ success: true, data: result.body });
+  } catch (err) {
+    if (err.notConfigured) {
+      return res.status(503).json({ success: false, error: 'channel_hub_not_configured' });
+    }
     sendError(res, 502, err, 'channel_hub_unreachable');
   }
 };

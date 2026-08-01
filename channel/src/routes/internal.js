@@ -3,6 +3,8 @@ const rateLimit = require('express-rate-limit');
 const config = require('../config');
 const logger = require('../logger');
 const botOrders = require('../core/botOrders');
+const ChannelKey = require('../models/ChannelKey');
+const { generateKey, generateClientId, hashKey, describeKey } = require('../models/ChannelKey');
 const ChannelOrder = require('../models/ChannelOrder');
 const { runCatalogSync } = require('../sync/catalog');
 const { requireInternalToken } = require('../middleware/internalAuth');
@@ -132,6 +134,111 @@ router.post('/bot-order', async (req, res) => {
     // A genuine failure — Billz unreachable, a write refused. The backend keeps
     // the job and retries with backoff.
     res.status(502).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Channel credentials ─────────────────────────────────────────────────────
+
+/**
+ * Issuing and revoking marketplace keys from the panel.
+ *
+ * The alternative is an SSH session and a script, which in practice means keys
+ * are issued rarely, revoked late, and shared over chat because reissuing is a
+ * chore. Making it a button is the security improvement.
+ *
+ * A key is shown exactly once, in the response that creates it. Only its
+ * SHA-256 is stored, so there is no endpoint that can reveal one later and no
+ * backup that contains one.
+ */
+const KEY_KINDS = { medicalka: ['token', 'secret'], uzum: ['oauth'] };
+
+router.get('/keys', async (_req, res) => {
+  try {
+    const keys = await ChannelKey().find({}).sort({ createdAt: -1 }).limit(200).lean();
+    res.json({
+      keys: keys.map((key) => ({
+        id: String(key._id),
+        channel: key.channel,
+        kind: key.kind,
+        // Enough to tell two keys apart, not enough to use one.
+        fingerprint: `${key.prefix}…${key.last4}`,
+        clientId: key.clientId || '',
+        label: key.label || '',
+        active: key.active,
+        lastUsedAt: key.lastUsedAt,
+        createdAt: key.createdAt,
+        revokedAt: key.revokedAt,
+      })),
+    });
+  } catch (err) {
+    logger.error('key listing failed', { err });
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.post('/keys', async (req, res) => {
+  const channel = String(req.body?.channel || '').trim();
+  const kind = String(req.body?.kind || '').trim();
+  const label = String(req.body?.label || '').slice(0, 120);
+
+  if (!KEY_KINDS[channel]) {
+    return res.status(422).json({ error: `channel must be one of ${Object.keys(KEY_KINDS).join(', ')}` });
+  }
+  if (!KEY_KINDS[channel].includes(kind)) {
+    return res.status(422).json({ error: `${channel} keys are ${KEY_KINDS[channel].join(' or ')}` });
+  }
+
+  try {
+    const secret = generateKey(channel, kind);
+    const shape = describeKey(secret);
+    const clientId = kind === 'oauth' ? generateClientId(channel) : '';
+
+    const record = await ChannelKey().create({
+      channel,
+      kind,
+      hash: hashKey(secret),
+      prefix: shape.prefix,
+      last4: shape.last4,
+      label,
+      active: true,
+      ...(clientId ? { clientId } : {}),
+    });
+
+    logger.info('channel key issued', { channel, kind, id: String(record._id), label });
+
+    // The only time this value exists outside the caller's screen.
+    res.json({
+      id: String(record._id),
+      channel,
+      kind,
+      label,
+      fingerprint: `${shape.prefix}…${shape.last4}`,
+      ...(clientId ? { clientId, clientSecret: secret } : { key: secret }),
+    });
+  } catch (err) {
+    logger.error('key issue failed', { err });
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.post('/keys/:id/revoke', async (req, res) => {
+  try {
+    const result = await ChannelKey().findOneAndUpdate(
+      { _id: req.params.id, active: true },
+      { $set: { active: false, revokedAt: new Date() } },
+      { new: true }
+    );
+    if (!result) return res.status(404).json({ error: 'not_found_or_already_revoked' });
+
+    logger.warn('channel key revoked', {
+      channel: result.channel, kind: result.kind, id: String(result._id),
+    });
+    // Uzum bearer tokens are checked against the key on every request, so this
+    // takes effect immediately rather than when the token would have expired.
+    res.json({ ok: true, id: String(result._id), revokedAt: result.revokedAt });
+  } catch (err) {
+    logger.error('key revoke failed', { err });
+    res.status(500).json({ error: 'internal_error' });
   }
 });
 

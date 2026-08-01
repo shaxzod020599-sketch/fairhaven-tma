@@ -313,15 +313,18 @@ test('a product uses its own MXIK code, and falls back to the default', async ()
 });
 
 test('the MXIK default can be changed from the panel without a deploy', async () => {
+  // The literal key the admin panel writes. Asserting the same near-miss the
+  // reader makes would prove nothing — this is the whole point of the test.
+  const PANEL_KEY = 'channels.defaultMxikCode';
   await db.getConnection().collection('settings')
-    .insertOne({ key: 'defaultMxikCode', value: '09999999999999999' });
+    .insertOne({ key: PANEL_KEY, value: '09999999999999999' });
   SettingView.clearCache();
 
   const res = await api('GET', '/nomenclature/store-uz-1/composition');
   const fallback = res.body.items.find((i) => i.id === 'bp-2');
   assert.equal(fallback.serviceCodesUz.mxikCodeUz, '09999999999999999');
 
-  await db.getConnection().collection('settings').deleteMany({ key: 'defaultMxikCode' });
+  await db.getConnection().collection('settings').deleteMany({ key: PANEL_KEY });
   SettingView.clearCache();
 });
 
