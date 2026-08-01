@@ -150,18 +150,30 @@ function ChannelRow({ product, channel, onSave, toast }) {
  * can be live on Medicalka while hidden in the bot for want of a photo.
  */
 const SHOP_STATE = {
-  in_stock: { tone: 'on', text: 'В магазине' },
+  in_stock: { tone: 'on', text: 'В магазине · по остатку Billz' },
   out_of_stock: { tone: 'off', text: 'Скрыт — нет остатка в Billz' },
   gone_from_billz: { tone: 'warn', text: 'Скрыт — пропал из Billz' },
   no_image: { tone: 'warn', text: 'Скрыт — нет фото' },
   awaiting_approval: { tone: 'warn', text: 'Ждёт одобрения' },
-  not_linked: { tone: 'off', text: 'Наличие вручную — не связан с Billz' },
-  manual_override: { tone: 'off', text: 'Наличие задано вручную' },
+  not_linked: { tone: 'plain', text: 'Наличие вручную' },
+  manual_override: { tone: 'plain', text: 'Наличие вручную' },
 };
 
+/**
+ * Shop visibility, and the one control that changes it.
+ *
+ * Much of the catalogue — nursing pads, test strips, accessories — has no Billz
+ * counterpart, so manual availability is a normal way to run a product, not an
+ * error state. Products in that mode get the in-stock switch right here.
+ *
+ * A missing photo is the exception: it blocks the product regardless, because
+ * it is not a stock question and the only fix is to add the photo.
+ */
 function ShopStatus({ product, onMeta, toast }) {
   const [busy, setBusy] = useState(false);
-  const state = SHOP_STATE[product.shop?.reason] || SHOP_STATE.not_linked;
+  const shop = product.shop || {};
+  const state = SHOP_STATE[shop.reason] || SHOP_STATE.not_linked;
+  const manual = shop.mode === 'manual';
 
   const act = async (patch, message) => {
     try {
@@ -176,12 +188,13 @@ function ShopStatus({ product, onMeta, toast }) {
   };
 
   return (
-    <div className="ap-ch-shop">
-      <span className={`ap-ch-state ap-ch-state--${state.tone}`}>
-        {state.tone !== 'on' && <Icon name="alert" size={13} />}
-        {state.text}
+    <div className={`ap-ch-shop ${shop.mode === 'blocked' ? 'is-blocked' : ''}`}>
+      <span className={`ap-ch-state ap-ch-state--${manual && shop.visible ? 'on' : state.tone}`}>
+        {state.tone === 'warn' && <Icon name="alert" size={13} />}
+        {manual ? `${state.text} — ${shop.visible ? 'в наличии' : 'нет в наличии'}` : state.text}
       </span>
-      {product.shop?.reason === 'awaiting_approval' && (
+
+      {shop.reason === 'awaiting_approval' && (
         <button
           type="button" className="ap-btn ap-btn-primary ap-btn-xs" disabled={busy}
           onClick={() => act({ approved: true }, 'Одобрено — появится в магазине')}
@@ -189,12 +202,35 @@ function ShopStatus({ product, onMeta, toast }) {
           Одобрить
         </button>
       )}
-      {product.shop?.mode === 'manual' && (
+
+      {manual && (
+        <div className="ap-seg ap-ch-shop-seg" role="group" aria-label="Наличие в магазине">
+          <button
+            type="button" disabled={busy}
+            className={`ap-seg-btn ${shop.visible ? 'is-active' : ''}`}
+            aria-pressed={shop.visible}
+            onClick={() => act({ isAvailable: true }, 'В наличии')}
+          >
+            Есть
+          </button>
+          <button
+            type="button" disabled={busy}
+            className={`ap-seg-btn ${!shop.visible ? 'is-active' : ''}`}
+            aria-pressed={!shop.visible}
+            onClick={() => act({ isAvailable: false }, 'Нет в наличии')}
+          >
+            Нет
+          </button>
+        </div>
+      )}
+
+      {/* Only offered when Billz can actually drive it. */}
+      {shop.reason === 'manual_override' && product.billzProductId && (
         <button
           type="button" className="ap-btn ap-btn-ghost ap-btn-xs" disabled={busy}
           onClick={() => act({ autoStock: true }, 'Наличие снова по Billz')}
         >
-          Вернуть авто
+          По Billz
         </button>
       )}
     </div>
@@ -269,9 +305,11 @@ export default function ChannelCard({
           )}
         </div>
       ) : (
+        // Not an error: plenty of the catalogue is not carried in Billz.
+        // Offered as an action, styled as a choice.
         <button type="button" className="ap-ch-unlinked" onClick={() => onLink(product)}>
-          <Icon name="unlink" size={15} />
-          <span>Не связан с Billz — нет остатка и цены</span>
+          <Icon name="link" size={15} />
+          <span>Нет в Billz — цена и наличие вручную. Связать?</span>
           <Icon name="chevron" size={15} className="ap-ch-unlinked-go" />
         </button>
       )}

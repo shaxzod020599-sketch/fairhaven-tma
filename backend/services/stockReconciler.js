@@ -11,21 +11,28 @@ const BillzProductView = require('../models/BillzProductView');
  *
  * Rules, in order:
  *
- *   1. Not approved yet          -> hidden. New products wait for an operator.
- *   2. No image                  -> hidden. A card with no photo should never
- *                                   reach a customer.
- *   3. Linked to Billz           -> follows Billz stock minus reservations.
- *   4. Linked but gone from Billz-> hidden, never deleted. Order history and
+ *   1. No image                  -> hidden, always. Overrides everything below,
+ *                                   including a manual decision: a product with
+ *                                   no photo is not out of stock, it is
+ *                                   incomplete, and the fix is to add a photo.
+ *   2. Not approved yet          -> hidden. New products wait for an operator.
+ *   3. Set by hand               -> left alone. An operator marking something
+ *                                   in or out of stock outranks Billz.
+ *   4. Linked to Billz           -> follows Billz stock minus reservations.
+ *   5. Linked but gone from Billz-> hidden, never deleted. Order history and
  *                                   the link survive so it returns by itself
  *                                   if Billz gets it back.
- *   5. Not linked at all         -> left exactly as the operator set it.
+ *   6. Not linked at all         -> left exactly as the operator set it.
  *
- * Rule 5 is deliberate. "Out of stock when it is not in Billz" means a product
- * that *was* there and disappeared — not one that was never linked. Applying it
- * to never-linked products would empty the shop the first time this ran.
+ * Rules 3 and 6 are what let the shop sell things Billz does not carry. Plenty
+ * of the catalogue — nursing pads, test strips, accessories — has no Billz
+ * counterpart at all, and those products are managed by hand. "Out of stock
+ * when it is not in Billz" means a product that *was* there and disappeared,
+ * not one that was never linked.
  *
- * `autoStock: false` opts a product out entirely; the admin toggle sets it, so
- * a manual decision is never overwritten on the next pass.
+ * Rule 1 sits above the manual override on purpose. The two are answering
+ * different questions: availability is the operator's call, having a usable
+ * product card is not.
  */
 
 function hasImage(product) {
@@ -38,9 +45,9 @@ function hasImage(product) {
  *   `available: null` means "leave this product alone".
  */
 function decide(product, mirror) {
-  if (product.autoStock === false) return { available: null, reason: 'manual_override' };
-  if (product.approved === false) return { available: false, reason: 'awaiting_approval' };
   if (!hasImage(product)) return { available: false, reason: 'no_image' };
+  if (product.approved === false) return { available: false, reason: 'awaiting_approval' };
+  if (product.autoStock === false) return { available: null, reason: 'manual_override' };
 
   if (!product.billzProductId) return { available: null, reason: 'not_linked' };
 

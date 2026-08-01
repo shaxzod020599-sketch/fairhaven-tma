@@ -321,6 +321,9 @@
   font-size: 11.5px; color: var(--ch-danger);
 }
 
+/* Neutral, not a warning: a product with no Billz counterpart is a normal way
+   to run part of the catalogue, and colouring it as a fault trains operators
+   to ignore the colour. */
 .ap-ch-unlinked {
   display: flex;
   align-items: center;
@@ -329,16 +332,17 @@
   min-height: 44px;
   margin: 0 var(--ch-pad) 10px;
   padding: 9px 12px;
-  border: 1px dashed color-mix(in srgb, var(--ch-warn) 45%, var(--line));
+  border: 1px dashed var(--line);
   border-radius: 10px;
-  background: var(--ch-warn-wash);
-  color: var(--ch-warn);
+  background: var(--paper-soft);
+  color: var(--ink-soft);
   font-size: 12.5px;
   text-align: left;
   cursor: pointer;
+  transition: border-color var(--t-fast), color var(--t-fast);
 }
 .ap-ch-unlinked span { flex: 1; }
-.ap-ch-unlinked:hover { border-color: var(--ch-warn); }
+.ap-ch-unlinked:hover { border-color: var(--terracotta); color: var(--ink); }
 .ap-ch-unlinked-go { opacity: 0.6; }
 
 /* --------------------------------------------------- Shop visibility */
@@ -356,10 +360,14 @@
   border-radius: 10px;
   background: var(--paper-soft);
 }
+.ap-ch-shop.is-blocked { background: var(--ch-warn-wash); }
 .ap-ch-shop .ap-ch-state { margin-left: 0; font-size: 12px; }
-.ap-ch-shop .ap-btn { margin-left: auto; }
+.ap-ch-shop .ap-btn,
+.ap-ch-shop-seg { margin-left: auto; }
+.ap-ch-shop-seg .ap-seg-btn { min-height: 32px; padding: 0 12px; font-size: 12px; }
 
 .ap-ch-state--warn { color: var(--ch-warn); }
+.ap-ch-state--plain { color: var(--ink-soft); }
 
 /* --------------------------------------------------- Channel rows */
 

@@ -299,23 +299,30 @@ isAvailable(product, channel) =
 `reservedQty` `billzproducts` da turadi — chunki bron Billz qoldig'iga qarshi qilinadi va
 hamma kanallar bitta qoldiqni bo'lishadi.
 
-### 3.2.1 Mahsulot faqat Billz'dan qo'shiladi
+### 3.2.1 Mahsulot qo'shish — Billz'dan yoki qo'lda
 
-Admin panelda **bo'sh joydan mahsulot yaratish o'chiriladi**. Yangi mahsulot qo'shish oqimi:
+> **Qaror o'zgardi (2026-07-31).** Avval «mahsulot faqat Billz'dan qo'shilsin, Billz'da
+> yo'q bo'lsa qo'shib bo'lmasin» deb kelishilgandi. Jonli katalogga qarshi tekshirilganda
+> ma'lum bo'ldiki, sotuvdagi 22 ta tovardan **13 tasining Billz'da mos keladigani umuman
+> yo'q** — emizish yostiqchalari, test poloskalari, mikroskop, komplektlar. Ular Billz'da
+> yuritilmaydi va yuritilmaydi ham. Shuning uchun Billz bog'lanishi **majburiy emas**.
+
+Ikki yo'l:
 
 ```
 «Yangi mahsulot» → Billz tanlagichi (modal)
    qidiruv: nom / artikul / shtrix-kod → billzproducts dan
-   ro'yxatda: nom, artikul, shtrix-kod, Billz narxi, qoldiq, rasm
-   «allaqachon qo'shilgan» tovarlar kulrang, tanlab bo'lmaydi
-→ tanlanadi
-→ Product yaratiladi: billzProductId bog'lanadi,
-   name / brand / sku / barcode / rasm Billz'dan oldindan to'ldiriladi
-→ admin tavsif, kategoriya, kanal narxlarini qo'shadi
+   allaqachon qo'shilganlar kulrang, tanlab bo'lmaydi
+→ tanlanadi → billzProductId bog'lanadi,
+   nom / brend / artikul / shtrix-kod / rasm Billz'dan oldindan to'ldiriladi
+   → qoldiq avtomatik Billz'dan
+
+yoki  «Billz'siz qo'shish»
+   → oddiy forma, qoldiq qo'lda («bor / yo'q»)
 ```
 
-Billz'da bo'lmagan tovarni qo'shib bo'lmaydi. Shu bilan har bir Fairhaven kartasi Billz
-nomi, artikuli va qoldig'iga qattiq bog'lanadi.
+Bog'lanmagan mahsulot kamchilik emas — katalogning bir qismini yuritishning normal
+usuli. Shuning uchun panelda ogohlantirish rangida emas, neytral ko'rsatiladi.
 
 **Mavjud mahsulotlarni bog'lash (migratsiya).** Hozirgi `Product` yozuvlarida
 `billzProductId` yo'q. Bir martalik skript avtomatik moslashtiradi:
@@ -647,7 +654,25 @@ Tuzatishlar:
 
 1. **Katalog** — Billz yagona manba. Qoldiq soni mijozga ko'rinmaydi, narxlar qo'lda qo'yiladi,
    admin har kanalda qo'lda «bor / yo'q» qila oladi.
-2. **Mahsulot qo'shish** — faqat Billz'dan tanlab. Billz'da yo'q tovarni qo'shib bo'lmaydi.
+2. **Mahsulot qo'shish** — Billz tanlagichidan yoki Billz'siz qo'lda. Billz bog'lanishi
+   ixtiyoriy: katalogning bir qismi (test poloskalari, emizish aksessuarlari) Billz'da
+   umuman yuritilmaydi va qoldig'i qo'lda boshqariladi.
+   *(Boshlang'ich «faqat Billz'dan» qarori 2026-07-31 da o'zgartirildi — §3.2.1.)*
+
+2a. **Do'kondagi ko'rinish qoidalari** (`services/stockReconciler.js`), tartib bilan:
+
+| # | Shart | Natija |
+|---|---|---|
+| 1 | Rasmi yo'q | **Yashirin — har doim**, qo'lda «bor» deyilsa ham |
+| 2 | Tasdiqlanmagan | Yashirin — admin ruxsatini kutadi |
+| 3 | Qo'lda belgilangan | **Tegilmaydi** — admin so'zi Billz'dan ustun |
+| 4 | Billz'ga bog'langan | Billz qoldig'i bo'yicha, tovar kelsa o'zi qaytadi |
+| 5 | Billz'dan yo'qolgan | Yashirin, **o'chirilmaydi** |
+| 6 | Bog'lanmagan | **Tegilmaydi** — qo'lda boshqariladi |
+
+1-qoida qo'lda boshqaruvdan yuqorida turadi, chunki ikkalasi turli savolga javob beradi:
+qoldiq — adminning qarori, rasmi bor-yo'qligi esa qaror emas. Rasmsiz tovar «yo'q»da emas,
+u **to'liq emas** — yagona yechim rasm qo'shish.
 3. **Bot zakazlari ham Billz'ga yoziladi** — lekin faqat Telegram kanalda tasdiqlangandan
    keyin. Tasdiqlashgacha Billz'da hech narsa bo'lmaydi.
 4. **Kanal zakazlari** — avtomatik qabul (odam kutmaydi), bot esa hamma platforma

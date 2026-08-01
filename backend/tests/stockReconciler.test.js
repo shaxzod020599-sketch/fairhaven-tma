@@ -68,15 +68,41 @@ test('approval is opt-out: an existing product with no field is approved', () =>
 });
 
 test('a product never linked to Billz is left exactly as it was', () => {
-  const state = decide(product({ billzProductId: '' }), null);
-  assert.equal(state.available, null, 'must not be touched');
-  assert.equal(state.reason, 'not_linked');
+  // Nursing pads, test strips and accessories have no Billz counterpart and
+  // are sold entirely on the operator's word.
+  for (const isAvailable of [true, false]) {
+    const state = decide(product({ billzProductId: '', isAvailable }), null);
+    assert.equal(state.available, null, 'must not be touched');
+    assert.equal(state.reason, 'not_linked');
+  }
 });
 
-test('a manual override outranks every automatic rule', () => {
-  const state = decide(product({ autoStock: false, imageUrl: '' }), null);
-  assert.equal(state.available, null);
-  assert.equal(state.reason, 'manual_override');
+test('a manual decision outranks Billz stock', () => {
+  // Operator says in stock, Billz says zero -> the operator wins.
+  const inStock = decide(product({ autoStock: false, isAvailable: true }), mirror({ stock: 0 }));
+  assert.equal(inStock.available, null);
+  assert.equal(inStock.reason, 'manual_override');
+
+  // And the other way round.
+  const outOfStock = decide(product({ autoStock: false, isAvailable: false }), mirror({ stock: 99 }));
+  assert.equal(outOfStock.available, null);
+});
+
+test('a missing photo blocks the product even when set by hand', () => {
+  // Availability is the operator's call; whether the card is usable is not.
+  // The only fix is to add a photo, so this rule sits above the override.
+  const state = decide(
+    product({ autoStock: false, isAvailable: true, imageUrl: '', images: [] }),
+    mirror({ stock: 50 })
+  );
+  assert.equal(state.available, false);
+  assert.equal(state.reason, 'no_image');
+});
+
+test('approval is checked before the manual override too', () => {
+  const state = decide(product({ approved: false, autoStock: false, isAvailable: true }), mirror());
+  assert.equal(state.available, false);
+  assert.equal(state.reason, 'awaiting_approval');
 });
 
 test('hasImage ignores blank and whitespace entries', () => {

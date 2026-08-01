@@ -79,15 +79,28 @@ function shopVisibility(product, mirror) {
     || (Array.isArray(product.images) && product.images.some((u) => u && String(u).trim()))
   );
 
-  if (product.autoStock === false) return { mode: 'manual', reason: 'manual_override', image };
-  if (product.approved === false) return { mode: 'auto', reason: 'awaiting_approval', image };
-  if (!image) return { mode: 'auto', reason: 'no_image', image };
-  if (!product.billzProductId) return { mode: 'auto', reason: 'not_linked', image };
-  if (!mirror || mirror.deletedInBillz) return { mode: 'auto', reason: 'gone_from_billz', image };
+  const visible = product.isAvailable !== false;
+
+  if (!image) return { mode: 'blocked', reason: 'no_image', image, visible: false };
+  if (product.approved === false) {
+    return { mode: 'blocked', reason: 'awaiting_approval', image, visible: false };
+  }
+  if (product.autoStock === false) {
+    return { mode: 'manual', reason: 'manual_override', image, visible };
+  }
+  if (!product.billzProductId) return { mode: 'manual', reason: 'not_linked', image, visible };
+  if (!mirror || mirror.deletedInBillz) {
+    return { mode: 'auto', reason: 'gone_from_billz', image, visible: false };
+  }
 
   const free = Math.max(0,
     (mirror.stock || 0) - (mirror.reservedQty || 0) - (mirror.pendingQty || 0));
-  return { mode: 'auto', reason: free > 0 ? 'in_stock' : 'out_of_stock', image };
+  return {
+    mode: 'auto',
+    reason: free > 0 ? 'in_stock' : 'out_of_stock',
+    image,
+    visible: free > 0,
+  };
 }
 
 function serialise(product, mirror) {
@@ -384,6 +397,14 @@ exports.updateProductMeta = async (req, res) => {
     if (req.body?.approved !== undefined) $set.approved = Boolean(req.body.approved);
     // Handing a product back to the reconciler after a manual decision.
     if (req.body?.autoStock !== undefined) $set.autoStock = Boolean(req.body.autoStock);
+    // Setting availability by hand. Much of the catalogue — nursing pads, test
+    // strips, accessories — has no Billz counterpart and is managed this way,
+    // so this also pins the product to manual: otherwise the reconciler would
+    // hand it straight back to Billz on its next pass.
+    if (req.body?.isAvailable !== undefined) {
+      $set.isAvailable = Boolean(req.body.isAvailable);
+      $set.autoStock = false;
+    }
     if (req.body?.mxikCode !== undefined) {
       const code = String(req.body.mxikCode).trim();
       if (code && !/^\d{6,20}$/.test(code)) {
