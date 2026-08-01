@@ -84,9 +84,10 @@ async function addLine(orderId, { productId, quantity, unitPrice, sellerIds = []
 /**
  * Forces a line to a given price when the product does not allow a free price.
  *
- * Expressed as a currency discount, which is what Billz offers for this: the
- * line keeps the retail price and carries the difference as a discount, so the
- * total matches what the customer paid either way.
+ * Despite the endpoint's name this sets the price rather than subtracting from
+ * it: `CURRENCY` with 333000 on a 280000 product produces a line of 333000, not
+ * −53000. Verified against the live company, at quantity two, so the per-unit
+ * reading is not an artefact of a single-unit test: two units came to 666000.
  */
 async function setLinePrice(orderId, { productId, price }) {
   return billz.request('POST', `/v2/order-manual-discount/${orderId}`, {
@@ -193,6 +194,58 @@ function formatBillzTime(date) {
     + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
+/** What Billz thinks the draft is worth. */
+async function orderTotal(orderId) {
+  const response = await billz.request('GET', `/v2/order/${orderId}`, {
+    query: { 'Billz-Response-Channel': 'HTTP' },
+    headers: HTTP_CHANNEL,
+  });
+  const detail = response?.order_detail || response?.data?.order_detail;
+  return Number(detail?.total_price) || 0;
+}
+
+/**
+ * Confirms Billz priced the draft the way we intended, and corrects it if not.
+ *
+ * Billz refuses a payment whose amount does not equal the order total — error
+ * 20035's neighbour, `20020 wrong payment amount`, which reports both figures.
+ * Without this check that refusal arrives at the very last step, **after the
+ * stock is reserved and the customer has been told the order is accepted**. The
+ * order then sits in `failed` with its units held, for a reason that has nothing
+ * to do with availability.
+ *
+ * `use_free_price` is the normal path and works, but it depends on a per-product
+ * setting in Billz. When a product does not allow it the line silently keeps the
+ * shop's retail price, which is both the wrong revenue and the wrong total. The
+ * manual discount is the documented way to force a price on such a product;
+ * both are per unit, verified against the live company.
+ */
+async function ensurePricing(orderId, items) {
+  const priced = items.filter((item) => Number(item.unitPrice) > 0);
+  if (!priced.length) return; // Billz's own pricing is what we want.
+
+  const expected = items.reduce(
+    (sum, item) => sum + item.quantity * (Number(item.unitPrice) || 0), 0
+  );
+  if (await orderTotal(orderId) === expected) return;
+
+  logger.warn('billz priced the draft differently — forcing the channel price', { orderId });
+  for (const item of priced) {
+    await setLinePrice(orderId, { productId: item.billzProductId, price: item.unitPrice });
+  }
+
+  const corrected = await orderTotal(orderId);
+  if (corrected !== expected) {
+    // Refused here, before the reservation. Reserving an order that cannot be
+    // paid for holds stock nobody can sell and nobody can release except by
+    // hand.
+    throw new Error(
+      `billz totals ${corrected} but this order is ${expected}; the sale would be `
+      + 'refused as a wrong payment amount'
+    );
+  }
+}
+
 /**
  * Builds a reservation for a whole order.
  *
@@ -218,6 +271,9 @@ async function reserveOrder({ items, comment, expiresAt, sellerIds }) {
         sellerIds,
       });
     }
+    // Before the reservation, deliberately: a mispriced draft is cheap to
+    // abandon and expensive to discover at payment.
+    await ensurePricing(orderId, items);
     await reserve(orderId, { expiresAt, comment });
     logger.info('billz reservation created', { orderId, orderNumber, lines: items.length });
     return { orderId, orderNumber };
@@ -234,7 +290,9 @@ module.exports = {
   completeSale,
   createDraft,
   deleteDraft,
+  ensurePricing,
   formatBillzTime,
+  orderTotal,
   releaseReservation,
   reserve,
   reserveOrder,

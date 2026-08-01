@@ -20,15 +20,45 @@ const config = require('../src/config');
  * later sync cannot detect.
  */
 
-function recordClient(responses = {}) {
+/**
+ * Records calls and answers them the way Billz does.
+ *
+ * The read-back of the order total is modelled rather than stubbed flat,
+ * because the pricing check is only meaningful against a server that actually
+ * prices things. By default the recorder behaves like a shop where free prices
+ * are permitted: every line takes the price it was given. `refusesFreePrice`
+ * makes it behave like one where they are not — the line keeps a retail price,
+ * which is the case that used to surface only at payment time.
+ */
+function recordClient(responses = {}, { refusesFreePrice = false, retailPrice = 280000 } = {}) {
   const calls = [];
   const original = billz.request;
+  const forced = new Map();
+
+  const total = () => calls
+    .filter((c) => c.path.startsWith('/v2/order-product/'))
+    .reduce((sum, c) => {
+      const productId = c.body.product_id;
+      const qty = c.body.sold_measurement_value;
+      if (forced.has(productId)) return sum + qty * forced.get(productId);
+      const free = c.body.use_free_price ? c.body.free_price : null;
+      return sum + qty * (free !== null && !refusesFreePrice ? free : retailPrice);
+    }, 0);
+
   billz.request = async (method, path, options = {}) => {
     calls.push({ method, path, body: options.body, headers: options.headers, query: options.query });
+
+    if (path.startsWith('/v2/order-manual-discount/')) {
+      forced.set(options.body.product_id, options.body.discount_value);
+      return {};
+    }
     for (const [pattern, value] of Object.entries(responses)) {
       if (path.startsWith(pattern)) {
         return typeof value === 'function' ? value(path, options) : value;
       }
+    }
+    if (method === 'GET' && /^\/v2\/order\/[^/]+$/.test(path)) {
+      return { order_detail: { total_price: total() } };
     }
     return { data: { id: 'draft-1', order_number: '5632631379' } };
   };
@@ -50,6 +80,7 @@ test('a reservation opens a draft, adds every line, then postpones', async () =>
       '/v2/order',
       '/v2/order-product/draft-1',
       '/v2/order-product/draft-1',
+      '/v2/order/draft-1',            // price check, before anything is held
       '/v2/order/create_postpone',
     ]);
     // Order matters: postponing before the lines exist reserves nothing.
@@ -266,6 +297,85 @@ test('the payment type name is omitted rather than invented', async () => {
   try {
     await sale.completeSale('draft-9', { paymentTypeId: 'pt-1', amount: 1000 });
     assert.equal('company_payment_type' in rec.calls[0].body.payments[0], false);
+  } finally {
+    rec.restore();
+  }
+});
+
+/* ── The price actually reaching Billz ───────────────────────────────────── */
+
+test('a correctly priced draft is not corrected', async () => {
+  const rec = recordClient();
+  try {
+    await sale.reserveOrder({ items: ITEMS, comment: 'ok' });
+    assert.equal(
+      rec.calls.filter((c) => c.path.startsWith('/v2/order-manual-discount/')).length, 0,
+      'nothing to fix, so nothing should be touched'
+    );
+  } finally {
+    rec.restore();
+  }
+});
+
+test('a product that refuses a free price is forced to the channel price', async () => {
+  // Some products have free pricing switched off in Billz. The line then keeps
+  // the shop's retail price silently — wrong revenue on the receipt, and a
+  // total that no longer matches what we are about to pay.
+  const rec = recordClient({}, { refusesFreePrice: true });
+  try {
+    await sale.reserveOrder({ items: ITEMS, comment: 'needs forcing' });
+
+    const forced = rec.calls.filter((c) => c.path.startsWith('/v2/order-manual-discount/'));
+    assert.equal(forced.length, 2, 'every priced line has to be corrected');
+    assert.deepEqual(forced[0].body, {
+      discount_unit: 'CURRENCY', discount_value: 310000, product_id: 'p-1',
+    });
+    // And it still ends up reserved.
+    assert.equal(rec.calls[rec.calls.length - 1].path, '/v2/order/create_postpone');
+  } finally {
+    rec.restore();
+  }
+});
+
+test('a draft that cannot be priced is refused before any stock is held', async () => {
+  // Billz rejects a payment whose amount does not equal the order total
+  // (`20020 wrong payment amount`). Discovering that at payment time means the
+  // order is already reserved and the customer already told it was accepted —
+  // units held for a reason that has nothing to do with availability.
+  const rec = recordClient({ '/v2/order/draft-1': { order_detail: { total_price: 1 } } });
+  try {
+    await assert.rejects(
+      sale.reserveOrder({ items: ITEMS, comment: 'unpriceable' }),
+      /would be refused as a wrong payment amount/
+    );
+    assert.equal(
+      rec.calls.some((c) => c.path === '/v2/order/create_postpone'), false,
+      'nothing may be reserved for an order that cannot be paid for'
+    );
+  } finally {
+    rec.restore();
+  }
+});
+
+test('the failed pricing check still reports the draft to clean up', async () => {
+  const rec = recordClient({ '/v2/order/draft-1': { order_detail: { total_price: 1 } } });
+  try {
+    await sale.reserveOrder({ items: ITEMS }).catch((err) => {
+      assert.equal(err.billzOrderId, 'draft-1');
+    });
+  } finally {
+    rec.restore();
+  }
+});
+
+test('an order with no prices of our own leaves Billz pricing alone', async () => {
+  // A bot order for a product we do not set a channel price on: Billz's retail
+  // price is the right answer, and checking it against nothing would fail.
+  const rec = recordClient({}, { refusesFreePrice: true });
+  try {
+    await sale.reserveOrder({ items: [{ billzProductId: 'p-9', quantity: 1 }] });
+    assert.equal(rec.calls.some((c) => c.path.startsWith('/v2/order/draft-1')), false);
+    assert.equal(rec.calls[rec.calls.length - 1].path, '/v2/order/create_postpone');
   } finally {
     rec.restore();
   }
