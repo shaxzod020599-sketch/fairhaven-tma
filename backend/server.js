@@ -24,10 +24,11 @@ const {
   ensureAtLeastOneAdmin,
 } = require('./seed/bootstrap');
 const { UPLOAD_DIR } = require('./controllers/uploadController');
-const { launchBotWithRetry } = require('./utils/telegramRetry');
-const { redactPath, securityHeaders } = require('./utils/http');
+const { launchBotWithRetry, withTelegramRetry } = require('./utils/telegramRetry');
+const { errorLabel, redactPath, securityHeaders } = require('./utils/http');
 const { apiLimiter } = require('./middleware/rateLimit');
 const stockReconciler = require('./services/stockReconciler');
+const webhook = require('./bot/webhook');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -69,6 +70,12 @@ app.use((req, _res, next) => {
 });
 
 // API Routes
+// Telegram webhook. Registered ahead of the API and the SPA catch-all so an
+// update never falls through to index.html, and deliberately outside the rate
+// limiter: Telegram sets the delivery rate, not us, and it authenticates with
+// its own secret-token header.
+app.use(webhook.webhookRoute);
+
 // Broad ceiling for every API caller. Tighter per-endpoint limits (auth,
 // promo guessing, uploads) live next to the routes they protect.
 app.use('/api', apiLimiter);
@@ -139,7 +146,8 @@ app.get('*', (req, res) => {
   if (
     req.path.startsWith('/api') ||
     req.path.startsWith('/legal') ||
-    req.path.startsWith('/uploads')
+    req.path.startsWith('/uploads') ||
+    req.path.startsWith(webhook.WEBHOOK_PREFIX)
   ) {
     return res.status(404).json({ success: false, error: 'Route not found' });
   }
@@ -236,27 +244,44 @@ async function start() {
       } else {
         bot = createBot(process.env.TELEGRAM_BOT_TOKEN, process.env.FRONTEND_URL);
         app.locals.bot = bot;
-        launchBotWithRetry(bot, {
-          isStopping: () => shuttingDown,
-          onRetry: (err, delay) => {
-            const reason = err.response?.description || err.code || err.cause?.code || 'unknown';
-            console.warn(`[bot] polling retry in ${delay}ms: ${reason}`);
-          },
-        }).catch((err) => {
-          const reason = err.response?.description || err.code || err.cause?.code || 'unknown';
-          console.error(`[bot] polling stopped permanently: ${reason}`);
-        });
-        console.log('🤖 Telegram bot launched');
 
-        // The web login deep-link needs the bot's @username.
-        bot.telegram.getMe()
-          .then((me) => {
-            app.locals.botUsername = me.username;
-            console.log(`🤖 Bot username: @${me.username}`);
-          })
-          .catch(() => {
-            app.locals.botUsername = process.env.WEB_BOT_USERNAME || '';
+        // Telegraf fetches botInfo lazily on the first update it handles.
+        // Given how unreliable egress to api.telegram.org is from this host,
+        // that would put a failure-prone round-trip in front of the very first
+        // message after a restart. Fetch it up front instead; the web login
+        // deep-link needs the @username anyway.
+        try {
+          const me = await withTelegramRetry(() => bot.telegram.getMe(), { tier: 'normal' });
+          bot.botInfo = me;
+          app.locals.botUsername = me.username;
+          console.log(`🤖 Bot username: @${me.username}`);
+        } catch (err) {
+          // Not fatal: Telegraf will fetch it on demand, and the deep-link can
+          // fall back to the configured username.
+          app.locals.botUsername = process.env.WEB_BOT_USERNAME || '';
+          console.warn('[bot] could not fetch bot info at startup:', errorLabel(err));
+        }
+
+        // Prefer the webhook: this host's outbound path to api.telegram.org is
+        // unreliable, and polling depends on it continuously. Falls back to
+        // polling on its own if the webhook cannot be established.
+        const onWebhook = await webhook.useWebhook(bot, process.env.TELEGRAM_BOT_TOKEN);
+        if (!onWebhook) {
+          // Telegram refuses getUpdates while a webhook is registered, so a
+          // previously-set one has to go before polling can work.
+          await webhook.clearWebhook(bot);
+          launchBotWithRetry(bot, {
+            isStopping: () => shuttingDown,
+            onRetry: (err, delay) => {
+              const reason = err.response?.description || err.code || err.cause?.code || 'unknown';
+              console.warn(`[bot] polling retry in ${delay}ms: ${reason}`);
+            },
+          }).catch((err) => {
+            const reason = err.response?.description || err.code || err.cause?.code || 'unknown';
+            console.error(`[bot] polling stopped permanently: ${reason}`);
           });
+          console.log('🤖 Telegram bot launched (long polling)');
+        }
       }
     } catch (botErr) {
       console.warn('⚠️  Bot launch failed (non-critical):', botErr.message);
