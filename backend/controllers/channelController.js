@@ -234,8 +234,37 @@ exports.summary = async (_req, res) => {
       ).length;
     }
 
-    const mirrorTotal = await BillzProductView.countDocuments({ deletedInBillz: false });
-    res.json({ success: true, data: { counts, mirrorTotal } });
+    // The Billz side of the headline: what the mirror holds regardless of
+    // whether anything is linked yet. Without this the page showed no Billz
+    // figures at all until the first product was linked, which read as "the
+    // sync is not working" when the sync was fine.
+    const [mirrorStats] = await BillzProductView.aggregate([
+      { $match: { deletedInBillz: false } },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          inStock: { $sum: { $cond: [{ $gt: ['$stock', 0] }, 1, 0] } },
+          units: { $sum: '$stock' },
+          reserved: { $sum: { $add: ['$reservedQty', '$pendingQty'] } },
+        },
+      },
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        counts,
+        mirrorTotal: mirrorStats?.total || 0,
+        billz: {
+          total: mirrorStats?.total || 0,
+          inStock: mirrorStats?.inStock || 0,
+          units: mirrorStats?.units || 0,
+          reserved: mirrorStats?.reserved || 0,
+          linked: billzIds.length,
+        },
+      },
+    });
   } catch (err) {
     sendError(res, 500, err);
   }
@@ -597,6 +626,34 @@ exports.issueKey = async (req, res) => {
     );
     // The secret travels exactly once, in this response. It is not stored here
     // and cannot be read back from anywhere.
+    res.json({ success: true, data: result.body });
+  } catch (err) {
+    if (err.notConfigured) {
+      return res.status(503).json({ success: false, error: 'channel_hub_not_configured' });
+    }
+    sendError(res, 502, err, 'channel_hub_unreachable');
+  }
+};
+
+exports.importKey = async (req, res) => {
+  try {
+    const result = await channelHub.request('POST', '/internal/keys/import', {
+      body: {
+        channel: req.body?.channel,
+        clientId: req.body?.clientId,
+        clientSecret: req.body?.clientSecret,
+        label: req.body?.label,
+      },
+    });
+    if (!result.ok) {
+      const status = result.status === 422 ? 400 : result.status === 409 ? 409 : 502;
+      return res.status(status)
+        .json({ success: false, error: result.body?.error || 'import_failed' });
+    }
+    console.log(
+      `[channels] ${req.admin?.telegramId || 'admin'} imported ${result.body.channel} `
+      + `credentials (${result.body.fingerprint})`
+    );
     res.json({ success: true, data: result.body });
   } catch (err) {
     if (err.notConfigured) {

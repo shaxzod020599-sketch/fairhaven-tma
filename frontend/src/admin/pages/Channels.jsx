@@ -47,6 +47,7 @@ export default function Channels({ toast }) {
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ total: 0, page: 1 });
   const [counts, setCounts] = useState({});
+  const [billzStats, setBillzStats] = useState(null);
   const [sync, setSync] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -91,6 +92,7 @@ export default function Channels({ toast }) {
     try {
       const [summary, status] = await Promise.all([channelSummary(), channelSyncStatus()]);
       setCounts(summary.data?.counts || {});
+      setBillzStats(summary.data?.billz || null);
       setSync(status.data || null);
     } catch (_) {
       // The page is still usable without the counters; stay quiet.
@@ -205,6 +207,36 @@ export default function Channels({ toast }) {
 
       {view === 'access' ? <ChannelKeys toast={toast} /> : (
       <>
+      {/* The Billz side of the headline, visible before anything is linked —
+          otherwise an empty page reads as "the sync is broken" when the sync
+          is fine and the linking simply has not been done yet. */}
+      {billzStats && (
+        <div className="ap-ch-billzbar" role="group" aria-label="Billz — сводка">
+          <div className="ap-ch-billzstat">
+            <span className="ap-ch-billzstat-n ap-num">{billzStats.total}</span>
+            <span className="ap-ch-billzstat-l">товаров в Billz</span>
+          </div>
+          <div className="ap-ch-billzstat">
+            <span className="ap-ch-billzstat-n ap-num">{billzStats.inStock}</span>
+            <span className="ap-ch-billzstat-l">в наличии</span>
+          </div>
+          <div className="ap-ch-billzstat">
+            <span className="ap-ch-billzstat-n ap-num">{money(billzStats.units)}</span>
+            <span className="ap-ch-billzstat-l">единиц на складе</span>
+          </div>
+          {billzStats.reserved > 0 && (
+            <div className="ap-ch-billzstat">
+              <span className="ap-ch-billzstat-n ap-num">{billzStats.reserved}</span>
+              <span className="ap-ch-billzstat-l">в резерве</span>
+            </div>
+          )}
+          <div className="ap-ch-billzstat">
+            <span className="ap-ch-billzstat-n ap-num">{billzStats.linked}</span>
+            <span className="ap-ch-billzstat-l">связано из {counts.total ?? 0}</span>
+          </div>
+        </div>
+      )}
+
       <SyncBar sync={sync} syncing={syncing} onSync={runSync} />
 
       <div className="ap-ch-toolbar">

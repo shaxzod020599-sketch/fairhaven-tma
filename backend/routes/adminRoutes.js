@@ -69,6 +69,9 @@ router.put('/channels/settings', channels.updateSettings);
 // creates it, and is not stored on this side at all.
 router.get('/channels/keys', channels.listKeys);
 router.post('/channels/keys', channels.issueKey);
+// Uzum hands us its client_id/client_secret rather than the other way round;
+// this registers the pair their system will present.
+router.post('/channels/keys/import', channels.importKey);
 router.post('/channels/keys/:id/revoke', channels.revokeKey);
 
 // Uploads

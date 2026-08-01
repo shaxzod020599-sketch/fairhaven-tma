@@ -46,39 +46,84 @@ body:has(.ap-shell.embedded) { padding-bottom: 0; }
   z-index: 30;
 }
 
+/* On phones the sidebar does not exist at all — mobile navigation is the
+   bottom bar plus the "Ещё" sheet. The old approach slid this dark panel in
+   as a drawer, which on a phone read as a wall of black covering the screen. */
 @media (max-width: 960px) {
-  .ap-sidebar {
-    position: fixed;
-    top: 0; left: 0; bottom: 0;
-    width: 260px;
-    transform: translateX(-100%);
-    transition: transform 260ms var(--ease-out);
-    box-shadow: var(--shadow-lg);
-  }
-  .ap-sidebar.open { transform: translateX(0); }
+  .ap-sidebar { display: none; }
 }
+.ap-shell.embedded .ap-sidebar { display: none; }
 
-/* Embedded sidebar is always a drawer */
-.ap-shell.embedded .ap-sidebar {
-  position: fixed;
-  top: 0; left: 0; bottom: 0;
-  width: 280px;
-  transform: translateX(-100%);
-  transition: transform 260ms var(--ease-out);
-  box-shadow: var(--shadow-lg);
-  height: 100vh;
-  z-index: 200;
-}
-.ap-shell.embedded .ap-sidebar.open { transform: translateX(0); }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-.ap-backdrop {
+/* --------------------------------- "Ещё" bottom sheet */
+.ap-sheet-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(14, 43, 31, 0.4);
-  z-index: 20;
-  animation: fadeIn 180ms var(--ease-out);
+  background: rgba(14, 43, 31, 0.45);
+  z-index: 250;
+  display: flex;
+  align-items: flex-end;
+  animation: fadeIn 160ms var(--ease-out);
 }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.ap-sheet {
+  width: 100%;
+  background: var(--paper-warm);
+  border-radius: 20px 20px 0 0;
+  padding: 10px 16px calc(16px + var(--safe-bottom));
+  box-shadow: 0 -12px 40px rgba(14, 43, 31, 0.18);
+  animation: sheetUp 240ms var(--ease-out);
+  max-height: 78vh;
+  overflow-y: auto;
+}
+@keyframes sheetUp {
+  from { transform: translateY(24px); opacity: 0.6; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.ap-sheet-grip {
+  width: 38px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  margin: 2px auto 12px;
+}
+.ap-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 6px;
+}
+.ap-sheet-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 13px 4px 11px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out);
+}
+.ap-sheet-item:active { background: var(--paper-soft); }
+.ap-sheet-item.active {
+  background: var(--terracotta-wash);
+  color: var(--terracotta-deep);
+}
+.ap-sheet-icon { display: flex; }
+.ap-sheet-label { line-height: 1.15; text-align: center; }
+.ap-sheet-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.ap-sheet-user-name { font-weight: 600; font-size: 0.9rem; }
 
 .ap-brand {
   display: flex;
@@ -239,7 +284,17 @@ body:has(.ap-shell.embedded) { padding-bottom: 0; }
 .ap-topbar-nav-btn { background: var(--ink); color: var(--paper); }
 
 /* --------------------------------- Page scaffold */
-.ap-page { animation: pageIn 320ms var(--ease-out); }
+/* The animation was declared but its keyframes never existed, so every page
+   switch snapped instead of easing — the single biggest "it feels stiff"
+   complaint. Compositor-only properties, and disabled for reduced motion. */
+.ap-page { animation: pageIn 300ms var(--ease-out); }
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ap-page, .ap-sheet, .ap-sheet-backdrop { animation: none; }
+}
 
 .ap-page-head {
   display: flex;
@@ -333,6 +388,14 @@ body:has(.ap-shell.embedded) { padding-bottom: 0; }
   border-color: var(--line);
 }
 .ap-btn-ghost:hover:not(:disabled) { background: var(--paper-soft); }
+
+/* Ghost buttons keep light-theme colours, which on the dark sidebar rendered
+   as a white pill with white text. Scoped override, not a new variant. */
+.ap-sidebar .ap-btn-ghost {
+  color: var(--paper);
+  background: rgba(255, 255, 255, 0.1);
+}
+.ap-sidebar .ap-btn-ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.2); }
 
 .ap-btn-danger {
   background: rgba(155, 44, 54, 0.08);
@@ -1542,3 +1605,56 @@ body:has(.ap-modal-backdrop) .ap-bottom-nav { display: none !important; }
   color: var(--ink-soft);
 }
 .ap-login-steps li::marker { color: var(--ink-faint); }
+
+/* --------------------------------- Billz picker (new product) */
+.ap-billzpick { margin-bottom: 16px; }
+.ap-billzpick--done {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.ap-billzpick-chosen { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ap-billzpick-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sage-deep);
+}
+.ap-billzpick-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ap-billzpick-list {
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.ap-billzpick-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--paper-warm);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms var(--ease-out);
+}
+.ap-billzpick-item:last-child { border-bottom: 0; }
+.ap-billzpick-item:hover:not(:disabled) { background: var(--paper-soft); }
+.ap-billzpick-item:disabled { opacity: 0.5; cursor: not-allowed; }

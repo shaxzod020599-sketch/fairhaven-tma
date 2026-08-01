@@ -16,6 +16,7 @@ process.env.SYNC_ON_BOOT = 'false';
 process.env.CHANNEL_TELEGRAM_ENABLED = 'false';
 process.env.DISABLE_RATE_LIMIT = 'true';
 
+process.env.CHANNEL_INTERNAL_TOKEN = 'uzum-test-internal-token-0123456789';
 process.env.UZUM_ENABLED = 'true';
 process.env.UZUM_STORE_ID = 'store-uz-1';
 process.env.UZUM_TOKEN_SIGNING_KEY = 'a'.repeat(48);
@@ -492,4 +493,53 @@ test('an unknown endpoint answers in their error shape, not an HTML page', async
   assert.equal(res.status, 404);
   assert.ok(Array.isArray(res.body));
   assert.equal(res.body[0].code, 404);
+});
+
+/* ── Credentials Uzum issues to us ───────────────────────────────────────── */
+
+async function importCreds(body) {
+  const res = await fetch(`${base}/internal/keys/import`, {
+    method: 'POST',
+    headers: {
+      'X-Internal-Token': process.env.CHANNEL_INTERNAL_TOKEN,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, body: await res.json().catch(() => null) };
+}
+
+test('credentials Uzum sends us authenticate exactly as given', async () => {
+  // The direction matters: their manager mails a client_id and client_secret
+  // of their own choosing, and their system presents exactly those values.
+  // Generating our own pair produces credentials nobody will ever send.
+  const theirs = { clientId: 'uzum-partner-4821', clientSecret: 'S3cret-Uzum-Provided-Value-2026' };
+
+  const imported = await importCreds({ channel: 'uzum', ...theirs });
+  assert.equal(imported.status, 200);
+  assert.equal(imported.body.clientId, theirs.clientId);
+  assert.equal('clientSecret' in imported.body, false, 'the secret is never echoed back');
+
+  const token = await tokenRequest({
+    grant_type: 'client_credentials',
+    client_id: theirs.clientId,
+    client_secret: theirs.clientSecret,
+  });
+  assert.equal(token.status, 200);
+  assert.ok(token.body.access_token, 'their pair must mint a bearer token');
+});
+
+test('importing the same client_id twice is refused, not shadowed', async () => {
+  // A silent second record would survive the revocation of the first.
+  const again = await importCreds({
+    channel: 'uzum', clientId: 'uzum-partner-4821', clientSecret: 'different-secret-value',
+  });
+  assert.equal(again.status, 409);
+});
+
+test('medicalka credentials cannot be imported — we issue those', async () => {
+  const res = await importCreds({
+    channel: 'medicalka', clientId: 'x-client', clientSecret: 'x-secret-value',
+  });
+  assert.equal(res.status, 422);
 });

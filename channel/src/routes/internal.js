@@ -221,6 +221,74 @@ router.post('/keys', async (req, res) => {
   }
 });
 
+/**
+ * Registers credentials issued by the marketplace itself.
+ *
+ * The two integrations hand credentials in opposite directions. Medicalka asks
+ * us to issue a token and a secret, and does not care what they look like —
+ * so we generate them. Uzum is the reverse: their manager sends us the
+ * `client_id` and `client_secret` their system will authenticate with, and our
+ * OAuth endpoint has to accept exactly those values. Generating our own pair
+ * for Uzum produces credentials nobody will ever present.
+ *
+ * The secret is stored the same way as a generated one — SHA-256 only.
+ */
+router.post('/keys/import', async (req, res) => {
+  const channel = String(req.body?.channel || '').trim();
+  const clientId = String(req.body?.clientId || '').trim();
+  const clientSecret = String(req.body?.clientSecret || '').trim();
+  const label = String(req.body?.label || '').slice(0, 120);
+
+  if (channel !== 'uzum') {
+    return res.status(422).json({ error: 'only uzum credentials are imported — medicalka keys are issued by us' });
+  }
+  if (!clientId || clientId.length < 4) {
+    return res.status(422).json({ error: 'clientId is required' });
+  }
+  if (!clientSecret || clientSecret.length < 8) {
+    return res.status(422).json({ error: 'clientSecret must be at least 8 characters' });
+  }
+
+  try {
+    // One active record per client id: importing the same pair twice should
+    // not create a shadow credential that revocation then misses.
+    const existing = await ChannelKey().findOne({ channel, kind: 'oauth', clientId, active: true });
+    if (existing) {
+      return res.status(409).json({
+        error: 'this client_id is already registered — revoke it first to replace the secret',
+        id: String(existing._id),
+      });
+    }
+
+    const record = await ChannelKey().create({
+      channel,
+      kind: 'oauth',
+      clientId,
+      hash: hashKey(clientSecret),
+      prefix: clientId.slice(0, 8),
+      last4: clientSecret.slice(-4),
+      label: label || 'выдан Uzum',
+      active: true,
+    });
+
+    logger.info('external credentials imported', { channel, clientId, id: String(record._id) });
+    res.json({
+      id: String(record._id),
+      channel,
+      kind: 'oauth',
+      clientId,
+      fingerprint: `${clientId.slice(0, 8)}…${clientSecret.slice(-4)}`,
+      label: record.label,
+    });
+  } catch (err) {
+    if (err?.code === 11000) {
+      return res.status(409).json({ error: 'these credentials are already registered' });
+    }
+    logger.error('credential import failed', { err });
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 router.post('/keys/:id/revoke', async (req, res) => {
   try {
     const result = await ChannelKey().findOneAndUpdate(

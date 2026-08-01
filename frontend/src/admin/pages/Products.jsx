@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   listProductsAdmin,
   createProduct,
   updateProduct,
   deleteProduct,
   toggleProduct,
+  searchBillzProducts,
 } from '../adminApi';
 import Modal, { ConfirmDialog } from '../components/Modal';
 import MultiImageUpload from '../components/MultiImageUpload';
@@ -204,8 +205,93 @@ export default function Products({ toast }) {
   );
 }
 
+/**
+ * Billz picker for a new product.
+ *
+ * Creating a card and linking it to Billz used to be two separate jobs on two
+ * different pages, and the second one was easy to forget — an unlinked card
+ * sells with no stock behind it. Picking here prefills the name, SKU and
+ * barcode from Billz and stores the link at birth.
+ */
+function BillzPicker({ picked, onPick }) {
+  const [query, setQuery] = useState('');
+  const [items, setItems] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const timer = useRef(null);
+
+  useEffect(() => {
+    if (!query.trim()) { setItems([]); return undefined; }
+    let current = true;
+    clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      try {
+        setBusy(true);
+        const res = await searchBillzProducts({ q: query.trim(), limit: 8 });
+        if (current) setItems(res.data || []);
+      } catch (_) {
+        if (current) setItems([]);
+      } finally {
+        if (current) setBusy(false);
+      }
+    }, 350);
+    return () => { current = false; clearTimeout(timer.current); };
+  }, [query]);
+
+  if (picked) {
+    return (
+      <div className="ap-billzpick ap-billzpick--done">
+        <div className="ap-billzpick-chosen">
+          <span className="ap-billzpick-tag">Billz</span>
+          <span className="ap-billzpick-name">{picked.name}</span>
+          <span className="ap-muted-sm">
+            остаток {picked.stock} · {fmtPrice(picked.retailPrice)}
+          </span>
+        </div>
+        <button type="button" className="ap-btn ap-btn-ghost ap-btn-xs" onClick={() => onPick(null)}>
+          Отвязать
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ap-billzpick">
+      <label className="ap-label">Товар из Billz (необязательно)</label>
+      <input
+        className="ap-input"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Найти по названию, артикулу или штрихкоду…"
+      />
+      {busy && <div className="ap-muted-sm" style={{ marginTop: 6 }}>Поиск…</div>}
+      {items.length > 0 && (
+        <div className="ap-billzpick-list">
+          {items.map((m) => (
+            <button
+              key={m.billzProductId}
+              type="button"
+              className="ap-billzpick-item"
+              disabled={Boolean(m.linkedTo)}
+              onClick={() => { onPick(m); setQuery(''); setItems([]); }}
+            >
+              <span className="ap-billzpick-name">{m.name}</span>
+              <span className="ap-muted-sm">
+                {m.sku && <>{m.sku} · </>}остаток {m.stock} · {fmtPrice(m.retailPrice)}
+                {m.linkedTo && <> · уже связан: {m.linkedTo}</>}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProductEditor({ product, onClose, onSaved }) {
   const isNew = !product;
+  // The Billz product this card will be born linked to. Picking one prefills
+  // the fields below; anything already typed by hand is left alone.
+  const [billzPick, setBillzPick] = useState(null);
   const [name, setName] = useState(product?.name || '');
   const [nameUz, setNameUz] = useState(product?.nameUz || '');
   const [brand, setBrand] = useState(product?.brand || 'Fairhaven Health');
@@ -260,6 +346,12 @@ function ProductEditor({ product, onClose, onSaved }) {
       images: images.filter(Boolean),
       isAvailable,
       tags: tags.split(',').map((s) => s.trim()).filter(Boolean),
+      // Born linked: stock then follows Billz from the first sync, instead of
+      // waiting for someone to remember the linking step on another page.
+      ...(isNew && billzPick ? {
+        billzProductId: billzPick.billzProductId,
+        barcode: billzPick.barcode || '',
+      } : {}),
     };
     try {
       setSaving(true);
@@ -287,6 +379,20 @@ function ProductEditor({ product, onClose, onSaved }) {
       }
     >
       {err && <div className="ap-error">{err}</div>}
+
+      {isNew && (
+        <BillzPicker
+          picked={billzPick}
+          onPick={(m) => {
+            setBillzPick(m);
+            if (!m) return;
+            // Prefill only what is still empty — a half-typed name is the
+            // operator's, not ours to replace.
+            if (!name.trim()) setName(m.name || '');
+            if (!sku.trim()) setSku(m.sku || '');
+          }}
+        />
+      )}
 
       <MultiImageUpload
         primary={imageUrl}

@@ -263,6 +263,63 @@ function ShopStatus({ product, onMeta, toast }) {
   );
 }
 
+/**
+ * Per-product ИКПУ (MXIK) override.
+ *
+ * Uzum requires a tax classification code on every product and Billz carries
+ * none, so the codes live here. A product without its own falls back to the
+ * default set in «Доступ и ИКПУ» — the placeholder says so, which is what
+ * makes an empty field read as "inherited", not "forgotten".
+ */
+function MxikField({ product, onMeta, toast }) {
+  const [value, setValue] = useState(product.mxikCode || '');
+  const [state, setState] = useState('idle'); // idle | saving | saved
+  const savedTimer = useRef(null);
+
+  useEffect(() => { setValue(product.mxikCode || ''); }, [product.mxikCode]);
+  useEffect(() => () => clearTimeout(savedTimer.current), []);
+
+  const save = async () => {
+    const next = value.trim();
+    if (next === (product.mxikCode || '')) return;
+    if (next && !/^\d{6,20}$/.test(next)) {
+      toast?.err('ИКПУ — от 6 до 20 цифр');
+      setValue(product.mxikCode || '');
+      return;
+    }
+    try {
+      setState('saving');
+      await onMeta(product._id, { mxikCode: next });
+      setState('saved');
+      savedTimer.current = setTimeout(() => setState('idle'), 1400);
+    } catch (err) {
+      setState('idle');
+      setValue(product.mxikCode || '');
+      toast?.err(err.message || 'Не сохранилось');
+    }
+  };
+
+  return (
+    <label className="ap-ch-mxik">
+      <span className="ap-ch-mxik-label">ИКПУ</span>
+      <input
+        className="ap-input ap-ch-mxik-input"
+        inputMode="numeric"
+        value={value}
+        onChange={(e) => setValue(e.target.value.replace(/\D/g, '').slice(0, 20))}
+        onBlur={save}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+        placeholder="по умолчанию"
+        aria-label={`ИКПУ для ${product.name}`}
+      />
+      <span className={`ap-ch-save ap-ch-save--${state}`} aria-live="polite">
+        {state === 'saving' && <span className="ap-ch-spinner" />}
+        {state === 'saved' && <Icon name="check" size={14} />}
+      </span>
+    </label>
+  );
+}
+
 export default function ChannelCard({
   product, channels, selected, onSelect, onSave, onMeta, onLink, toast,
 }) {
@@ -348,6 +405,8 @@ export default function ChannelCard({
       )}
 
       <ShopStatus product={product} onMeta={onMeta} toast={toast} />
+
+      <MxikField product={product} onMeta={onMeta} toast={toast} />
 
       <div className="ap-ch-rows">
         {channels.map((channel) => (

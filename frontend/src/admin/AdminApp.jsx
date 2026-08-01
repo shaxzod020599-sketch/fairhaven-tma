@@ -133,7 +133,7 @@ export default function AdminApp({ onExit, embedded }) {
 
   return (
     <div className={`ap-shell ${embedded ? 'embedded' : ''}`}>
-      <aside className={`ap-sidebar ${navOpen ? 'open' : ''}`}>
+      <aside className="ap-sidebar">
         <div className="ap-brand">
           <div className="ap-brand-logo">
             <span className="ap-brand-logo-name">Fairhaven</span>
@@ -238,8 +238,91 @@ export default function AdminApp({ onExit, embedded }) {
         })}
       </nav>
 
-      {navOpen && <div className="ap-backdrop" onClick={() => setNavOpen(false)} />}
+      {navOpen && (
+        <MoreSheet
+          page={page}
+          me={me}
+          embedded={embedded}
+          onExit={onExit}
+          onNavigate={navigate}
+          onClose={() => setNavOpen(false)}
+        />
+      )}
       <AdminToast toast={toast} />
+    </div>
+  );
+}
+
+/**
+ * Mobile navigation, as a light bottom sheet.
+ *
+ * The first version reused the desktop sidebar as a slide-in drawer. On a
+ * phone that reads as a wall of black covering the whole screen — operators
+ * described it as "a black window with nothing in it" — and the drawer's own
+ * footer button was white-on-white on top of it. A sheet in the panel's own
+ * light palette fixes both, and behaves like every other overlay here: tap
+ * outside to close, Telegram's Back closes it first.
+ */
+function MoreSheet({ page, me, embedded, onExit, onNavigate, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    const back = () => onClose();
+    pushBackButton(back);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+      popBackButton(back);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="ap-sheet-backdrop" onClick={onClose}>
+      <div
+        className="ap-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Все разделы"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="ap-sheet-grip" aria-hidden="true" />
+        <nav className="ap-sheet-grid" aria-label="Разделы панели">
+          {NAV.map((n) => (
+            <button
+              key={n.key}
+              type="button"
+              className={`ap-sheet-item ${page === n.key ? 'active' : ''}`}
+              onClick={() => { hapticFeedback('light'); onNavigate(n.key); }}
+              aria-current={page === n.key ? 'page' : undefined}
+            >
+              <span className="ap-sheet-icon"><Icon name={n.icon} size={22} /></span>
+              <span className="ap-sheet-label">{n.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="ap-sheet-foot">
+          <div className="ap-sheet-user">
+            <div className="ap-sheet-user-name">
+              {[me.firstName, me.lastName].filter(Boolean).join(' ') || me.username || 'admin'}
+            </div>
+            <div className="ap-muted-sm">ID: {me.telegramId}</div>
+          </div>
+          {embedded ? (
+            <button type="button" className="ap-btn ap-btn-ghost ap-btn-xs" onClick={onExit}>
+              ← В магазин
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="ap-btn ap-btn-ghost ap-btn-xs"
+              onClick={() => window.location.reload()}
+            >
+              Обновить
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

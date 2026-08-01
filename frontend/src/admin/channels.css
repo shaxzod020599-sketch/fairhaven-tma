@@ -790,3 +790,53 @@
 @media (max-width: 560px) {
   .ap-ch-keyused { margin-left: 0; width: 100%; }
 }
+
+/* ─────────────────────────────────────────────── Per-product ИКПУ */
+.ap-ch-mxik {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 2px;
+}
+.ap-ch-mxik-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  flex-shrink: 0;
+}
+.ap-ch-mxik-input {
+  max-width: 210px;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  padding: 7px 10px;
+}
+
+/* ─────────────────────────────────────────────── Billz headline strip */
+.ap-ch-billzbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.ap-ch-billzstat {
+  flex: 1 1 auto;
+  min-width: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.ap-ch-billzstat-n {
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.ap-ch-billzstat-l {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}

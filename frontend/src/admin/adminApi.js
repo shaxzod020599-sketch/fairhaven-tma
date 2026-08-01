@@ -129,6 +129,10 @@ export const updateChannelSettings = (body) =>
 export const listChannelKeys = () => adminRequest('/channels/keys');
 export const issueChannelKey = (body) =>
   adminRequest('/channels/keys', { method: 'POST', body });
+// Uzum sends us its client_id/client_secret — this registers the pair rather
+// than generating one they would never present.
+export const importChannelKey = (body) =>
+  adminRequest('/channels/keys/import', { method: 'POST', body });
 export const revokeChannelKey = (id) =>
   adminRequest(`/channels/keys/${id}/revoke`, { method: 'POST' });
 

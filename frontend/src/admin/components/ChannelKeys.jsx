@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   listChannelKeys,
   issueChannelKey,
+  importChannelKey,
   revokeChannelKey,
   channelSettings,
   updateChannelSettings,
@@ -23,13 +24,18 @@ import Modal from './Modal';
  * back for it.
  */
 
+/**
+ * The two integrations hand credentials in opposite directions.
+ *
+ * Medicalka: WE issue a token and a secret and send them over — so the Uzum
+ * buttons here generate. Uzum: THEIR manager sends us the client_id and
+ * client_secret their system will present — so for Uzum the panel takes the
+ * pair in, it does not generate one nobody would ever use.
+ */
 const KINDS = {
   medicalka: [
     { kind: 'token', label: 'Токен чтения', hint: 'каталог и остатки' },
     { kind: 'secret', label: 'Секрет заказов', hint: 'приём и статусы заказов' },
-  ],
-  uzum: [
-    { kind: 'oauth', label: 'OAuth-клиент', hint: 'client_id + client_secret' },
   ],
 };
 
@@ -47,6 +53,7 @@ export default function ChannelKeys({ toast }) {
   const [loading, setLoading] = useState(true);
   const [issuing, setIssuing] = useState(false);
   const [revealed, setRevealed] = useState(null);
+  const [uzumForm, setUzumForm] = useState(false);
   const [mxik, setMxik] = useState('');
   const [savedMxik, setSavedMxik] = useState('');
   const [savingMxik, setSavingMxik] = useState(false);
@@ -146,6 +153,18 @@ export default function ChannelKeys({ toast }) {
               ))}
             </div>
           ))}
+          <div className="ap-ch-issuegroup">
+            <span className="ap-ch-issuechannel">Uzum Tezkor</span>
+            <button
+              type="button"
+              className="ap-btn ap-btn-ghost ap-btn-xs"
+              onClick={() => setUzumForm(true)}
+              title="Uzum присылает свои client_id и client_secret — введите их здесь"
+            >
+              <Icon name="plus" size={14} />
+              Ввести данные от Uzum
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -190,7 +209,90 @@ export default function ChannelKeys({ toast }) {
       </section>
 
       {revealed && <RevealDialog data={revealed} onClose={() => setRevealed(null)} toast={toast} />}
+      {uzumForm && (
+        <UzumImportDialog
+          onClose={() => setUzumForm(false)}
+          onDone={async () => { setUzumForm(false); toast?.ok?.('Данные Uzum сохранены'); await load(); }}
+          toast={toast}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Takes in the credentials Uzum's manager sends.
+ *
+ * The direction matters: for Medicalka we issue and they store; for Uzum they
+ * issue and we store. Only the SHA-256 of the secret is kept, so after this
+ * dialog closes the value exists nowhere on our side — same rule as our own
+ * generated keys.
+ */
+function UzumImportDialog({ onClose, onDone, toast }) {
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!clientId.trim() || !clientSecret.trim()) {
+      toast?.err?.('Заполните оба поля');
+      return;
+    }
+    try {
+      setBusy(true);
+      await importChannelKey({
+        channel: 'uzum',
+        clientId: clientId.trim(),
+        clientSecret: clientSecret.trim(),
+        label: 'выдан Uzum',
+      });
+      await onDone();
+    } catch (err) {
+      toast?.err?.(err.message || 'Не сохранилось');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title="Данные от Uzum Tezkor"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="ap-btn ap-btn-ghost" onClick={onClose}>Отмена</button>
+          <button type="button" className="ap-btn ap-btn-primary" disabled={busy} onClick={submit}>
+            {busy ? 'Сохраняю…' : 'Сохранить'}
+          </button>
+        </>
+      }
+    >
+      <p className="ap-ch-keysub">
+        Менеджер Uzum присылает client_id и client_secret — их система будет
+        входить именно с ними. Секрет хранится только в виде хеша: после
+        сохранения увидеть его снова нельзя, только заменить.
+      </p>
+      <div className="ap-ch-revealfield">
+        <label className="ap-label">client_id</label>
+        <input
+          className="ap-input"
+          value={clientId}
+          onChange={(e) => setClientId(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </div>
+      <div className="ap-ch-revealfield">
+        <label className="ap-label">client_secret</label>
+        <input
+          className="ap-input"
+          value={clientSecret}
+          onChange={(e) => setClientSecret(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </div>
+    </Modal>
   );
 }
 
