@@ -105,8 +105,30 @@ function checkUzumConfig() {
   }
 }
 
+/**
+ * The /internal surface moves stock, and it is protected by three things: the
+ * service binds to loopback, nginx never proxies /internal, and every request
+ * carries a shared token. Binding to a public interface removes the first, so
+ * the remaining two have to be worth relying on.
+ */
+function checkInternalExposure() {
+  const loopback = ['127.0.0.1', '::1', 'localhost'].includes(config.host);
+  if (loopback) return;
+
+  if (!config.internalToken || config.internalToken.length < 32) {
+    throw new Error(
+      `HOST is ${config.host}, so /internal is reachable off this machine. `
+      + 'CHANNEL_INTERNAL_TOKEN must be at least 32 characters before that is allowed.'
+    );
+  }
+  logger.warn('bound to a non-loopback address — make sure nginx does not proxy /internal', {
+    host: config.host,
+  });
+}
+
 async function start() {
   checkUzumConfig();
+  checkInternalExposure();
   await db.connect();
 
   // Fail fast on a bad key or a wrong shop id rather than discovering it on
@@ -164,4 +186,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, checkUzumConfig, start };
+module.exports = { app, checkInternalExposure, checkUzumConfig, start };
