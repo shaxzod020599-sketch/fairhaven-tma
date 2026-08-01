@@ -225,7 +225,12 @@ exports.summary = async (_req, res) => {
       counts[key] = rows.filter(predicate).length;
     }
     for (const channel of CHANNELS) {
-      counts[channel] = rows.filter((r) => r.channels[channel].live).length;
+      // `live` answers "is there stock"; the feed additionally refuses a
+      // product with no price. Counting only `live` overstated the headline
+      // against what Medicalka and Uzum actually receive.
+      counts[channel] = rows.filter(
+        (r) => r.channels[channel].live && !r.channels[channel].priceMissing
+      ).length;
     }
 
     const mirrorTotal = await BillzProductView.countDocuments({ deletedInBillz: false });
@@ -418,7 +423,6 @@ exports.updateProductMeta = async (req, res) => {
     // rather than behind the generic product edit form.
     if (req.body?.approved !== undefined) $set.approved = Boolean(req.body.approved);
     // Handing a product back to the reconciler after a manual decision.
-    if (req.body?.autoStock !== undefined) $set.autoStock = Boolean(req.body.autoStock);
     // Setting availability by hand. Much of the catalogue — nursing pads, test
     // strips, accessories — has no Billz counterpart and is managed this way,
     // so this also pins the product to manual: otherwise the reconciler would
@@ -427,6 +431,9 @@ exports.updateProductMeta = async (req, res) => {
       $set.isAvailable = Boolean(req.body.isAvailable);
       $set.autoStock = false;
     }
+    // Applied last so an explicit value wins. Sending both is contradictory,
+    // and silently discarding the one the caller named is the worse answer.
+    if (req.body?.autoStock !== undefined) $set.autoStock = Boolean(req.body.autoStock);
     if (req.body?.mxikCode !== undefined) {
       const code = String(req.body.mxikCode).trim();
       if (code && !/^\d{6,20}$/.test(code)) {

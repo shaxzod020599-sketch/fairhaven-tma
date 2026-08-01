@@ -75,6 +75,20 @@ function sellableStock(card, mirror, channel) {
 }
 
 /**
+ * The quantity a channel is actually told.
+ *
+ * `forceStatus: 'in'` is an operator override meaning "sell this regardless of
+ * what Billz says". Publishing a quantity of zero alongside is_available:true
+ * is a contradiction their client cannot act on, so the override carries a
+ * nominal unit rather than an impossible row.
+ */
+function publishedQuantity(card, mirror, channel) {
+  const sellable = sellableStock(card, mirror, channel);
+  if (sellable <= 0 && channelConfig(card, channel).forceStatus === 'in') return 1;
+  return sellable;
+}
+
+/**
  * Joins cards to mirrors for one channel.
  *
  * Filtering happens in Mongo where it can use an index, then the join is a
@@ -150,5 +164,6 @@ module.exports = {
   isPublishable,
   listForChannel,
   priceFor,
+  publishedQuantity,
   sellableStock,
 };

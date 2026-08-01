@@ -4,6 +4,7 @@ const catalog = require('../../core/catalog');
 const BillzProduct = require('../../models/BillzProduct');
 const ProductCard = require('../../models/ProductCard');
 const { requireKey, CHANNEL } = require('./auth');
+const { channelLimiter, authFailureLimiter } = require('../../middleware/rateLimit');
 const S = require('./serializers');
 
 /**
@@ -16,6 +17,11 @@ const S = require('./serializers');
  * `None` rather than an exception.
  */
 const router = express.Router();
+
+// Bounds an unauthenticated flood before it reaches the key lookup, then bounds
+// an authenticated caller per key. The contract documents a 429, so one has to
+// exist; both are generous against the polling schedule it asks for.
+router.use(authFailureLimiter);
 
 // One shop in Billz, so one pharmacy. Their contract still expects a list, and
 // order submission carries no pharmacy_id because there is only one branch.
@@ -46,7 +52,7 @@ async function decorate(entry) {
   return { ...entry, medicalkaId, price: catalog.priceFor(entry.card, CHANNEL) };
 }
 
-const read = requireKey('token');
+const read = [requireKey('token'), channelLimiter];
 
 // ── Access check ────────────────────────────────────────────────────────────
 router.get('/pharmacies', read, (_req, res) => {
@@ -116,7 +122,7 @@ router.get('/inventory', read, async (req, res, next) => {
       return S.inventoryRow({
         pharmacyId: PHARMACY_ID,
         medicalkaId: decorated.medicalkaId,
-        quantity: catalog.sellableStock(entry.card, entry.mirror, CHANNEL),
+        quantity: catalog.publishedQuantity(entry.card, entry.mirror, CHANNEL),
         price: decorated.price,
       });
     }));
@@ -132,11 +138,18 @@ router.get('/stock', read, async (req, res, next) => {
     if (!Number.isInteger(productId) || productId <= 0) {
       return unprocessable(res, 'query parameter "product_id" must be a positive integer');
     }
-    const pharmacyId = req.query.pharmacy_id === undefined
-      ? PHARMACY_ID
-      : Number(req.query.pharmacy_id);
+    // A malformed id is a bad parameter (422); a well-formed one we do not have
+    // is a missing object (404). Answering 404 for both told an integrator the
+    // pharmacy was gone when they had simply sent nonsense.
+    let pharmacyId = PHARMACY_ID;
+    if (req.query.pharmacy_id !== undefined) {
+      pharmacyId = Number(req.query.pharmacy_id);
+      if (!Number.isInteger(pharmacyId) || pharmacyId <= 0) {
+        return unprocessable(res, 'query parameter "pharmacy_id" must be a positive integer');
+      }
+    }
     if (pharmacyId !== PHARMACY_ID) {
-      return notFound(res, `Pharmacy ${req.query.pharmacy_id} not found`);
+      return notFound(res, `Pharmacy ${pharmacyId} not found`);
     }
 
     const mirror = await BillzProduct().findOne({ medicalkaId: productId }).lean();
@@ -150,7 +163,7 @@ router.get('/stock', read, async (req, res, next) => {
     res.json(S.inventoryRow({
       pharmacyId: PHARMACY_ID,
       medicalkaId: productId,
-      quantity: catalog.sellableStock(entry.card, entry.mirror, CHANNEL),
+      quantity: catalog.publishedQuantity(entry.card, entry.mirror, CHANNEL),
       price: catalog.priceFor(entry.card, CHANNEL),
     }));
   } catch (err) { next(err); }
@@ -159,7 +172,7 @@ router.get('/stock', read, async (req, res, next) => {
 // ── Orders ──────────────────────────────────────────────────────────────────
 // Submission lands in the next step, together with the Billz reservation flow.
 // Answering 501 with a readable reason beats a 404 that looks like a wrong URL.
-const write = requireKey('secret');
+const write = [requireKey('secret'), channelLimiter];
 
 router.post('/orders', write, (_req, res) => {
   res.status(501).json({ detail: 'Order submission is not enabled yet' });

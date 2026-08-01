@@ -124,6 +124,19 @@ test('the published quantity holds back minStock', () => {
   assert.equal(catalog.sellableStock(card({ minStock: 0 }), m, 'medicalka'), 8);
 });
 
+test('a forced-in product never publishes zero alongside is_available true', () => {
+  // The contract's inventory feed lists only sellable products, so a row that
+  // says "available" with a quantity of zero is one their client cannot act on.
+  const forced = card({ forceStatus: 'in' });
+  const empty = mirror({ stock: 0 });
+
+  assert.equal(catalog.sellableStock(forced, empty, 'medicalka'), 0);
+  assert.equal(catalog.publishedQuantity(forced, empty, 'medicalka'), 1);
+  // Without the override the real figure is published unchanged.
+  assert.equal(catalog.publishedQuantity(card(), empty, 'medicalka'), 0);
+  assert.equal(catalog.publishedQuantity(card(), mirror({ stock: 7 }), 'medicalka'), 7);
+});
+
 /* ── Keys ───────────────────────────────────────────────────────────────── */
 
 test('issued keys are url-safe, tagged and high entropy', () => {

@@ -131,16 +131,20 @@ async function runCatalogSync({ force = false } = {}) {
   try {
     const products = await fetchAllProducts();
 
+    // Counted on identifiable products only — the same set the delete step
+    // uses. Measuring the raw fetch count instead would let the guard pass on a
+    // larger number while a smaller set decided what gets flagged as deleted.
+    const identifiable = products.filter((p) => p.id).length;
     const mirrorCount = await Model.countDocuments({ deletedInBillz: false });
-    const ratio = mirrorCount === 0 ? 1 : products.length / mirrorCount;
+    const ratio = mirrorCount === 0 ? 1 : identifiable / mirrorCount;
     if (!force && ratio < config.sync.minCatalogRatio) {
       const reason =
-        `billz returned ${products.length} products but the mirror holds ${mirrorCount}; ` +
+        `billz returned ${identifiable} products but the mirror holds ${mirrorCount}; ` +
         `below the ${config.sync.minCatalogRatio} ratio guard`;
       logger.error('catalog sync rejected', { reason });
       await SyncLog().create({
         kind: 'catalog', startedAt, finishedAt: new Date(),
-        ok: false, rejectedReason: reason, seen: products.length,
+        ok: false, rejectedReason: reason, seen: identifiable,
         durationMs: Date.now() - startedAt.getTime(),
       });
       return { ok: false, rejected: true, reason };
@@ -169,9 +173,18 @@ async function runCatalogSync({ force = false } = {}) {
 /** Prevents an interval tick from overlapping a still-running sync. */
 let running = null;
 
-function runCatalogSyncExclusive(options) {
-  if (running) return running;
-  running = runCatalogSync(options).finally(() => { running = null; });
+/**
+ * Joins the in-flight run when one is going, except for a forced run.
+ *
+ * A forced run means something different — it skips the shrink guard, which is
+ * how the first fill happens. Handing back the promise of an unforced run in
+ * progress would report success while quietly not doing what was asked, so a
+ * forced request queues behind the current run instead.
+ */
+function runCatalogSyncExclusive(options = {}) {
+  if (running && !options.force) return running;
+  const start = () => runCatalogSync(options).finally(() => { running = null; });
+  running = running ? running.then(start, start) : start();
   return running;
 }
 
