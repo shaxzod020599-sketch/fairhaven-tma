@@ -271,6 +271,13 @@ export default function ChannelCard({
   // reads as a bug rather than as "no photo yet".
   const [imageOk, setImageOk] = useState(Boolean(product.imageUrl));
 
+  // Initial state alone was not enough: the row keeps its identity across a
+  // refetch, so a product that gained a photo went on showing the placeholder
+  // and one that lost its file kept a stale thumbnail.
+  useEffect(() => {
+    setImageOk(Boolean(product.imageUrl));
+  }, [product.imageUrl]);
+
   return (
     <article className={`ap-ch-card ${selected ? 'is-selected' : ''}`}>
       <header className="ap-ch-card-head">

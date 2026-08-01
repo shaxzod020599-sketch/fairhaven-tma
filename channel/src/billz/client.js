@@ -89,7 +89,7 @@ async function request(method, path, options = {}) {
     if (res.status === 401 && !retriedAuth) {
       retriedAuth = true;
       logger.warn('billz token rejected, re-authenticating', { path });
-      await auth.invalidate();
+      await auth.invalidate(token);
       // Re-authenticating is not a failed attempt; counting it here used to
       // eat one retry and shorten the backoff ladder for whatever came next.
       continue;

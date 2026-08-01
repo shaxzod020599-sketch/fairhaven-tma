@@ -151,6 +151,13 @@ export default function Channels({ toast }) {
   const pages = Math.max(1, Math.ceil((meta.total || 0) / PAGE_SIZE));
   const selectedIds = useMemo(() => [...selected], [selected]);
 
+  // Applying a filter, or products leaving one, can shrink the result set below
+  // the current page. That left an empty list and — because the pager hides
+  // itself at a single page — no visible way back.
+  useEffect(() => {
+    if (page > pages) setPage(pages);
+  }, [page, pages]);
+
   return (
     <div className="ap-page ap-ch">
       <div className="ap-page-head">
@@ -455,15 +462,19 @@ function LinkDialog({ product, onClose, onLinked, toast }) {
 
   useEffect(() => {
     clearTimeout(timer.current);
+    // Typing fires overlapping requests and they do not come back in order.
+    // Without this guard a slow response for "fer" could land after "fertil"
+    // and repopulate the list with results for a query no longer on screen.
+    let current = true;
     timer.current = setTimeout(async () => {
       try {
         const res = await searchBillzProducts({ search: query.trim(), limit: 40 });
-        setItems(res.data || []);
+        if (current) setItems(res.data || []);
       } catch (err) {
-        toast?.err(err.message || 'Поиск не удался');
+        if (current) toast?.err(err.message || 'Поиск не удался');
       }
     }, 300);
-    return () => clearTimeout(timer.current);
+    return () => { current = false; clearTimeout(timer.current); };
   }, [query, toast]);
 
   const link = async (billzProductId) => {

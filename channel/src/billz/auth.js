@@ -94,10 +94,24 @@ async function getAccessToken() {
   return token.accessToken;
 }
 
-/** Drops the cached token so the next call re-authenticates. Used on a 401. */
-async function invalidate() {
+/**
+ * Drops a token that Billz rejected, so the next call re-authenticates.
+ *
+ * Takes the token that actually failed. Clearing unconditionally meant a
+ * request holding an old token could delete one another caller had just
+ * issued — every in-flight request then 401'd in turn and each triggered its
+ * own login, which is the storm the promise lock exists to avoid.
+ */
+async function invalidate(staleToken) {
+  if (staleToken && cached && cached.accessToken !== staleToken) {
+    // Someone already refreshed; the caller simply raced and should retry.
+    return;
+  }
   cached = null;
-  await BillzToken().deleteOne({ kind: 'default' }).catch(() => {});
+  const filter = staleToken
+    ? { kind: 'default', accessToken: staleToken }
+    : { kind: 'default' };
+  await BillzToken().deleteOne(filter).catch(() => {});
 }
 
 /** Test seam. */
