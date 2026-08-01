@@ -187,6 +187,13 @@ async function reserveOrder(internalOrderId) {
     // reserved with the order still marked for retry, which an operator can
     // see and correct. The reverse order would silently under-reserve.
     await applyReservedQty(order.items, +1);
+    // Set with no `await` between it and the counter it describes. Anything in
+    // between — including the hold release below — could throw, and the failure
+    // path saves the order: a saved order whose flag says it holds nothing
+    // while the counter says otherwise leaks those units permanently, because
+    // the cancellation path trusts the flag.
+    order.billz.reservationApplied = true;
+
     // Billz is now holding the same units, so the local hold has to go — the
     // two counters are both subtracted from sellable stock, and keeping both
     // would take twice the inventory off sale. Released after the reservation
@@ -195,7 +202,6 @@ async function reserveOrder(internalOrderId) {
 
     order.billz.draftOrderId = orderId;
     order.billz.orderNumber = orderNumber;
-    order.billz.reservationApplied = true;
     order.billz.lastError = '';
     order.status = 'reserved';
     await order.save();

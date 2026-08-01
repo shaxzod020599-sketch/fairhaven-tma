@@ -1,6 +1,7 @@
 const config = require('../config');
 const logger = require('../logger');
 const orders = require('./orders');
+const { reconcileCounters } = require('./counters');
 const ChannelOrder = require('../models/ChannelOrder');
 
 /**
@@ -174,10 +175,22 @@ async function sweepExpiredHolds({ now = new Date() } = {}) {
   return { released, examined: expired.length };
 }
 
-/** Runs the sweeper on a timer. Returns the handle so shutdown can clear it. */
+/**
+ * Runs the sweeper on a timer. Returns the handle so shutdown can clear it.
+ *
+ * The counter repair rides along at a tenth of the rate: it is a safety net for
+ * a lifecycle that is written not to need one, and running it often would blur
+ * the line between the two.
+ */
 function startHoldSweeper() {
+  let tick = 0;
   const timer = setInterval(() => {
     sweepExpiredHolds().catch((err) => logger.error('hold sweep failed', { err }));
+
+    tick += 1;
+    if (tick % 10 === 0) {
+      reconcileCounters().catch((err) => logger.error('counter reconcile failed', { err }));
+    }
   }, config.bot.holdSweepMs);
   timer.unref?.();
   return timer;
