@@ -29,7 +29,7 @@ class BillzError extends Error {
   }
 }
 
-async function send(method, path, { query, body, token }) {
+async function send(method, path, { query, body, token, headers }) {
   const url = new URL(path, config.billz.baseUrl);
   for (const [k, v] of Object.entries(query || {})) {
     if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
@@ -41,6 +41,11 @@ async function send(method, path, { query, body, token }) {
       Authorization: `Bearer ${token}`,
       Accept: 'application/json',
       ...(body ? { 'Content-Type': 'application/json' } : {}),
+      // Caller-supplied last, but never able to replace Authorization — some
+      // Billz endpoints need Billz-Response-Channel to answer over HTTP at all
+      // rather than over a websocket.
+      ...(headers || {}),
+      Authorization: `Bearer ${token}`,
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
     signal: AbortSignal.timeout(config.billz.timeoutMs),
