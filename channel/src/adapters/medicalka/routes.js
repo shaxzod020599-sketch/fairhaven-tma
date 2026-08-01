@@ -190,6 +190,43 @@ const STATUS_ACTIONS = {
 };
 
 /**
+ * What we report back, in their vocabulary rather than ours.
+ *
+ * Their examples answer `received` on creation and `processing` after a
+ * payment. Our internal names — `reserved`, `sold` — are ours; sending them
+ * would make an integrator match on words their own guide never mentions.
+ */
+const STATUS_OUT = {
+  received: 'received',
+  reserved: 'accepted',
+  sold: 'processing',
+  cancelled: 'cancelled',
+  failed: 'received',
+};
+
+/**
+ * Finds an order the way their client addresses it.
+ *
+ * Their guide is explicit: "Обращайтесь по тому order_id, который вы сами
+ * сгенерировали" — the status call carries THEIR order id, not the
+ * `wc_order_id` we replied with. Looking up only by ours meant every status
+ * update would have answered 404 on the first day of the integration.
+ *
+ * All three are accepted: the id they generated, the integer we answered with,
+ * and the internal uuid. Being liberal costs nothing and removes a whole class
+ * of "which id did you mean" support traffic.
+ */
+async function findOrder(key) {
+  const raw = String(key || '').trim();
+  if (!raw) return null;
+
+  const or = [{ externalId: raw }, { internalOrderId: raw }];
+  if (/^\d+$/.test(raw)) or.push({ publicOrderId: Number(raw) });
+
+  return ChannelOrder().findOne({ channel: CHANNEL, $or: or }).lean();
+}
+
+/**
  * Validates and normalises an incoming order.
  *
  * Prices come from our own catalogue, never from the request. A marketplace
@@ -255,9 +292,13 @@ router.post('/orders', write, async (req, res, next) => {
       raw: req.body,
     });
 
+    // Allocated once and stored, so a resend answers with the same number
+    // rather than burning a fresh one each time.
+    const publicId = await orders.ensurePublicOrderId(order.internalOrderId);
+
     // Answer before touching Billz. A resend gets the same answer as the
     // original, which is what stops one customer order becoming two sales.
-    res.json({ wc_order_id: order.internalOrderId, status: 'received' });
+    res.json({ wc_order_id: publicId, status: 'received' });
 
     if (created) {
       orders.reserveOrder(order.internalOrderId)
@@ -285,9 +326,7 @@ router.post('/orders/:orderId/status', write, async (req, res, next) => {
       return unprocessable(res, `unknown status "${status}"`);
     }
 
-    const order = await ChannelOrder()
-      .findOne({ channel: CHANNEL, internalOrderId: req.params.orderId })
-      .lean();
+    const order = await findOrder(req.params.orderId);
     if (!order) return notFound(res, `Order ${req.params.orderId} not found`);
 
     try {
@@ -301,7 +340,10 @@ router.post('/orders/:orderId/status', write, async (req, res, next) => {
     }
 
     const fresh = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId }).lean();
-    res.json({ wc_order_id: fresh.internalOrderId, status: fresh.status });
+    res.json({
+      wc_order_id: fresh.publicOrderId ?? (await orders.ensurePublicOrderId(fresh.internalOrderId)),
+      status: STATUS_OUT[fresh.status] || fresh.status,
+    });
 
     // Edits the existing card rather than posting again, so one order stays one
     // message in the channel.

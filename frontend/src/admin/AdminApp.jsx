@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { whoami } from './adminApi';
 import {
   pushBackButton,
@@ -84,25 +84,42 @@ export default function AdminApp({ onExit, embedded }) {
 
   useEffect(() => { check(); }, [check]);
 
-  // Wire Telegram BackButton to exit admin mode when embedded. We push
-  // the handler onto the stack so child screens (e.g. order detail
-  // modal) can override it with their own "close" action and have ours
-  // restored automatically when they unmount.
+  /**
+   * Telegram's Back button, wired to the section you came from.
+   *
+   * It used to call `onExit` from anywhere, so Back on the Orders page threw
+   * you out of the panel and back to the storefront instead of returning one
+   * step. Now it walks the trail of sections and only leaves the panel from
+   * the first one — which is what Back means everywhere else in Telegram.
+   */
+  const trail = useRef([]);
+
+  const goBack = useCallback(() => {
+    hapticFeedback('light');
+    const previous = trail.current.pop();
+    if (previous) {
+      setPage(previous.page);
+      setPageArgs(previous.args);
+      return;
+    }
+    onExit?.();
+  }, [onExit]);
+
   useEffect(() => {
-    if (!embedded || !onExit) return;
-    const handler = () => {
-      hapticFeedback('light');
-      onExit();
-    };
-    pushBackButton(handler);
-    return () => popBackButton(handler);
-  }, [embedded, onExit]);
+    if (!embedded || !onExit) return undefined;
+    pushBackButton(goBack);
+    return () => popBackButton(goBack);
+  }, [embedded, onExit, goBack]);
 
   const navigate = useCallback((target, args = null) => {
-    setPage(target);
+    setPage((current) => {
+      // Re-selecting the section you are already on is not a step.
+      if (current !== target) trail.current.push({ page: current, args: pageArgs });
+      return target;
+    });
     setPageArgs(args);
     setNavOpen(false);
-  }, []);
+  }, [pageArgs]);
 
   if (status === 'loading') {
     return (
@@ -184,9 +201,9 @@ export default function AdminApp({ onExit, embedded }) {
           {embedded ? (
             <button
               className="ap-hamburger"
-              onClick={onExit}
-              aria-label="Назад в магазин"
-              title="Назад в магазин"
+              onClick={goBack}
+              aria-label={trail.current.length ? 'Назад' : 'Назад в магазин'}
+              title={trail.current.length ? 'Назад' : 'Назад в магазин'}
             >
               ←
             </button>

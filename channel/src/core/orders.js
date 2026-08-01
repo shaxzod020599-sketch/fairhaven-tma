@@ -4,6 +4,7 @@ const logger = require('../logger');
 const sale = require('../billz/sale');
 const BillzProduct = require('../models/BillzProduct');
 const ChannelOrder = require('../models/ChannelOrder');
+const { nextValue } = require('../models/Counter');
 
 /**
  * Channel order lifecycle.
@@ -81,6 +82,30 @@ async function acceptOrder(channel, { externalId, items, totalAmount, customer, 
     }
     throw err;
   }
+}
+
+/**
+ * Allocates the integer id a channel answers with, once per order.
+ *
+ * Medicalka's contract types ids as integers and their own example replies
+ * `{"wc_order_id": 25545}`; a uuid there is a type error on the very first
+ * order. Allocated lazily so the number is only spent on an order that was
+ * actually answered, and stored so a resend returns the same one.
+ */
+async function ensurePublicOrderId(internalOrderId) {
+  const Model = ChannelOrder();
+  const existing = await Model.findOne({ internalOrderId }).select('publicOrderId').lean();
+  if (existing?.publicOrderId) return existing.publicOrderId;
+
+  const value = await nextValue('publicOrderId');
+  await Model.updateOne(
+    { internalOrderId, publicOrderId: null },
+    { $set: { publicOrderId: value } }
+  );
+
+  // A concurrent resend may have won; its number is the one that stuck.
+  const fresh = await Model.findOne({ internalOrderId }).select('publicOrderId').lean();
+  return fresh?.publicOrderId || value;
 }
 
 /**
@@ -331,6 +356,7 @@ module.exports = {
   applyReservedQty,
   cancelOrder,
   completeOrder,
+  ensurePublicOrderId,
   holdOrder,
   releaseHold,
   reserveOrder,

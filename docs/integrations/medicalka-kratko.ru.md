@@ -45,16 +45,21 @@ POST /orders?secret=…
   "delivery_address": "…",
   "items": [ { "product_id": 1, "quantity": 2 } ]
 }
-→ { "wc_order_id": "…", "status": "received" }
+→ { "wc_order_id": 1042, "status": "received" }
 ```
 
+- `wc_order_id` — **целое число**, как и все `id` в API.
 - Повтор того же `order_id` вернёт **тот же** `wc_order_id` — дубликатов не будет.
 - Цена берётся из нашего каталога; `unit_price` в запросе игнорируется.
 
 ## Статусы
 
+Обращайтесь **по своему `order_id`** — тому, что вы сгенерировали при создании.
+Наш `wc_order_id` тоже принимается.
+
 ```json
-POST /orders/{wc_order_id}/status?secret=…   { "status": "paid" }
+POST /orders/{order_id}/status?secret=…   { "status": "paid" }
+→ { "wc_order_id": 1042, "status": "processing" }
 ```
 
 | Статус | Действие у нас |

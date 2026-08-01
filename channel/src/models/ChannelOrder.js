@@ -26,6 +26,16 @@ const channelOrderSchema = new mongoose.Schema({
   // Ours, handed back to them and used for every later reference.
   internalOrderId: { type: String, required: true, unique: true },
 
+  /**
+   * The integer Medicalka's contract expects back as `wc_order_id`.
+   *
+   * Their own example answers `{"wc_order_id": 25545}` — unquoted — and their
+   * type note says ids are integers while prices are strings. A UUID in that
+   * field is a type error their client would hit on the very first order, so
+   * the number is allocated once per order and never changes.
+   */
+  publicOrderId: { type: Number, default: null, index: true, sparse: true },
+
   items: { type: [channelOrderItemSchema], default: [] },
   totalAmount: { type: Number, default: 0 },
   customer: {

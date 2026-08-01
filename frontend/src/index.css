@@ -1556,9 +1556,14 @@ ul, ol {
   animation: sheetIn 360ms var(--ease-out);
   box-shadow: var(--shadow-lg);
 }
+/* Centring is done by `margin:auto` between left:0 and right:0 — see the note
+   on .bottom-nav for why. The keyframes still carried translateX(-50%) from an
+   older `left:50%` layout, so the sheet slid in half a width to the LEFT and
+   snapped back the instant the animation ended. That snap is what read as the
+   panel "sticking". Vertical only. */
 @keyframes sheetIn {
-  from { transform: translateX(-50%) translateY(100%); }
-  to { transform: translateX(-50%) translateY(0); }
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }
 
 .sheet-handle {
@@ -2243,12 +2248,14 @@ ul, ol {
   border-radius: var(--r-pill);
   background: var(--butter);
 }
+/* Same stale translateX as the sheet had: the toast is centred by margin:auto,
+   so the horizontal shift only pushed it off-centre and back. */
 @keyframes toastIn {
-  from { transform: translateX(-50%) translateY(-20px); opacity: 0; }
-  to { transform: translateX(-50%) translateY(0); opacity: 1; }
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 @keyframes toastOut {
-  to { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  to { opacity: 0; transform: translateY(-10px); }
 }
 
 /* scrollbar subtle */
