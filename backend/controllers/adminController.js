@@ -765,6 +765,7 @@ async function tryNotifyCustomer(bot, order, status) {
     return;
   }
   await withTelegramRetry(() =>
-    bot.telegram.sendMessage(order.telegramId, text, { parse_mode: 'HTML' })
+    bot.telegram.sendMessage(order.telegramId, text, { parse_mode: 'HTML' }),
+    { tier: 'normal' }
   );
 }

@@ -11,7 +11,21 @@ const {
   escapeRegistrationName,
   syncRegistrationUser,
 } = require('../utils/registration');
-const { withTelegramRetry } = require('../utils/telegramRetry');
+const {
+  isPermanentlyUnreachable,
+  withTelegramRetry,
+} = require('../utils/telegramRetry');
+const { mapWithConcurrency } = require('../utils/pool');
+
+/**
+ * Broadcast pacing.
+ *
+ * Telegram allows roughly 30 messages per second to different users. 25/s
+ * leaves headroom for the order notifications that must not queue behind a
+ * broadcast. Concurrency is what keeps a slow or retrying recipient from
+ * stalling the run: eight workers means seven others keep going.
+ */
+const BROADCAST_PACING = { concurrency: 8, minIntervalMs: 40 };
 
 // Fairhaven channel — orders are sent here for operator approval.
 // Override via ORDERS_CHANNEL_ID env var if needed.
@@ -444,6 +458,8 @@ async function broadcastProductToUsers(bot, product, frontendUrl, kind = 'new') 
     registrationStep: 'done',
     consentAccepted: true,
     notificationsEnabled: { $ne: false },
+    // Users who blocked the bot are skipped until they come back via /start.
+    botBlocked: { $ne: true },
   }).select('telegramId').lean();
 
   console.log(`[bot] Broadcasting ${kind} product "${product.name}" to ${recipients.length} users`);
@@ -451,60 +467,74 @@ async function broadcastProductToUsers(bot, product, frontendUrl, kind = 'new') 
   let sent = 0;
   let failed = 0;
   const errorSamples = [];
-  for (let i = 0; i < recipients.length; i += 25) {
-    const chunk = recipients.slice(i, i + 25);
-    await Promise.allSettled(chunk.map(async (r) => {
-      try {
-        if (photoUrl) {
-          try {
-            await withTelegramRetry(() =>
-              bot.telegram.sendPhoto(r.telegramId, photoUrl, {
-                caption: text,
-                parse_mode: 'HTML',
-                reply_markup: keyboard,
-              })
-            );
-          } catch (photoErr) {
-            // Telegram couldn't fetch / accept the photo URL — fall back to plain text
-            // so the broadcast still reaches users instead of silently failing.
-            await withTelegramRetry(() =>
-              bot.telegram.sendMessage(r.telegramId, text, {
-                parse_mode: 'HTML',
-                disable_web_page_preview: false,
-                reply_markup: keyboard,
-              })
-            );
-            if (errorSamples.length < 3) {
-              errorSamples.push(`photo fallback: ${photoErr.description || photoErr.message}`);
-            }
-          }
-        } else {
-          await withTelegramRetry(() =>
-            bot.telegram.sendMessage(r.telegramId, text, {
+  const unreachable = [];
+
+  const results = await mapWithConcurrency(
+    recipients,
+    BROADCAST_PACING,
+    async (r) => {
+      if (photoUrl) {
+        try {
+          return await withTelegramRetry(() =>
+            bot.telegram.sendPhoto(r.telegramId, photoUrl, {
+              caption: text,
               parse_mode: 'HTML',
-              disable_web_page_preview: true,
               reply_markup: keyboard,
-            })
+            }),
+            { tier: 'bulk' }
           );
-        }
-        sent += 1;
-      } catch (err) {
-        failed += 1;
-        if (errorSamples.length < 5) {
-          errorSamples.push(`${r.telegramId}: ${err.description || err.message}`);
+        } catch (photoErr) {
+          // Telegram could not fetch or accept the photo URL. Falling back to
+          // text keeps the broadcast reaching people; failing here would drop
+          // it for everyone over one bad image.
+          if (isPermanentlyUnreachable(photoErr)) throw photoErr;
+          if (errorSamples.length < 3) {
+            errorSamples.push(`photo fallback: ${photoErr.description || photoErr.message}`);
+          }
         }
       }
-    }));
-    if (i + 25 < recipients.length) {
-      await new Promise((r) => setTimeout(r, 1000));
+      return withTelegramRetry(() =>
+        bot.telegram.sendMessage(r.telegramId, text, {
+          parse_mode: 'HTML',
+          disable_web_page_preview: !photoUrl,
+          reply_markup: keyboard,
+        }),
+        { tier: 'bulk' }
+      );
     }
+  );
+
+  results.forEach((result, index) => {
+    if (result?.status === 'fulfilled') {
+      sent += 1;
+      return;
+    }
+    failed += 1;
+    const err = result?.reason;
+    if (isPermanentlyUnreachable(err)) {
+      unreachable.push(recipients[index].telegramId);
+    } else if (errorSamples.length < 5) {
+      errorSamples.push(`${recipients[index].telegramId}: ${err?.description || err?.message}`);
+    }
+  });
+
+  // Without this, every future broadcast retries the same dead chats — five
+  // network round-trips each, for people who will never receive them.
+  if (unreachable.length) {
+    await User.updateMany(
+      { telegramId: { $in: unreachable } },
+      { $set: { botBlocked: true } }
+    ).catch((err) => console.warn('[bot] could not flag blocked users:', errorLabel(err)));
   }
+
   if (errorSamples.length) {
     console.warn(`[bot] Broadcast (${kind}) sample errors:`, errorSamples);
   }
-
-  console.log(`[bot] Broadcast (${kind}) done: ${sent} sent, ${failed} failed`);
-  return { sent, failed, total: recipients.length };
+  console.log(
+    `[bot] Broadcast (${kind}) done: ${sent} sent, ${failed} failed`
+    + (unreachable.length ? `, ${unreachable.length} blocked the bot` : '')
+  );
+  return { sent, failed, blocked: unreachable.length, total: recipients.length };
 }
 
 function createBot(token, frontendUrl) {
@@ -568,6 +598,9 @@ function createBot(token, frontendUrl) {
       });
     }
     syncRegistrationUser(user, tg);
+    // Reaching /start proves the chat is open again, whatever Telegram last
+    // told a broadcast.
+    if (user.botBlocked) user.botBlocked = false;
     await user.save();
 
     // Web-site login deep-link: confirm (or queue) and keep the shop flow.
@@ -765,7 +798,8 @@ function createBot(token, frontendUrl) {
               order.telegramId,
               action === 'approve' ? T.orderApproved(shortId) : T.orderRejected(shortId),
               { parse_mode: 'HTML' }
-            )
+            ),
+            { tier: 'normal' }
           );
         } catch (notifyErr) {
           console.warn('[bot] Could not notify customer:', errorLabel(notifyErr));

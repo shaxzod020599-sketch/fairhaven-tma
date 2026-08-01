@@ -21,11 +21,39 @@ function retryDelay(err, fallback) {
   return retryAfter > 0 ? retryAfter * 1000 : fallback;
 }
 
+/**
+ * Retry budgets by how much the call is worth waiting for.
+ *
+ * VPS egress to api.telegram.org is throttled (~60% failure rate per call from
+ * UZ networks), so retrying is not optional. But the same budget everywhere is
+ * wrong: `critical` can take ~28s in the worst case, which is right for an
+ * order that must not be lost and badly wrong inside a broadcast, where it
+ * stalls a worker for one unreachable recipient.
+ */
+const RETRY_TIERS = {
+  // An order reaching the operators' channel. Losing it loses the sale.
+  critical: [500, 1500, 3500, 7500, 15000],
+  // Customer-facing status messages: worth pursuing, not worth blocking on.
+  normal: [500, 1500, 3500],
+  // Mass sends. A miss costs one impression; the next broadcast catches up.
+  bulk: [500, 1500],
+  // Card edits: the following status change rewrites the message anyway.
+  edit: [500, 1500],
+};
+
+/** True when Telegram says this chat can never receive messages again. */
+function isPermanentlyUnreachable(err) {
+  const code = Number(err?.response?.error_code || err?.code);
+  if (code !== 403 && code !== 400) return false;
+  const description = String(err?.response?.description || err?.message || '').toLowerCase();
+  return /blocked by the user|user is deactivated|chat not found|bot was kicked|user_deactivated/
+    .test(description);
+}
+
 async function withTelegramRetry(operation, options = {}) {
-  // VPS egress to api.telegram.org is throttled (~60% failure rate per
-  // call from UZ networks). 5 retries with widening backoff lift effective
-  // success rate to ~99% while keeping worst-case latency under ~30s.
-  const delays = options.delays || [500, 1500, 3500, 7500, 15000];
+  const delays = options.delays
+    || RETRY_TIERS[options.tier]
+    || RETRY_TIERS.critical;
 
   for (let attempt = 0; ; attempt += 1) {
     try {
@@ -66,7 +94,9 @@ async function launchBotWithRetry(bot, options = {}) {
 }
 
 module.exports = {
+  isPermanentlyUnreachable,
   isTransientTelegramError,
   launchBotWithRetry,
   withTelegramRetry,
+  RETRY_TIERS,
 };

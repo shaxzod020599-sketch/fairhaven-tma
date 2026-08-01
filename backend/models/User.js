@@ -55,6 +55,13 @@ const userSchema = new mongoose.Schema({
 
   notificationsEnabled: { type: Boolean, default: true },
 
+  // Set when Telegram reports the chat as permanently unreachable — the user
+  // blocked the bot, or the account was deleted. Kept separate from
+  // notificationsEnabled, which is the user's own choice: broadcasts skip these
+  // chats instead of spending five network round-trips per send on each of
+  // them, and /start clears the flag when the person comes back.
+  botBlocked: { type: Boolean, default: false, index: true },
+
   promoCodesUsed: [{ type: String }],
 
   // SHA-256 hash of a pending web login token — set when the visitor opened
