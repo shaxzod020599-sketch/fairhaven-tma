@@ -41,15 +41,35 @@ async function list() {
   }
 }
 
+/**
+ * Revokes by the identifier `--list` prints: `fhm_t…a1b2`, or just `a1b2`.
+ *
+ * The previous parse split on `_` and required three parts, which the printed
+ * form never has, so every revocation silently matched nothing and reported
+ * "Revoked 0 key(s)" — the operator would have believed a leaked key was dead.
+ */
 async function revoke(identifier) {
-  const [prefix, last4] = String(identifier).split('_').length >= 3
-    ? [identifier.split('…')[0], identifier.split('…')[1]]
-    : [null, null];
-  const query = prefix && last4 ? { prefix, last4 } : { last4: identifier };
+  const raw = String(identifier).trim();
+  const [prefixPart, last4Part] = raw.split('…');
+
+  const query = last4Part
+    ? { prefix: prefixPart, last4: last4Part }
+    : { last4: raw };
+
+  const matches = await ChannelKey().find(query).lean();
+  if (!matches.length) {
+    console.log(`No key matches "${raw}". Run --list to see the exact identifier.`);
+    process.exitCode = 1;
+    return;
+  }
+
   const result = await ChannelKey().updateMany(
     { ...query, active: true },
     { $set: { active: false, revokedAt: new Date() } }
   );
+  for (const key of matches) {
+    console.log(`  ${key.channel} ${key.kind} ${key.prefix}…${key.last4}${key.active ? '' : ' (already revoked)'}`);
+  }
   console.log(`Revoked ${result.modifiedCount} key(s).`);
 }
 

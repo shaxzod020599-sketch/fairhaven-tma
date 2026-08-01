@@ -43,21 +43,41 @@ function toMirrorFields(product, shopId) {
   };
 }
 
-/** Walks every page of /v2/products. Returns the complete list or throws. */
+// A catalogue this large means something is wrong with the paging, not that
+// the shop grew. Bailing out beats looping forever against a rate-limited API.
+const MAX_PAGES = 500;
+
+/**
+ * Walks every page of /v2/products. Returns the complete list or throws.
+ *
+ * `count` is treated as a hint, not as the loop bound. When Billz omitted it —
+ * or returned 0 while still sending products — deriving the page count from it
+ * gave zero extra pages, and the completeness check was skipped for the same
+ * reason. Page one was then accepted as the entire catalogue and everything
+ * beyond it got flagged as deleted. Paging now continues until a short page
+ * arrives, and `count` is only used to verify the result afterwards.
+ */
 async function fetchAllProducts() {
   const { pageSize } = config.billz;
-  const first = await billz.listProducts({ page: 1, limit: pageSize });
-  const all = [...first.products];
+  const all = [];
+  let reportedTotal = 0;
 
-  const pages = Math.ceil(first.total / pageSize);
-  for (let page = 2; page <= pages; page += 1) {
-    const next = await billz.listProducts({ page, limit: pageSize });
-    if (!next.products.length) break;
-    all.push(...next.products);
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const response = await billz.listProducts({ page, limit: pageSize });
+    if (page === 1) reportedTotal = response.total;
+    all.push(...response.products);
+
+    // A page shorter than the limit is the last one. An empty page ends it too,
+    // which also covers a genuinely empty catalogue.
+    if (response.products.length < pageSize) break;
+
+    if (page === MAX_PAGES) {
+      throw new Error(`catalogue paging exceeded ${MAX_PAGES} pages — aborting`);
+    }
   }
 
-  if (first.total && all.length < first.total) {
-    throw new Error(`incomplete catalogue: fetched ${all.length} of ${first.total}`);
+  if (reportedTotal && all.length < reportedTotal) {
+    throw new Error(`incomplete catalogue: fetched ${all.length} of ${reportedTotal}`);
   }
   return all;
 }

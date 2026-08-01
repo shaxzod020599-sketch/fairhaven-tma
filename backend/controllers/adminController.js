@@ -348,6 +348,10 @@ function sanitizeProductBody(b = {}) {
     'isAvailable', 'brand', 'sku', 'tags',
   ];
   for (const f of fields) if (b[f] !== undefined) out[f] = b[f];
+  // Setting availability by hand pins the product to manual. Without this the
+  // stock reconciler hands it straight back to Billz on its next pass and the
+  // operator's edit is undone a couple of minutes later, with no trace.
+  if (out.isAvailable !== undefined) out.autoStock = false;
   if (typeof out.tags === 'string') out.tags = out.tags.split(',').map((s) => s.trim()).filter(Boolean);
   if (out.price !== undefined) out.price = Number(out.price);
   if (out.oldPrice !== undefined) {
@@ -550,6 +554,10 @@ function sanitizeCollectionBody(b = {}) {
   const out = {};
   const fields = ['name', 'eyebrow', 'description', 'tone', 'imageUrl', 'art', 'productIds', 'sortOrder', 'visible'];
   for (const f of fields) if (b[f] !== undefined) out[f] = b[f];
+  // Setting availability by hand pins the product to manual. Without this the
+  // stock reconciler hands it straight back to Billz on its next pass and the
+  // operator's edit is undone a couple of minutes later, with no trace.
+  if (out.isAvailable !== undefined) out.autoStock = false;
   return out;
 }
 
@@ -732,6 +740,10 @@ function sanitizePromoBody(b = {}) {
     'maxUses', 'isActive', 'startsAt', 'expiresAt',
   ];
   for (const f of fields) if (b[f] !== undefined) out[f] = b[f];
+  // Setting availability by hand pins the product to manual. Without this the
+  // stock reconciler hands it straight back to Billz on its next pass and the
+  // operator's edit is undone a couple of minutes later, with no trace.
+  if (out.isAvailable !== undefined) out.autoStock = false;
   if (out.code) out.code = String(out.code).trim().toUpperCase();
   ['discountValue', 'minOrderAmount', 'maxDiscount', 'maxUses'].forEach((k) => {
     if (out[k] !== undefined) out[k] = Number(out[k]) || 0;

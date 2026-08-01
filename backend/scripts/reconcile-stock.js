@@ -50,7 +50,9 @@ async function main() {
     return;
   }
 
-  const result = await reconcileStock();
+  // The plan printed above, not a freshly computed one: a sync landing between
+  // the report and the confirmation would otherwise apply a different list.
+  const result = await reconcileStock({ plan });
   console.log(`\nApplied ${result.applied} change(s).\n`);
   await mongoose.disconnect();
 }

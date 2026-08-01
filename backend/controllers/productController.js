@@ -47,9 +47,12 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
+    const patch = { ...req.body };
+    // Same rule as everywhere else availability is written by hand.
+    if (patch.isAvailable !== undefined) patch.autoStock = false;
     const product = await Product.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      patch,
       { new: true, runValidators: true }
     );
     if (!product) {
@@ -80,6 +83,8 @@ exports.toggleAvailability = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Product not found' });
     }
     product.isAvailable = !product.isAvailable;
+    // A manual decision outranks Billz; see services/stockReconciler.js.
+    product.autoStock = false;
     await product.save();
     res.json({
       success: true,

@@ -1,6 +1,7 @@
 const config = require('../config');
 const logger = require('../logger');
 const BillzToken = require('../models/BillzToken');
+const { limiter } = require('./queue');
 
 /**
  * Access-token lifecycle for the Billz integration key.
@@ -26,12 +27,14 @@ function isUsable(token) {
 }
 
 async function login() {
-  const res = await fetch(`${config.billz.baseUrl}/v1/auth/login`, {
+  // Through the shared queue: a login is a Billz request and counts against
+  // the same 2 req/s ceiling as everything else.
+  const res = await limiter.schedule(() => fetch(`${config.billz.baseUrl}/v1/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ secret_token: config.billz.secretToken }),
     signal: AbortSignal.timeout(config.billz.timeoutMs),
-  });
+  }));
 
   const body = await res.json().catch(() => null);
   const data = body?.data;

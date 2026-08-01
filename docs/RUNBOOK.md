@@ -117,6 +117,25 @@ curl -s http://127.0.0.1:3100/health/detail
 
 ---
 
+### Eski indeksni tozalash
+
+Agar avvalgi versiya bir marta ishga tushgan bo'lsa, `products` da endi keraksiz
+`billzProductId_1` indeksi qolgan bo'lishi mumkin. Zarar qilmaydi, lekin yozishga
+ortiqcha yuk. Tekshirish va olib tashlash:
+
+```bash
+mongosh fairhaven --eval 'db.products.getIndexes().map(i=>i.name)'
+```
+
+```bash
+mongosh fairhaven --eval 'db.products.dropIndex("billzProductId_1")'
+```
+
+Kerakli indeks — `billzProductId_unique`. U bir Billz mahsuloti ikkita kartaga
+bog'lanishini bazada to'sadi.
+
+---
+
 ## 4. Mahsulotlarni Billz'ga bog'lash
 
 ```bash

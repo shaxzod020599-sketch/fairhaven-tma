@@ -1,7 +1,8 @@
 const config = require('../config');
 const logger = require('../logger');
 const auth = require('./auth');
-const { createLimiter, sleep } = require('./limiter');
+const { sleep } = require('./limiter');
+const { limiter } = require('./queue');
 
 /**
  * Billz HTTP client.
@@ -17,8 +18,6 @@ const { createLimiter, sleep } = require('./limiter');
 
 const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000];
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-
-const limiter = createLimiter({ requestsPerSecond: config.billz.requestsPerSecond });
 
 class BillzError extends Error {
   constructor(message, { status, path, body }) {
@@ -62,10 +61,28 @@ async function request(method, path, options = {}) {
   }
 
   let retriedAuth = false;
+  let attempt = 0;
 
-  for (let attempt = 0; ; attempt += 1) {
+  for (;;) {
     const token = await auth.getAccessToken();
-    const { res, parsed } = await limiter.schedule(() => send(method, path, { ...options, token }));
+
+    let res;
+    let parsed;
+    try {
+      ({ res, parsed } = await limiter.schedule(() => send(method, path, { ...options, token })));
+    } catch (err) {
+      // A dropped connection or a timeout, not an HTTP response. Retrying
+      // matters most during the catalogue walk: without it a single blip on
+      // page 7 abandoned the whole sync.
+      if (attempt >= RETRY_DELAYS_MS.length) {
+        throw new BillzError(`billz ${method} ${path} failed: ${err.message}`, { status: 0, path });
+      }
+      const delay = RETRY_DELAYS_MS[attempt];
+      attempt += 1;
+      logger.warn('billz request network error, retrying', { path, delay, err });
+      await sleep(delay);
+      continue;
+    }
 
     if (res.ok) return parsed;
 
@@ -73,6 +90,8 @@ async function request(method, path, options = {}) {
       retriedAuth = true;
       logger.warn('billz token rejected, re-authenticating', { path });
       await auth.invalidate();
+      // Re-authenticating is not a failed attempt; counting it here used to
+      // eat one retry and shorten the backoff ladder for whatever came next.
       continue;
     }
 
@@ -80,6 +99,7 @@ async function request(method, path, options = {}) {
     if (retriable && attempt < RETRY_DELAYS_MS.length) {
       const retryAfter = Number(res.headers.get('retry-after'));
       const delay = retryAfter > 0 ? retryAfter * 1000 : RETRY_DELAYS_MS[attempt];
+      attempt += 1;
       logger.warn('billz request retrying', { path, status: res.status, delay });
       await sleep(delay);
       continue;

@@ -92,9 +92,16 @@ async function planReconcile() {
   return { total: products.length, changes, reasons };
 }
 
-/** Applies the plan. Only products whose value actually changes are written. */
-async function reconcileStock() {
-  const plan = await planReconcile();
+/**
+ * Applies a plan. Only products whose value actually changes are written.
+ *
+ * Accepts a precomputed plan so an operator who has just read the report can
+ * apply exactly what was printed. Recomputing here meant the list shown and
+ * the list written could differ — a sync landing between the two is enough,
+ * and the whole point of the report is to see what will happen.
+ */
+async function reconcileStock({ plan: precomputed } = {}) {
+  const plan = precomputed || await planReconcile();
   if (!plan.changes.length) return { ...plan, applied: 0 };
 
   await Product.bulkWrite(
@@ -113,9 +120,9 @@ async function reconcileStock() {
 let running = null;
 
 /** Prevents a scheduled pass from overlapping one already in flight. */
-function reconcileStockExclusive() {
+function reconcileStockExclusive(options) {
   if (running) return running;
-  running = reconcileStock().finally(() => { running = null; });
+  running = reconcileStock(options).finally(() => { running = null; });
   return running;
 }
 
