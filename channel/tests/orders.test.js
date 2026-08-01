@@ -6,6 +6,7 @@ process.env.BILLZ_SECRET_TOKEN = 'test-secret';
 process.env.BILLZ_SHOP_ID = 'shop-a';
 process.env.BILLZ_CASHBOX_ID = 'till-1';
 process.env.BILLZ_PAYMENT_TYPE_ID = 'pt-transfer';
+process.env.BILLZ_PAYMENT_TYPE_NAME = 'Тестовый тип';
 process.env.MONGO_DB_NAME = 'orders-test';
 
 let mongod;
@@ -362,7 +363,24 @@ test('the sale is recorded against the configured payment type', async () => {
     await orders.completeOrder(order.internalOrderId);
     const call = stub.calls.find((c) => c.fn === 'completeSale');
     assert.equal(call.args.paymentTypeId, 'pt-transfer');
+    assert.equal(call.args.paymentTypeName, 'Тестовый тип');
     assert.equal(call.args.amount, 300000);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('the sale comment names the channel and their order id', async () => {
+  // Every channel books against the same payment type, so a Billz report
+  // grouped by payment type cannot tell Medicalka from Uzum. The comment is
+  // what makes an individual sale traceable back to the order that caused it.
+  const stub = stubSale();
+  const { order } = await freshOrder();
+  try {
+    await orders.reserveOrder(order.internalOrderId);
+    await orders.completeOrder(order.internalOrderId);
+    const call = stub.calls.find((c) => c.fn === 'completeSale');
+    assert.match(call.args.comment, /^medicalka ext-\d+$/);
   } finally {
     stub.restore();
   }

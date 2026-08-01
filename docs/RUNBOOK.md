@@ -89,6 +89,14 @@ cd ~/fairhaven-tma/channel && npm ci && cp .env.example .env && chmod 600 .env
 
 `.env` ga: `BILLZ_SECRET_TOKEN` (**yangisi**), `BILLZ_SHOP_ID=d25689cf-cefa-470e-9a54-6b2f9ea0fb0f`, `BILLZ_CASHBOX_ID=9238c93c-1506-451f-9ff5-a548bb135030`, `MONGO_URI`, `CHANNEL_INTERNAL_TOKEN`.
 
+To'lov turi `.env.example` da to'ldirilgan — barcha kanal sotuvlari
+«Баланс поставщика» ga yoziladi:
+
+```
+BILLZ_PAYMENT_TYPE_ID=42bb647e-9533-4104-a018-8fd79e8387b3
+BILLZ_PAYMENT_TYPE_NAME=Баланс поставщика
+```
+
 `BILLZ_WRITE_ENABLED=false` — **shunday qoldiring**.
 
 Avval quruq yurish:

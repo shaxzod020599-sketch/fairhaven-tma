@@ -265,7 +265,6 @@ holda marketpleys bizga qancha to'lanishini o'zi hal qilardi.
 | 1 | **Billz kalitini almashtirish** — chatda ochiq yozilgan | Mijoz, zudlik bilan |
 | 2 | **VPS parolini almashtirish** — chatda ochiq yozilgan | Mijoz, zudlik bilan |
 | 3 | Sotuv metodi test kompaniyada sinalishi kerak | Biz + Billz |
-| 4 | Bank o'tkazmasi uchun to'lov turi Billz'da yo'q | Buxgalter |
 | 5 | Uzum `measure.unit` enum — dona tovar uchun aniqlash | Uzum menejeri |
 | 6 | Uzum `serviceCodesUz` majburiymi | Uzum menejeri |
 | 7 | `api.fairhaven.uz` + TLS (Uzum IP qabul qilmaydi) | Biz |
@@ -291,6 +290,29 @@ qiymatiga qaytdi.
 
 Sotuv metodi ataylab sinalmagan — u ostatokni haqiqatan kamaytiradi va chek
 yozadi. **Test kompaniyasida** sinaladi, prodda emas.
+
+### To'lov turi
+
+Barcha kanal sotuvlari — Medicalka, Uzum, bot — bitta turga yoziladi:
+
+```
+42bb647e-9533-4104-a018-8fd79e8387b3   Баланс поставщика
+```
+
+Har kanalga alohida tur qo'shish o'rniga mavjudi tanlandi. Oqibati bilinib
+tursin: **Billz'da to'lov turi bo'yicha guruhlangan hisobot hamma kanalni bitta
+raqamda ko'rsatadi.** Ularni ajratadigan narsa — sotuv izohi, u kanal nomini va
+ularning zakaz ID'sini olib yuradi:
+
+```
+medicalka MK-2026-1
+uzum UZ-1001
+fairhaven-bot 68a1…
+```
+
+Ya'ni **bitta sotuvni** har doim zakazigacha kuzatib borish mumkin. «Uzum shu
+oyda qancha keltirdi» degan savol esa Billz hisobotiniki emas, bizning
+panelimizniki bo'ladi.
 
 ### Endpoint nomini taxmin qilish qimmatga tushdi
 

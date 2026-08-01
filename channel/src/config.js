@@ -45,8 +45,13 @@ const config = {
     cashboxId: process.env.BILLZ_CASHBOX_ID || '',
     // Channel sales settle by transfer, not cash. Recording them under the
     // wrong type corrupts till reconciliation rather than just mislabelling a
-    // row, so there is no default — GET /v1/payment-type lists the real ids.
+    // row, so there is no default — GET /v1/company-payment-type lists the real
+    // ids for this company.
     paymentTypeId: process.env.BILLZ_PAYMENT_TYPE_ID || '',
+    // Redundant with the id, and present in every documented example of the
+    // payment call. Sent when set, because that call cannot be rehearsed: a
+    // refused payment leaves an order reserved but unsold.
+    paymentTypeName: process.env.BILLZ_PAYMENT_TYPE_NAME || '',
     // Shown to channels as the pharmacy/branch name. Overwritten at boot with
     // the name Billz reports for BILLZ_SHOP_ID.
     shopName: process.env.BILLZ_SHOP_NAME || 'Fairhaven Health',

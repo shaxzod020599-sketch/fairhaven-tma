@@ -242,7 +242,10 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
   try {
     await sale.completeSale(order.billz.draftOrderId, {
       paymentTypeId: typeId,
+      paymentTypeName: config.billz.paymentTypeName,
       amount: order.totalAmount,
+      // Every channel sale lands on the same payment type, so this comment is
+      // what tells them apart in Billz — which order, from which marketplace.
       comment: `${order.channel} ${order.externalId}`,
     });
 
