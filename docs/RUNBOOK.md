@@ -323,7 +323,7 @@ Hammasi **o'chirilgan holatda** keladi. Har birini alohida, tekshirib yoqing.
 
 | Bayroq | Nima qiladi | Yoqishdan oldin |
 |---|---|---|
-| `BILLZ_WRITE_ENABLED` | Billz'ga yozishga ruxsat | Sotuv oqimi test kompaniyada tekshirilsin |
+| `BILLZ_WRITE_ENABLED` | Billz'ga yozishga ruxsat | Oqim jonli tekshirilgan (01.08.2026) — Medicalka ulangach yoqiladi |
 | `BILLZ_BRIDGE_ENABLED` | Bot zakazlari Billz'ga | `BILLZ_BRIDGE_SINCE` qo'yilsin |
 | `UZUM_ENABLED` | Uzum endpointlari | Store ID, signing key, rasm domeni |
 | `STOCK_RECONCILE_ENABLED` | Ostatokni avtomatik boshqarish | `reconcile-stock.js` hisoboti ko'rilsin |

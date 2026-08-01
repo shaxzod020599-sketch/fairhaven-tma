@@ -264,7 +264,6 @@ holda marketpleys bizga qancha to'lanishini o'zi hal qilardi.
 |---|---|---|
 | 1 | **Billz kalitini almashtirish** — chatda ochiq yozilgan | Mijoz, zudlik bilan |
 | 2 | **VPS parolini almashtirish** — chatda ochiq yozilgan | Mijoz, zudlik bilan |
-| 3 | Sotuv metodi test kompaniyada sinalishi kerak | Biz + Billz |
 | 5 | Uzum `measure.unit` enum — dona tovar uchun aniqlash | Uzum menejeri |
 | 6 | Uzum `serviceCodesUz` majburiymi | Uzum menejeri |
 | 7 | `api.fairhaven.uz` + TLS (Uzum IP qabul qilmaydi) | Biz |
@@ -282,14 +281,43 @@ Jonli kompaniyada tekshirilgan (`medicalka api` foydalanuvchisi):
 | `DELETE /v2/order/:id` — qoralamani o'chirish | ✅ |
 | `GET /v2/order/:id` | ✅ |
 | `GET /v1/company-payment-type` | ✅ |
-| `POST /v2/order-payment/:id` — **sotuv** | ⚠️ ataylab sinalmagan |
+| `POST /v2/product-import/create-with-products` — prixod | ✅ |
+| `POST /v2/order-payment/:id` — **sotuv** | ✅ |
 
-To'liq zanjir jonli kompaniyada uch marta ishlatildi: qoralama → qator →
-bron → bo'shatish → o'chirish. **Hech narsa qolmadi**, ostatok boshlang'ich
-qiymatiga qaytdi.
+To'liq zanjir jonli kompaniyada ishlatildi: qoralama → qator → bron →
+bo'shatish → o'chirish. **Hech narsa qolmadi**, ostatok boshlang'ich qiymatiga
+qaytdi.
 
-Sotuv metodi ataylab sinalmagan — u ostatokni haqiqatan kamaytiradi va chek
-yozadi. **Test kompaniyasida** sinaladi, prodda emas.
+### Sotuv nol farq bilan tekshirildi
+
+Test kompaniya yo'q edi va API'da qaytarish metodi ham yo'q, shuning uchun
+sotuv **prixod bilan qoplandi**:
+
+```
+prixod 1 dona   →  1080 → 1081     import 1000094
+sotuv  1 dona   →  1081 → 1080     draft 000800011246
+```
+
+Javob: `{"order_type":"SALE","should_print_cheque":true}`. Ostatok boshlang'ich
+joyida, narx tegilmagan (280 000). Ikkita hujjat qoldi — kirim va sotuv —
+ikkalasi ham ko'rinadi va tushuntiriladi. Hech narsa yo'qolmadi.
+
+**Muhim:** prixodda `retail_price` joriy narxdan farq qilsa, Billz **do'kon
+narxini almashtiradi**. Shuning uchun narxlar avval o'qilib, aynan o'sha
+qiymatlar qaytarib yuborildi.
+
+### Billz ostatogi ~1 daqiqa kechikadi
+
+O'lchandi: sotuv bajarilgach `/v2/products` **65 soniya** davomida eski raqamni
+qaytarib turdi. Prixodda ham xuddi shunday.
+
+Bu bizning sinxronga qo'shiladi: 5 daqiqalik davr + ~1 daqiqa kechikish =
+do'kon zalida sotilgan tovar bizga **6 daqiqagacha** kech yetadi. O'z
+zakazlarimiz bunga tobe emas — `reservedQty` darhol ishlaydi — lekin kassadagi
+sotuv shuncha vaqt ko'rinmaydi.
+
+Aynan shu sababdan `minStock` yostig'i bor: oxirgi donalarni marketpleysga
+chiqarmaslik shu oynani yopadi.
 
 ### To'lov turi
 
