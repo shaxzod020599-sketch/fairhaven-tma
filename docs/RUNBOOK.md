@@ -214,23 +214,98 @@ Webhook o'rnatilmasa kod **o'zi polling'ga tushadi** — bot o'lik qolmaydi.
 
 ---
 
-## 7. Medicalka kalitlari
+## 7. Kanal kalitlari
 
 `api.fairhaven.uz` tayyor bo'lgandan keyin.
+
+**Odatiy yo'l — admin panel:** «Каналы продаж» → «Доступ и ИКПУ». Kalit
+tugma bilan chiqariladi va **bir marta** ko'rsatiladi. SSH shart emas, shuning
+uchun sizib ketgan kalitni darhol bekor qilish mumkin — bu qulaylik emas,
+xavfsizlik.
+
+Terminal muqobili:
 
 ```bash
 cd ~/fairhaven-tma/channel && node scripts/issue-key.js medicalka token --label "Medicalka prod"
 ```
 
 ```bash
-cd ~/fairhaven-tma/channel && node scripts/issue-key.js medicalka secret --label "Medicalka prod"
+cd ~/fairhaven-tma/channel && node scripts/issue-key.js uzum oauth --label "Uzum Tezkor prod"
 ```
 
-Har biri kalitni **bir marta** chiqaradi — bazada faqat SHA-256 saqlanadi. Yo'qolsa qayta chiqariladi.
+Bazada faqat SHA-256 saqlanadi. Yo'qolsa — qayta chiqariladi, tiklab bo'lmaydi.
 
-Medicalka'ga [docs/integrations/medicalka-api.ru.md](integrations/medicalka-api.ru.md) bilan birga yuboriladi.
+| Kanal | Kalit turi | Nima uchun |
+|---|---|---|
+| medicalka | `token` | katalog va ostatok o'qish |
+| medicalka | `secret` | zakaz qabul qilish va status |
+| uzum | `oauth` | `client_id` + `client_secret` → bearer token |
+
+Hujjatlar: [Medicalka](integrations/medicalka-api.ru.md) ·
+[Uzum Tezkor](integrations/uzum-tezkor-api.ru.md)
 
 Ro'yxat: `node scripts/issue-key.js --list` · Bekor qilish: `--revoke <prefix>…<last4>`
+
+Bekor qilish **darhol** kuchga kiradi — Uzum bearer token'i ham, chunki u har
+so'rovda kalitga qarab tekshiriladi.
+
+---
+
+## 8. Uzum Tezkor
+
+Uzum menejeri bilan kelishilgandan keyin. `channel/.env`:
+
+```
+UZUM_ENABLED=true
+UZUM_STORE_ID=<Uzum bergan do'kon ID>
+UZUM_TOKEN_SIGNING_KEY=<32+ belgi, faqat shu server uchun>
+PUBLIC_IMAGE_BASE_URL=https://fairhaven.uz
+UPLOADS_DIR=/var/www/fairhaven/backend/uploads
+```
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+```
+
+Servis to'liqsiz sozlamada **ishga tushmaydi** — bu ataylab: yarim sozlangan
+integratsiya runtime'da chalg'ituvchi xato beradi.
+
+Rasmsiz mahsulot Uzum'ga **chiqmaydi**. Uzum har qatorga rasm chizadi, bo'sh
+massiv mijozga bo'sh katak ko'rsatadi. Billz CDN'dan rasm olinmaydi — Billz buni
+taqiqlaydi.
+
+---
+
+## 9. Bot zakazlari → Billz
+
+Eng oxirida yoqiladi, 1–8 barqaror ishlagandan keyin.
+
+`backend/.env`:
+
+```
+BILLZ_BRIDGE_ENABLED=true
+BILLZ_BRIDGE_SINCE=2026-08-01T00:00:00.000Z
+```
+
+`BILLZ_BRIDGE_SINCE` — **qattiq chegara**. Undan oldin yaratilgan zakazlarga
+umuman qaralmaydi. Uni yoqayotgan kunga qo'ying, aks holda butun zakaz tarixi
+Billz'ga yangi bron bo'lib ketadi.
+
+Oqim: `pending` → lokal bron · `confirmed` → Billz'da bron · `delivered` →
+sotuv · `cancelled` → bo'shatish.
+
+Lokal bron (`pendingQty`) — Telegram kanalida tasdiqlangunicha tovarni
+marketpleyslardan olib turadi. `BOT_HOLD_TTL_MS` (default 2 soat) o'tgach
+bo'shaydi; zakaz ochiq qoladi va keyin tasdiqlansa oddiy tarzda bron qilinadi.
+
+Tekshirish:
+
+```bash
+pm2 logs fairhaven --lines 50 --nostream | grep billz-bridge
+```
+
+**Orqaga qaytarish:** `BILLZ_BRIDGE_ENABLED=false`, `pm2 restart fairhaven`.
+Ochiq bronlar Billz'da o'z muddati bilan bo'shaydi.
 
 ---
 
@@ -240,11 +315,25 @@ Hammasi **o'chirilgan holatda** keladi. Har birini alohida, tekshirib yoqing.
 
 | Bayroq | Nima qiladi | Yoqishdan oldin |
 |---|---|---|
-| `BILLZ_WRITE_ENABLED` | Billz'ga yozishga ruxsat | Sotuv oqimi test qilinsin |
+| `BILLZ_WRITE_ENABLED` | Billz'ga yozishga ruxsat | Sotuv oqimi test kompaniyada tekshirilsin |
+| `BILLZ_BRIDGE_ENABLED` | Bot zakazlari Billz'ga | `BILLZ_BRIDGE_SINCE` qo'yilsin |
+| `UZUM_ENABLED` | Uzum endpointlari | Store ID, signing key, rasm domeni |
 | `STOCK_RECONCILE_ENABLED` | Ostatokni avtomatik boshqarish | `reconcile-stock.js` hisoboti ko'rilsin |
 | `TELEGRAM_USE_WEBHOOK` | Webhook transporti | Domen va TLS ishlasin |
 | `SEED_ON_EMPTY` | Bo'sh katalogni to'ldirish | **Production'da hech qachon** |
 | `ALLOW_IN_MEMORY_DB` | Vaqtinchalik baza | `NODE_ENV=production` da o'zi rad etadi |
+
+### nginx
+
+`/internal` **hech qachon** proksilanmasligi kerak — u ostatokni harakatlantiradi.
+
+```nginx
+location /internal { return 404; }
+```
+
+Servis odatda `127.0.0.1` ga bog'lanadi, ya'ni tashqaridan yetib bo'lmaydi.
+`HOST` boshqa qiymatga o'zgartirilsa, servis `CHANNEL_INTERNAL_TOKEN` 32+ belgi
+bo'lishini talab qiladi va ishga tushmaydi.
 
 ---
 
@@ -259,6 +348,22 @@ Hammasi **o'chirilgan holatda** keladi. Har birini alohida, tekshirib yoqing.
 **Bot javob bermayapti** — `pm2 logs fairhaven | grep -i "webhook\|polling"`. Webhook o'rnatilgan, lekin nginx `/tg/` ni proksilamayotgan bo'lsa Telegram bizga yeta olmaydi: `TELEGRAM_USE_WEBHOOK=false` qilib qaytaring.
 
 **Billz `429`** — rate limit. Klient o'zi kutib qayta uradi. Doimiy bo'lsa `BILLZ_RPS` ni pasaytiring.
+
+**Zakaz Billz'ga tushmadi** — `orders` kolleksiyasida `billzSync` ga qarang:
+`lastError` — vaqtinchalik xato, o'zi qayta uriladi; `conflict` — o'zi
+tuzalmaydi, odam aralashuvi kerak (masalan, yetkazilgan zakazni bekor qilishga
+urinish — bu qaytarish, boshqa hisob).
+
+**Marketpleys `429` oldi** — `RATE_LIMIT_CHANNEL_MAX` (kalit boshiga daqiqada)
+yoki `RATE_LIMIT_CHANNEL_AUTH_MAX` (IP boshiga 5 daqiqada, faqat rad etilganlar).
+Ikkinchisi bir IP'dan kelayotgan xatolar oqimi bilan to'ladi — o'sha kompaniyaning
+boshqa buzuq skripti bo'lishi mumkin.
+
+**Uzum `401`** — token muddati (1 soat) tugagan yoki kalit bekor qilingan.
+Uzum o'zi qayta token oladi. Kalit bekor qilingan bo'lsa yangisini chiqaring.
+
+**Tovar Uzum'da yo'q** — sabablari tartib bilan: rasm yo'q, narx yo'q,
+`channels.uzum.enabled` o'chiq, Billz'da o'chirilgan.
 
 ---
 
