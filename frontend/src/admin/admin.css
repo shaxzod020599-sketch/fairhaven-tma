@@ -1529,3 +1529,16 @@ body:has(.ap-modal-backdrop) .ap-bottom-nav { display: none !important; }
   padding: 2px 7px;
   border-radius: 999px;
 }
+
+/* Login screen — instructions, not a form. */
+.ap-login-steps {
+  margin: 0 0 4px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.ap-login-steps li::marker { color: var(--ink-faint); }

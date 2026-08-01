@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { whoami, setAdminTgId, clearAdminTgId } from './adminApi';
+import { whoami } from './adminApi';
 import {
   pushBackButton,
   popBackButton,
@@ -171,12 +171,9 @@ export default function AdminApp({ onExit, embedded }) {
           ) : (
             <button
               className="ap-btn ap-btn-xs ap-btn-ghost"
-              onClick={() => {
-                clearAdminTgId();
-                window.location.reload();
-              }}
+              onClick={() => window.location.reload()}
             >
-              Выйти
+              Обновить
             </button>
           )}
         </div>
@@ -247,59 +244,52 @@ export default function AdminApp({ onExit, embedded }) {
   );
 }
 
-function LoginPage({ onLoggedIn }) {
-  const [tgId, setTgId] = useState('');
-  const [err, setErr] = useState('');
-
-  const submit = async () => {
-    setErr('');
-    if (!/^\d+$/.test(tgId.trim())) {
-      setErr('Введите числовой Telegram ID');
-      return;
-    }
-    setAdminTgId(tgId.trim());
-    try {
-      const res = await whoami();
-      if (res?.data?.isAdmin) {
-        onLoggedIn();
-      } else {
-        setErr('Этот Telegram ID не назначен администратором');
-        clearAdminTgId();
-      }
-    } catch (e) {
-      setErr(e.message || 'Ошибка');
-      clearAdminTgId();
-    }
-  };
+/**
+ * Shown when the panel is opened outside Telegram.
+ *
+ * There is deliberately no login form. The only credential the API accepts is
+ * Telegram's signed initData, which a plain browser cannot produce — the field
+ * that used to sit here promised a way in that could not work, and making it
+ * work would have meant accepting a typed Telegram ID as proof of identity,
+ * which is no proof at all.
+ */
+function LoginPage() {
+  const botUsername = (import.meta.env.VITE_BOT_USERNAME || 'Fairhaven_uzbot').replace(/^@/, '');
 
   return (
     <div className="ap-login">
       <div className="ap-login-card">
         <div className="ap-brand-logo large">
           <span className="ap-brand-logo-name">Fairhaven</span>
-          <span className="ap-brand-logo-sub">Health<sup>®</sup></span>
+          <span className="ap-brand-logo-sub">Health<sup>&reg;</sup></span>
         </div>
-        <h1 className="ap-login-title">Fairhaven · Админ-панель</h1>
+        <h1 className="ap-login-title">Панель управления</h1>
         <p className="ap-muted" style={{ marginBottom: 18 }}>
-          Введите ваш Telegram ID, чтобы войти. Чтобы получить ID — откройте бота <b>@FairHavenHealthBot</b> и отправьте <code>/start</code>.
+          Панель открывается только внутри Telegram — так вход подтверждается
+          подписью самого Telegram, а не паролем, который можно подобрать.
         </p>
-        {err && <div className="ap-error">{err}</div>}
-        <label className="ap-label">Telegram ID</label>
-        <input
-          type="text"
-          className="ap-input"
-          placeholder="например, 123456789"
-          value={tgId}
-          onChange={(e) => setTgId(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-          autoFocus
-        />
-        <button className="ap-btn ap-btn-primary" style={{ marginTop: 14, width: '100%' }} onClick={submit}>
-          Войти
-        </button>
+
+        <ol className="ap-login-steps">
+          <li>Откройте бота <b>@{botUsername}</b></li>
+          <li>Нажмите <b>&laquo;Открыть магазин&raquo;</b></li>
+          <li>Внизу выберите <b>Профиль</b> &rarr; <b>Админ-панель</b></li>
+        </ol>
+
+        <a
+          className="ap-btn ap-btn-primary"
+          style={{ marginTop: 14, width: '100%' }}
+          href={`https://t.me/${botUsername}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Открыть бота
+        </a>
+
         <div className="ap-muted-sm" style={{ marginTop: 16 }}>
-          Первый администратор назначается через переменную среды{' '}
-          <code>ADMIN_TELEGRAM_IDS</code> на сервере.
+          Если кнопка &laquo;Админ-панель&raquo; не появилась — ваш Telegram ID
+          ещё не в списке администраторов. Первый администратор назначается
+          переменной <code>ADMIN_TELEGRAM_IDS</code> на сервере, остальных
+          добавляет действующий администратор в разделе <b>Админы</b>.
         </div>
       </div>
     </div>

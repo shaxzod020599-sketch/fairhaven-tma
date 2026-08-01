@@ -3,14 +3,13 @@ import { getTelegramInitData } from '../utils/telegram';
 const API = '/api/admin';
 const PUBLIC = '/api';
 
-export function setAdminTgId() {
-  try { localStorage.removeItem('fh-admin-tgid'); } catch (_) {}
-}
-
-export function clearAdminTgId() {
-  try { localStorage.removeItem('fh-admin-tgid'); } catch (_) {}
-}
-
+/**
+ * Every admin call authenticates with Telegram's signed initData and nothing
+ * else. There was once a pair of helpers here for a locally-stored Telegram id;
+ * they only ever removed a key nothing wrote, and the login form that called
+ * them could not succeed. Accepting a typed id would have been no proof of
+ * identity at all, so the form is gone rather than repaired.
+ */
 async function adminRequest(endpoint, options = {}) {
   const initData = getTelegramInitData();
   const headers = {
