@@ -67,3 +67,13 @@ test('content security policy locks down script origins and plugins', () => {
   const scriptSrc = CONTENT_SECURITY_POLICY.split('; ').find((d) => d.startsWith('script-src'));
   assert.equal(/https:\/\/(?!telegram\.org)/.test(scriptSrc), false);
 });
+
+test('inline scripts cannot execute', () => {
+  // The cache-bust bootstrap lives in public/build-guard.js precisely so this
+  // holds; an injected <script> is the payload this directive exists to stop.
+  const { CONTENT_SECURITY_POLICY } = require('../utils/http');
+  const scriptSrc = CONTENT_SECURITY_POLICY.split('; ').find((d) => d.startsWith('script-src'));
+
+  assert.equal(scriptSrc.includes("'unsafe-inline'"), false);
+  assert.equal(scriptSrc.includes("'unsafe-eval'"), false);
+});

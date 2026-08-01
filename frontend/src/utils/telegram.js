@@ -9,6 +9,40 @@ export function getTelegram() {
   return tg || null;
 }
 
+/**
+ * Whether the client is new enough for a given Bot API feature.
+ *
+ * Calling a method the installed Telegram client does not have logs a warning
+ * and, on some builds, throws — so every call added after Bot API 6.0 is gated.
+ * Older clients simply keep the previous behaviour.
+ */
+export function supports(version) {
+  return Boolean(tg?.isVersionAtLeast?.(version));
+}
+
+/**
+ * Publishes the device safe-area insets as CSS variables.
+ *
+ * Bot API 8.0 reports the real values. Before it existed, index.css carried
+ * hand-tuned guesses for the notch and the gesture bar — those stay as the
+ * fallback for older clients, and these variables override them when the
+ * client actually knows.
+ */
+function applySafeArea() {
+  if (!supports('8.0')) return;
+  const root = document.documentElement;
+  const write = (prefix, inset) => {
+    if (!inset) return;
+    for (const side of ['top', 'bottom', 'left', 'right']) {
+      const value = Number(inset[side]);
+      if (Number.isFinite(value)) root.style.setProperty(`--${prefix}-${side}`, `${value}px`);
+    }
+  };
+  write('tg-safe', tg.safeAreaInset);
+  // Content insets additionally clear Telegram's own chrome (header, buttons).
+  write('tg-content-safe', tg.contentSafeAreaInset);
+}
+
 export function initTelegram() {
   if (!tg) {
     console.warn('[TMA] Not running inside Telegram. Using dev fallbacks.');
@@ -16,9 +50,22 @@ export function initTelegram() {
   }
   tg.ready();
   tg.expand();
-  tg.disableVerticalSwipes();
-  tg.setHeaderColor('#F6F1E6');
-  tg.setBackgroundColor('#F6F1E6');
+
+  // 7.7 — stops a downward swipe from closing the app mid-scroll.
+  if (supports('7.7')) tg.disableVerticalSwipes();
+
+  // 6.1 — both accept a colour; older clients ignore the call.
+  if (supports('6.1')) {
+    tg.setHeaderColor('#F6F1E6');
+    tg.setBackgroundColor('#F6F1E6');
+  }
+
+  applySafeArea();
+  if (supports('8.0')) {
+    tg.onEvent?.('safeAreaChanged', applySafeArea);
+    tg.onEvent?.('contentSafeAreaChanged', applySafeArea);
+  }
+
   return tg;
 }
 

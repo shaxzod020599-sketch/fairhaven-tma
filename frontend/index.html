@@ -14,37 +14,10 @@
 
     <title>FairHaven — Витамины и добавки</title>
 
-    <script>
-      // Cache-bust guard — runs BEFORE any app script. Compares baked-in build id
-      // against the one saved on the device; if different, purge caches & reload.
-      (function () {
-        try {
-          var buildId = '__BUILD_ID__';
-          var storageKey = 'fh-build-id';
-          var reloadFlag = 'fh-reloaded-at';
-          var saved = localStorage.getItem(storageKey);
-
-          if (saved !== buildId) {
-            // First visit or new build — wipe caches.
-            if (window.caches && caches.keys) {
-              caches.keys().then(function (keys) {
-                keys.forEach(function (k) { caches.delete(k); });
-              }).catch(function () {});
-            }
-            localStorage.setItem(storageKey, buildId);
-
-            // Avoid reload loop: only force-reload once per build id.
-            var lastReload = sessionStorage.getItem(reloadFlag);
-            if (saved !== null && lastReload !== buildId) {
-              sessionStorage.setItem(reloadFlag, buildId);
-              // Hard reload (bypasses http cache where possible).
-              window.location.replace(window.location.pathname + '?v=' + buildId);
-              return;
-            }
-          }
-        } catch (e) { /* ignore */ }
-      })();
-    </script>
+    <!-- Cache-bust guard. In its own file, not inline, so the CSP can forbid
+         inline scripts outright — see public/build-guard.js. No defer/async:
+         it must finish before the bundle loads. -->
+    <script src="/build-guard.js" data-build-id="__BUILD_ID__"></script>
 
     <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />

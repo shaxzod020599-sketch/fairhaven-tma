@@ -8,12 +8,16 @@ function sendError(res, status, _err, code) {
 // so framing is controlled by CSP frame-ancestors instead and XFO is not sent.
 const FRAME_ANCESTORS = ["'self'", 'https://telegram.org', 'https://*.telegram.org'];
 
-// `script-src` still carries 'unsafe-inline' because frontend/index.html runs an
-// inline cache-bust bootstrap before any bundle. Extracting it to its own file is
-// the follow-up that lets this drop to "'self' https://telegram.org".
+// No 'unsafe-inline' in script-src: the cache-bust bootstrap that used to sit
+// inline in index.html now lives in public/build-guard.js, so an injected
+// <script> — the main XSS payload — cannot execute at all.
+//
+// style-src keeps 'unsafe-inline' because React writes style attributes and
+// Vite injects a stylesheet at runtime. Inline styles cannot exfiltrate or
+// execute, so the trade-off is not the same one.
 const CSP_DIRECTIVES = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://telegram.org",
+  "script-src 'self' https://telegram.org",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",

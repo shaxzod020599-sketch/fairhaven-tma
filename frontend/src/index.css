@@ -80,10 +80,17 @@
   --t-mid: 280ms var(--ease-out);
 
   /* ---------- safe area ---------- */
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
+  /* Safe areas.
+     `env()` reports the hardware inset (notch, home indicator). Telegram
+     additionally draws its own header and buttons over the viewport, and only
+     Bot API 8.0+ reports how much — utils/telegram.js publishes it as
+     --tg-content-safe-*. `max()` takes whichever is larger, so on older clients
+     nothing changes and on newer ones content stops sliding under Telegram's
+     chrome. Missing variables resolve to 0px, so max() is always safe. */
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--tg-content-safe-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-content-safe-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--tg-content-safe-left, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--tg-content-safe-right, 0px));
 
   /* clean flat surfaces — no paper noise on fairhaven */
   --paper-texture: none;
