@@ -17,8 +17,17 @@ const { defineModel } = require('../db');
  */
 const channelKeySchema = new mongoose.Schema({
   channel: { type: String, required: true, index: true },   // 'medicalka' | 'uzum'
-  kind: { type: String, required: true },                   // 'token' | 'secret'
+  kind: { type: String, required: true },                   // 'token' | 'secret' | 'oauth'
   hash: { type: String, required: true, unique: true },
+  /**
+   * The public half of an OAuth client credential.
+   *
+   * Uzum authenticates with a client id and a client secret. Only the secret is
+   * a secret — the id is an identifier they send in the clear on every token
+   * request, and we have to look the record up by it, which a hash of the
+   * secret cannot do. Stored in plaintext for exactly that reason.
+   */
+  clientId: { type: String, default: '', index: true, sparse: true },
   // Shown in the admin panel so an operator can tell two keys apart without
   // ever seeing the key itself again.
   label: { type: String, default: '' },
@@ -31,7 +40,7 @@ const channelKeySchema = new mongoose.Schema({
 
 channelKeySchema.index({ channel: 1, kind: 1, active: 1 });
 
-const KIND_TAG = { token: 't', secret: 's' };
+const KIND_TAG = { token: 't', secret: 's', oauth: 'o' };
 const CHANNEL_TAG = { medicalka: 'fhm', uzum: 'fhu' };
 
 /**
@@ -55,9 +64,22 @@ function hashKey(presented) {
   return crypto.createHash('sha256').update(String(presented)).digest('hex');
 }
 
+/**
+ * The public identifier of an OAuth client.
+ *
+ * Deliberately shorter and visually distinct from a secret, so an integrator
+ * reading both out of an email cannot confuse them, and so a client id that
+ * turns up in a log is recognisable as harmless.
+ */
+function generateClientId(channel) {
+  const channelTag = CHANNEL_TAG[channel];
+  if (!channelTag) throw new Error(`unknown channel "${channel}"`);
+  return `${channelTag}_id_${crypto.randomBytes(12).toString('base64url')}`;
+}
+
 /** Reads the tags off a presented key without trusting them for authorisation. */
 function describeKey(presented) {
-  const match = /^(fh[a-z])_([ts])_([A-Za-z0-9_-]{43})$/.exec(String(presented || ''));
+  const match = /^(fh[a-z])_([tso])_([A-Za-z0-9_-]{43})$/.exec(String(presented || ''));
   if (!match) return null;
   const channel = Object.keys(CHANNEL_TAG).find((c) => CHANNEL_TAG[c] === match[1]);
   const kind = Object.keys(KIND_TAG).find((k) => KIND_TAG[k] === match[2]);
@@ -73,6 +95,7 @@ function ChannelKey() {
 
 module.exports = ChannelKey;
 module.exports.generateKey = generateKey;
+module.exports.generateClientId = generateClientId;
 module.exports.hashKey = hashKey;
 module.exports.describeKey = describeKey;
 module.exports.CHANNEL_TAG = CHANNEL_TAG;

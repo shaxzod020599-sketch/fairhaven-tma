@@ -79,6 +79,32 @@ const config = {
     enabled: bool('CHANNEL_TELEGRAM_ENABLED', true),
   },
 
+  // Uzum Tezkor (Yandex Eats family). We are the provider: they authenticate
+  // against us, poll our catalogue and post orders to us.
+  uzum: {
+    enabled: bool('UZUM_ENABLED', false),
+    // Their identifier for our branch. Sent as a path segment on every
+    // nomenclature call and checked, so a misconfigured integration fails
+    // loudly instead of serving another shop's catalogue.
+    storeId: process.env.UZUM_STORE_ID || '',
+    // Signs the bearer tokens we issue. No default on purpose — a shared
+    // default would mean a token minted against any deployment is accepted here.
+    tokenSigningKey: process.env.UZUM_TOKEN_SIGNING_KEY || '',
+    // Public base for product images. Billz forbids serving media from their
+    // CDN, and Uzum needs a hash per image, so both are served from ours.
+    imageBaseUrl: process.env.PUBLIC_IMAGE_BASE_URL || '',
+  },
+
+  // Uzum requires a tax classification code per product; Billz carries none, so
+  // they live with us. A product without its own falls back to this.
+  defaultMxikCode: process.env.DEFAULT_MXIK_CODE || '02106999028000000',
+
+  // Where the bot backend writes uploaded product images. Read-only here, and
+  // only to hash them: Uzum wants a hash per image, and a hash that does not
+  // describe the bytes is worse than none.
+  uploadsDir: process.env.UPLOADS_DIR
+    || path.resolve(__dirname, '../../backend/uploads'),
+
   // Shared with the bot backend for loopback service-to-service calls.
   internalToken: process.env.CHANNEL_INTERNAL_TOKEN || '',
 

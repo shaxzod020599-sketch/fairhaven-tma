@@ -3,6 +3,7 @@
  *
  *   node scripts/issue-key.js medicalka token  --label "Medicalka prod"
  *   node scripts/issue-key.js medicalka secret --label "Medicalka prod"
+ *   node scripts/issue-key.js uzum      oauth  --label "Uzum Tezkor prod"
  *   node scripts/issue-key.js --list
  *   node scripts/issue-key.js --revoke <prefix>_<last4>
  *
@@ -13,7 +14,9 @@
 const db = require('../src/db');
 const logger = require('../src/logger');
 const ChannelKey = require('../src/models/ChannelKey');
-const { generateKey, hashKey, describeKey, CHANNEL_TAG, KIND_TAG } = require('../src/models/ChannelKey');
+const {
+  generateKey, generateClientId, hashKey, describeKey, CHANNEL_TAG, KIND_TAG,
+} = require('../src/models/ChannelKey');
 
 function arg(name) {
   const i = process.argv.indexOf(name);
@@ -73,6 +76,12 @@ async function revoke(identifier) {
   console.log(`Revoked ${result.modifiedCount} key(s).`);
 }
 
+const KIND_PURPOSE = {
+  token: 'read catalogue and stock',
+  secret: 'submit and update orders',
+  oauth: 'exchange for a bearer token, then read and order',
+};
+
 async function issue(channel, kind, label) {
   if (!CHANNEL_TAG[channel]) {
     throw new Error(`channel must be one of: ${Object.keys(CHANNEL_TAG).join(', ')}`);
@@ -83,6 +92,10 @@ async function issue(channel, kind, label) {
 
   const key = generateKey(channel, kind);
   const shape = describeKey(key);
+  // OAuth clients need a public identifier to be looked up by; the secret alone
+  // is stored as a hash, which cannot be searched for.
+  const clientId = kind === 'oauth' ? generateClientId(channel) : '';
+
   await ChannelKey().create({
     channel,
     kind,
@@ -91,12 +104,18 @@ async function issue(channel, kind, label) {
     last4: shape.last4,
     label: label || '',
     active: true,
+    ...(clientId ? { clientId } : {}),
   });
 
   console.log('');
   console.log(`  channel : ${channel}`);
-  console.log(`  kind    : ${kind}   (${kind === 'token' ? 'read catalogue and stock' : 'submit and update orders'})`);
-  console.log(`  key     : ${key}`);
+  console.log(`  kind    : ${kind}   (${KIND_PURPOSE[kind] || ''})`);
+  if (clientId) {
+    console.log(`  client_id     : ${clientId}`);
+    console.log(`  client_secret : ${key}`);
+  } else {
+    console.log(`  key     : ${key}`);
+  }
   console.log('');
   console.log('  Shown once. Only its SHA-256 is stored — reissue if lost.');
   console.log('');
@@ -112,7 +131,7 @@ async function main() {
 
     const [, , channel, kind] = process.argv;
     if (!channel || !kind) {
-      console.log('usage: node scripts/issue-key.js <channel> <token|secret> [--label "..."]');
+      console.log('usage: node scripts/issue-key.js <channel> <token|secret|oauth> [--label "..."]');
       console.log('       node scripts/issue-key.js --list');
       console.log('       node scripts/issue-key.js --revoke <prefix>…<last4>');
       process.exitCode = 1;

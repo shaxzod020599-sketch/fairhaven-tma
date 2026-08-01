@@ -34,6 +34,16 @@ app.use((req, _res, next) => {
 // revoking one never affects another.
 app.use('/medicalka/v1', require('./adapters/medicalka/routes'));
 
+// Uzum's contract requires every route to answer both with and without the
+// `/v1` prefix, so the same router is mounted twice rather than each route
+// being declared twice. Off until UZUM_ENABLED — an unfinished integration
+// should not be reachable, even behind a token.
+if (config.uzum.enabled) {
+  const uzum = require('./adapters/uzum/routes');
+  app.use('/uzum/v1', uzum);
+  app.use('/uzum', uzum);
+}
+
 // Service-to-service surface: catalogue sync from the panel, and bot order
 // goals from the backend. Token-guarded and never proxied by nginx.
 app.use('/internal', require('./routes/internal'));
@@ -75,7 +85,28 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'internal_error' });
 });
 
+/**
+ * Refuses to start a half-configured Uzum integration.
+ *
+ * Each of these surfaces as something misleading at runtime otherwise: an
+ * unsigned token endpoint that answers 500 on every call, a catalogue served
+ * for the wrong store, or image URLs that resolve to nothing on their side.
+ */
+function checkUzumConfig() {
+  if (!config.uzum.enabled) return;
+  const missing = [];
+  if (!config.uzum.storeId) missing.push('UZUM_STORE_ID');
+  if (!config.uzum.tokenSigningKey || config.uzum.tokenSigningKey.length < 32) {
+    missing.push('UZUM_TOKEN_SIGNING_KEY (32+ characters)');
+  }
+  if (!config.uzum.imageBaseUrl) missing.push('PUBLIC_IMAGE_BASE_URL');
+  if (missing.length) {
+    throw new Error(`UZUM_ENABLED is on but ${missing.join(', ')} is not set`);
+  }
+}
+
 async function start() {
+  checkUzumConfig();
   await db.connect();
 
   // Fail fast on a bad key or a wrong shop id rather than discovering it on
@@ -133,4 +164,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, start };
+module.exports = { app, checkUzumConfig, start };
