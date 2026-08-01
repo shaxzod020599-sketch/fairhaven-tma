@@ -11,3 +11,4 @@ backend/uploads/
 *.MOV
 *.mov
 *.mp4
+graphify-out/
