@@ -28,6 +28,7 @@ const { launchBotWithRetry, withTelegramRetry } = require('./utils/telegramRetry
 const { errorLabel, redactPath, securityHeaders } = require('./utils/http');
 const { apiLimiter } = require('./middleware/rateLimit');
 const stockReconciler = require('./services/stockReconciler');
+const billzBridge = require('./services/billzBridge');
 const webhook = require('./bot/webhook');
 
 const app = express();
@@ -234,6 +235,11 @@ async function start() {
     if (process.env.STOCK_RECONCILE_ENABLED === 'true') {
       stockReconciler.startScheduler();
     }
+
+    // Carries confirmed orders into Billz through the channel hub. Off until
+    // BILLZ_BRIDGE_ENABLED and BILLZ_BRIDGE_SINCE are both set, so switching it
+    // on cannot replay old orders.
+    billzBridge.start();
 
     // Start Telegram Bot & expose to controllers via app.locals.
     let bot = null;

@@ -77,8 +77,38 @@ const orderSchema = new mongoose.Schema({
   accessToken: { type: String, default: '' },
 
   channelMessageId: { type: Number, default: null },
+
+  /**
+   * Progress of this order through the Billz bridge.
+   *
+   * The bridge does not listen for events. It compares `dispatched` with the
+   * goal implied by `status` and closes the gap, which means a missed hook, a
+   * crash mid-write or a restart all self-correct on the next pass — there is no
+   * queue of events to lose. `nextAttemptAt` doubles as the lease that stops two
+   * backend instances working the same order at once.
+   *
+   * Untouched for orders placed before the bridge was switched on: history is
+   * not replayed into Billz.
+   */
+  billzSync: {
+    dispatched: { type: String, default: '' },
+    attempts: { type: Number, default: 0 },
+    nextAttemptAt: { type: Date, default: null },
+    lastError: { type: String, default: '' },
+    // Set when the goal can no longer be reached — a cancellation after
+    // delivery, say. Retrying cannot fix it, so the bridge stops and an
+    // operator settles it in Billz by hand.
+    conflict: { type: String, default: '' },
+  },
 }, {
   timestamps: true,
 });
+
+// Serves the bridge's scan: narrow by status first, then by what has already
+// been dispatched, then by age.
+orderSchema.index(
+  { status: 1, 'billzSync.dispatched': 1, createdAt: 1 },
+  { name: 'billz_bridge_scan' }
+);
 
 module.exports = mongoose.model('Order', orderSchema);

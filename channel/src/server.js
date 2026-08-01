@@ -1,9 +1,10 @@
-const crypto = require('crypto');
 const express = require('express');
 const config = require('./config');
 const logger = require('./logger');
 const db = require('./db');
 const billz = require('./billz/client');
+const botOrders = require('./core/botOrders');
+const notify = require('./notify/telegram');
 const BillzProduct = require('./models/BillzProduct');
 const SyncLog = require('./models/SyncLog');
 const { runCatalogSync, startScheduler } = require('./sync/catalog');
@@ -33,46 +34,9 @@ app.use((req, _res, next) => {
 // revoking one never affects another.
 app.use('/medicalka/v1', require('./adapters/medicalka/routes'));
 
-/**
- * Internal control surface for the admin panel.
- *
- * The panel never talks to Billz directly — it asks here, so rate limiting and
- * the single request queue stay in one process. Guarded by a shared token
- * rather than an admin session: this is service-to-service over loopback, and
- * nginx does not expose /internal.
- */
-app.post('/internal/sync', async (req, res) => {
-  const expected = process.env.CHANNEL_INTERNAL_TOKEN;
-  const presented = req.get('X-Internal-Token') || '';
-  if (!expected) return res.status(503).json({ error: 'internal_token_not_configured' });
-  if (!tokensMatch(presented, expected)) {
-    return res.status(401).json({ error: 'unauthorized' });
-  }
-  try {
-    const result = await runCatalogSync({ force: req.query.force === 'true' });
-    res.json(result);
-  } catch (err) {
-    logger.error('manual sync failed', { err });
-    res.status(500).json({ error: 'sync_failed' });
-  }
-});
-
-/**
- * Constant-time comparison of two secrets of any length.
- *
- * Comparing raw buffers here would be a remote crash: `timingSafeEqual` throws
- * unless both buffers are the same byte length, and a JavaScript string's
- * `.length` counts UTF-16 code units, not bytes. One multi-byte character in
- * the header — "…abcdéf" — passes a character-length check while producing a
- * 33-byte buffer against a 32-byte secret, and the throw escapes an async
- * Express handler as an unhandled rejection, which Node terminates on by
- * default. Hashing first makes both sides 32 bytes whatever arrives.
- */
-function tokensMatch(presented, expected) {
-  const a = crypto.createHash('sha256').update(String(presented)).digest();
-  const b = crypto.createHash('sha256').update(String(expected)).digest();
-  return crypto.timingSafeEqual(a, b);
-}
+// Service-to-service surface: catalogue sync from the panel, and bot order
+// goals from the backend. Token-guarded and never proxied by nginx.
+app.use('/internal', require('./routes/internal'));
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'channel-hub', writeEnabled: config.billzWriteEnabled });
@@ -142,10 +106,18 @@ async function start() {
     runCatalogSync().catch((err) => logger.error('boot sync failed', { err }));
   }
   const timer = startScheduler();
+  // Releases local holds on bot orders nobody acted on, so a forgotten order
+  // stops keeping stock out of the marketplaces.
+  const holdTimer = botOrders.startHoldSweeper();
+
+  if (!notify.isConfigured()) {
+    logger.warn('telegram announcements are off — marketplace orders will not appear in the channel');
+  }
 
   const shutdown = async (signal) => {
     logger.info('shutting down', { signal });
     clearInterval(timer);
+    clearInterval(holdTimer);
     server.close();
     await db.disconnect();
     process.exit(0);

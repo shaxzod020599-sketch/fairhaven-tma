@@ -3,6 +3,7 @@ const config = require('../../config');
 const catalog = require('../../core/catalog');
 const orders = require('../../core/orders');
 const logger = require('../../logger');
+const notify = require('../../notify/telegram');
 const BillzProduct = require('../../models/BillzProduct');
 const ChannelOrder = require('../../models/ChannelOrder');
 const ProductCard = require('../../models/ProductCard');
@@ -259,14 +260,19 @@ router.post('/orders', write, async (req, res, next) => {
     res.json({ wc_order_id: order.internalOrderId, status: 'received' });
 
     if (created) {
-      orders.reserveOrder(order.internalOrderId).catch((err) => {
-        // Already recorded on the order as `failed`; an operator retries from
-        // the panel. Rejecting the request instead would make the marketplace
-        // resend an order we have in fact accepted.
-        logger.error('reservation failed after accepting order', {
-          internalOrderId: order.internalOrderId, err,
-        });
-      });
+      orders.reserveOrder(order.internalOrderId)
+        .catch((err) => {
+          // Already recorded on the order as `failed`; an operator retries from
+          // the panel. Rejecting the request instead would make the marketplace
+          // resend an order we have in fact accepted.
+          logger.error('reservation failed after accepting order', {
+            internalOrderId: order.internalOrderId, err,
+          });
+        })
+        // Announced either way: a reservation that failed is precisely what an
+        // operator needs to see, and the card carries the reason.
+        .finally(() => notify.announceOrder(CHANNEL, parsed.externalId)
+          .catch((err) => logger.warn('order announcement failed', { err })));
     }
   } catch (err) { next(err); }
 });
@@ -296,6 +302,11 @@ router.post('/orders/:orderId/status', write, async (req, res, next) => {
 
     const fresh = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId }).lean();
     res.json({ wc_order_id: fresh.internalOrderId, status: fresh.status });
+
+    // Edits the existing card rather than posting again, so one order stays one
+    // message in the channel.
+    notify.announceOrder(CHANNEL, fresh.externalId)
+      .catch((err) => logger.warn('order announcement failed', { err }));
   } catch (err) { next(err); }
 });
 

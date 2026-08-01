@@ -55,10 +55,21 @@ const channelOrderSchema = new mongoose.Schema({
     // counter against double application: a retry that re-runs a step must not
     // reserve the same units twice, and a release must not subtract twice.
     reservationApplied: { type: Boolean, default: false },
+    // The same guard for pendingQty — the local hold a bot order takes while it
+    // waits for an operator in the Telegram channel. Separate from the flag
+    // above because the two are held at different times and released by
+    // different events.
+    pendingApplied: { type: Boolean, default: false },
     attempts: { type: Number, default: 0 },
     lastError: { type: String, default: '' },
     lastTriedAt: { type: Date, default: null },
   },
+
+  // When an unconfirmed local hold stops protecting stock. An order nobody ever
+  // acts on must not keep units out of every marketplace forever, so the sweeper
+  // releases the hold at this point — the order itself stays open, and
+  // confirming it later still reserves normally.
+  holdExpiresAt: { type: Date, default: null },
 
   // Card in the Telegram orders channel, so status changes edit it in place
   // instead of posting again.
@@ -71,6 +82,12 @@ const channelOrderSchema = new mongoose.Schema({
 
 channelOrderSchema.index({ channel: 1, externalId: 1 }, { unique: true });
 channelOrderSchema.index({ status: 1, createdAt: -1 });
+// Drives the hold sweeper. Partial so it only spans orders actually holding
+// stock, which is a small slice of the collection.
+channelOrderSchema.index(
+  { holdExpiresAt: 1 },
+  { name: 'expiring_holds', partialFilterExpression: { 'billz.pendingApplied': true } }
+);
 
 let model = null;
 

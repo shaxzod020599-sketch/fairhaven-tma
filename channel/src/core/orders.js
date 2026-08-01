@@ -26,6 +26,11 @@ const ChannelOrder = require('../models/ChannelOrder');
  * to acknowledge an order.
  */
 
+// How long an unconfirmed bot order keeps stock out of the marketplaces. Long
+// enough to cover a normal working shift, short enough that a forgotten order
+// does not quietly strand inventory.
+const DEFAULT_HOLD_TTL_MS = config.bot.holdTtlMs;
+
 function newInternalOrderId() {
   return crypto.randomUUID();
 }
@@ -78,18 +83,76 @@ async function acceptOrder(channel, { externalId, items, totalAmount, customer, 
   }
 }
 
-/** Adds or removes this order's units from the mirror's reserved counter. */
-async function applyReservedQty(items, sign) {
+/**
+ * Moves this order's units on one of the mirror's two counters.
+ *
+ * `reservedQty` is stock Billz is holding for us; `pendingQty` is stock only we
+ * are holding, for a bot order still waiting on an operator. Both are subtracted
+ * from what any channel is allowed to sell, and neither is ever written by the
+ * catalogue sync — which is exactly why a double application here would drift
+ * permanently instead of being corrected on the next tick.
+ */
+async function applyCounter(items, field, sign) {
   const Mirror = BillzProduct();
   await Mirror.bulkWrite(
     items.map((item) => ({
       updateOne: {
         filter: { billzProductId: item.billzProductId },
-        update: { $inc: { reservedQty: sign * item.quantity } },
+        update: { $inc: { [field]: sign * item.quantity } },
       },
     })),
     { ordered: false }
   );
+}
+
+/** Adds or removes this order's units from the mirror's reserved counter. */
+async function applyReservedQty(items, sign) {
+  return applyCounter(items, 'reservedQty', sign);
+}
+
+/** Adds or removes this order's units from the mirror's local hold counter. */
+async function applyPendingQty(items, sign) {
+  return applyCounter(items, 'pendingQty', sign);
+}
+
+/**
+ * Takes a local hold on an order's stock without telling Billz anything.
+ *
+ * This is the bot's case: a customer has ordered, but nothing may be written to
+ * Billz until an operator confirms in the Telegram channel. Without the hold,
+ * those units stay on sale in every marketplace during the minutes or hours the
+ * order waits — and the first confirmation then finds the stock gone.
+ *
+ * Idempotent: an order already holding returns unchanged.
+ */
+async function holdOrder(internalOrderId, { ttlMs = DEFAULT_HOLD_TTL_MS } = {}) {
+  const order = await ChannelOrder().findOne({ internalOrderId });
+  if (!order) throw new Error(`unknown order ${internalOrderId}`);
+  if (order.billz.pendingApplied) return order.toObject();
+  if (order.status !== 'received') return order.toObject();
+
+  // Counter first: a crash before the flag is stored leaves stock held with the
+  // order still marked unheld, which over-protects. The reverse under-protects,
+  // and over-selling is the failure that reaches a customer.
+  await applyPendingQty(order.items, +1);
+  order.billz.pendingApplied = true;
+  order.holdExpiresAt = new Date(Date.now() + ttlMs);
+  await order.save();
+
+  logger.info('local hold taken', { internalOrderId, channel: order.channel });
+  return order.toObject();
+}
+
+/**
+ * Gives back a local hold if one is held. Takes the loaded document so callers
+ * can fold it into a save they are already making.
+ */
+async function releaseHold(order) {
+  if (!order.billz.pendingApplied) return false;
+  await applyPendingQty(order.items, -1);
+  order.billz.pendingApplied = false;
+  order.holdExpiresAt = null;
+  return true;
 }
 
 /**
@@ -124,6 +187,11 @@ async function reserveOrder(internalOrderId) {
     // reserved with the order still marked for retry, which an operator can
     // see and correct. The reverse order would silently under-reserve.
     await applyReservedQty(order.items, +1);
+    // Billz is now holding the same units, so the local hold has to go — the
+    // two counters are both subtracted from sellable stock, and keeping both
+    // would take twice the inventory off sale. Released after the reservation
+    // rather than before, so no window exists where nothing is holding.
+    await releaseHold(order);
 
     order.billz.draftOrderId = orderId;
     order.billz.orderNumber = orderNumber;
@@ -176,6 +244,9 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
       await applyReservedQty(order.items, -1);
       order.billz.reservationApplied = false;
     }
+    // Normally already gone — reserving releases it. Kept as a belt-and-braces
+    // release so a hold can never outlive the order that took it.
+    await releaseHold(order);
     order.status = 'sold';
     order.billz.lastError = '';
     await order.save();
@@ -223,6 +294,7 @@ async function cancelOrder(internalOrderId, { reason = '' } = {}) {
     await applyReservedQty(order.items, -1);
     order.billz.reservationApplied = false;
   }
+  await releaseHold(order);
   order.status = 'cancelled';
   if (reason) order.billz.lastError = order.billz.lastError || `cancelled: ${reason}`;
   await order.save();
@@ -232,9 +304,13 @@ async function cancelOrder(internalOrderId, { reason = '' } = {}) {
 }
 
 module.exports = {
+  DEFAULT_HOLD_TTL_MS,
   acceptOrder,
+  applyPendingQty,
   applyReservedQty,
   cancelOrder,
   completeOrder,
+  holdOrder,
+  releaseHold,
   reserveOrder,
 };

@@ -60,6 +60,28 @@ const config = {
     timeoutMs: number('BILLZ_TIMEOUT_MS', 20000),
   },
 
+  // Fairhaven's own bot and mini app are a sales channel like any other: the
+  // same reservation, the same counters, the same order record. What differs is
+  // when Billz is told — an operator confirms in the Telegram channel first.
+  bot: {
+    channel: 'fairhaven-bot',
+    // How long an unconfirmed order keeps stock out of the marketplaces.
+    holdTtlMs: number('BOT_HOLD_TTL_MS', 2 * 60 * 60 * 1000),
+    holdSweepMs: number('BOT_HOLD_SWEEP_MS', 60 * 1000),
+  },
+
+  // Order cards posted to the Telegram channel. Read-only announcements from
+  // this service: it never accepts commands from Telegram, so a compromised
+  // channel cannot move stock.
+  telegram: {
+    botToken: process.env.TELEGRAM_BOT_TOKEN || '',
+    ordersChannelId: process.env.ORDERS_CHANNEL_ID || '',
+    enabled: bool('CHANNEL_TELEGRAM_ENABLED', true),
+  },
+
+  // Shared with the bot backend for loopback service-to-service calls.
+  internalToken: process.env.CHANNEL_INTERNAL_TOKEN || '',
+
   sync: {
     intervalMs: number('SYNC_INTERVAL_MS', 5 * 60 * 1000),
     // Guard rail: a sync that suddenly sees far fewer products than last time
