@@ -24,7 +24,7 @@ test('the writable-collection list stays limited to this service', () => {
   // the new collection is genuinely owned here and not by the bot backend.
   assert.deepEqual(
     [...db.OWNED_COLLECTIONS].sort(),
-    ['billzproducts', 'billztokens', 'channelcounters', 'channelkeys', 'synclogs']
+    ['billzproducts', 'billztokens', 'channelcounters', 'channelkeys', 'channelorders', 'synclogs']
   );
 });
 

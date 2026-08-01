@@ -1,0 +1,80 @@
+const mongoose = require('mongoose');
+const { defineModel } = require('../db');
+
+/**
+ * An order received from a sales channel.
+ *
+ * The record exists before anything is written to Billz, and it is what makes
+ * the integration safe to retry. Marketplaces resend an order when our reply is
+ * slow or lost — Uzum's contract requires that a resend return the same order
+ * id with a 200 — so the unique index on (channel, externalId) is the thing
+ * that stops one customer order becoming two sales.
+ */
+const channelOrderItemSchema = new mongoose.Schema({
+  billzProductId: { type: String, required: true },
+  // Denormalised on purpose: the order must still read correctly years later,
+  // after the product has been renamed, repriced or delisted.
+  name: { type: String, default: '' },
+  quantity: { type: Number, required: true, min: 0 },
+  unitPrice: { type: Number, required: true, min: 0 },
+}, { _id: false });
+
+const channelOrderSchema = new mongoose.Schema({
+  channel: { type: String, required: true, index: true },
+  // Their id: Medicalka's order_id, Uzum's eatsId.
+  externalId: { type: String, required: true },
+  // Ours, handed back to them and used for every later reference.
+  internalOrderId: { type: String, required: true, unique: true },
+
+  items: { type: [channelOrderItemSchema], default: [] },
+  totalAmount: { type: Number, default: 0 },
+  customer: {
+    name: { type: String, default: '' },
+    phone: { type: String, default: '' },
+    address: { type: String, default: '' },
+  },
+
+  /**
+   * received  — stored, nothing written to Billz yet
+   * reserved  — stock held in Billz by a postponed draft
+   * sold      — payment posted; Billz has decremented stock
+   * cancelled — reservation released, or cancelled before one existed
+   * failed    — a Billz step failed; an operator can retry
+   */
+  status: {
+    type: String,
+    enum: ['received', 'reserved', 'sold', 'cancelled', 'failed'],
+    default: 'received',
+    index: true,
+  },
+
+  billz: {
+    draftOrderId: { type: String, default: '' },
+    orderNumber: { type: String, default: '' },
+    // Whether reservedQty on the mirror currently counts this order. Guards the
+    // counter against double application: a retry that re-runs a step must not
+    // reserve the same units twice, and a release must not subtract twice.
+    reservationApplied: { type: Boolean, default: false },
+    attempts: { type: Number, default: 0 },
+    lastError: { type: String, default: '' },
+    lastTriedAt: { type: Date, default: null },
+  },
+
+  // Card in the Telegram orders channel, so status changes edit it in place
+  // instead of posting again.
+  telegramMessageId: { type: Number, default: null },
+
+  // The payload exactly as it arrived. Reconstructing what a marketplace sent
+  // from our normalised copy is guesswork when something goes wrong.
+  rawIn: { type: mongoose.Schema.Types.Mixed, default: null },
+}, { timestamps: true });
+
+channelOrderSchema.index({ channel: 1, externalId: 1 }, { unique: true });
+channelOrderSchema.index({ status: 1, createdAt: -1 });
+
+let model = null;
+
+module.exports = function ChannelOrder() {
+  if (!model) model = defineModel('ChannelOrder', channelOrderSchema, 'channelorders');
+  return model;
+};

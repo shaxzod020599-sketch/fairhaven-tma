@@ -43,6 +43,10 @@ const config = {
     secretToken: required('BILLZ_SECRET_TOKEN'),
     shopId: required('BILLZ_SHOP_ID'),
     cashboxId: process.env.BILLZ_CASHBOX_ID || '',
+    // Channel sales settle by transfer, not cash. Recording them under the
+    // wrong type corrupts till reconciliation rather than just mislabelling a
+    // row, so there is no default — GET /v1/payment-type lists the real ids.
+    paymentTypeId: process.env.BILLZ_PAYMENT_TYPE_ID || '',
     // Shown to channels as the pharmacy/branch name. Overwritten at boot with
     // the name Billz reports for BILLZ_SHOP_ID.
     shopName: process.env.BILLZ_SHOP_NAME || 'Fairhaven Health',

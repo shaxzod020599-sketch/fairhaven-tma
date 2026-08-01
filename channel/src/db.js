@@ -26,6 +26,7 @@ const OWNED_COLLECTIONS = new Set([
   'synclogs',
   'channelkeys',
   'channelcounters',
+  'channelorders',
 ]);
 
 /**
