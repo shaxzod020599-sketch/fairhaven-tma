@@ -8,7 +8,7 @@
  * hides every product with no photo, and it is worth seeing that list before it
  * takes effect rather than after.
  */
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+require('./loadEnv').loadEnv();
 const mongoose = require('mongoose');
 const { planReconcile, reconcileStock } = require('../services/stockReconciler');
 

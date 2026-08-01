@@ -11,7 +11,7 @@
  *
  * Requires the Billz mirror to be populated (channel-hub sync).
  */
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+require('./loadEnv').loadEnv();
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const BillzProductView = require('../models/BillzProductView');
