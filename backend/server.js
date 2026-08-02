@@ -6,6 +6,7 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') }
 require('dns').setDefaultResultOrder('ipv4first');
 
 const express = require('express');
+const path = require('path');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -30,11 +31,17 @@ const { apiLimiter } = require('./middleware/rateLimit');
 const stockReconciler = require('./services/stockReconciler');
 const billzBridge = require('./services/billzBridge');
 const webhook = require('./bot/webhook');
+const {
+  SURFACES,
+  allowedOrigins,
+  publicAdminRedirect,
+  surfaceForHost,
+} = require('./utils/surfaces');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
-const CORS_ORIGIN = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? false : '*');
+const CORS_ORIGINS = allowedOrigins();
 
 // Middleware
 app.disable('x-powered-by');
@@ -44,12 +51,27 @@ app.set('query parser', 'simple');
 // throttle all clients as one.
 app.set('trust proxy', process.env.TRUST_PROXY || 'loopback');
 app.use(cors({
-  origin: CORS_ORIGIN,
+  origin(origin, callback) {
+    // Non-browser/server-to-server requests carry no Origin. Browsers receive
+    // CORS headers only for the three exact FairHaven surfaces.
+    callback(null, !origin || CORS_ORIGINS.has(origin));
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   credentials: true,
 }));
 app.use(securityHeaders);
 app.use(cookieParser());
+
+// Reject Host-header confusion in application code, not only nginx. Direct
+// loopback access remains available for local development and health probes.
+app.use((req, res, next) => {
+  if (surfaceForHost(req.hostname)) return next();
+  if (
+    process.env.NODE_ENV !== 'production'
+    && ['127.0.0.1', 'localhost'].includes(String(req.hostname || '').toLowerCase())
+  ) return next();
+  return res.status(421).json({ success: false, error: 'host_not_allowed' });
+});
 
 // Only the two image-upload endpoints receive a base64 dataUrl body; everything
 // else is small JSON. A single global 6mb limit let any unauthenticated POST
@@ -116,33 +138,38 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Serve frontend static files (production)
-const path = require('path');
-const frontendDist = path.resolve(__dirname, '../frontend/dist');
+// Public `/admin` is only a safe convenience URL. Actual admin cookies never
+// exist on the public host because the browser is redirected first.
+app.get(['/admin', '/admin/*'], (req, res, next) => {
+  const destination = publicAdminRedirect(req.hostname, req.path);
+  if (!destination) return next();
+  return res.redirect(302, destination);
+});
 
-// Hashed assets (Vite generates /assets/*.{hash}.{ext}) — cache forever
-app.use(
-  '/assets',
-  express.static(path.join(frontendDist, 'assets'), {
-    maxAge: '1y',
-    immutable: true,
-  })
-);
-
-// Everything else (index.html, icons, manifest, etc.) — never cache HTML
-app.use(
-  express.static(frontendDist, {
+// Three standalone builds, selected by exact host. One surface can never fall
+// through into another surface's assets or index.html.
+const staticBySurface = new Map(SURFACES.map((surface) => [
+  surface.key,
+  express.static(surface.dist, {
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.html')) {
         res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
         res.set('Pragma', 'no-cache');
         res.set('Expires', '0');
+      } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.set('Cache-Control', 'public, max-age=31536000, immutable');
       }
     },
-  })
-);
+  }),
+]));
 
-// SPA fallback — serve index.html for non-API routes with no-cache
+app.use((req, res, next) => {
+  const surface = surfaceForHost(req.hostname);
+  if (!surface) return next();
+  return staticBySurface.get(surface.key)(req, res, next);
+});
+
+// SPA fallback — serve the selected surface index.html with no-cache.
 app.get('*', (req, res) => {
   if (
     req.path.startsWith('/api') ||
@@ -155,7 +182,9 @@ app.get('*', (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
   res.set('Pragma', 'no-cache');
   res.set('Expires', '0');
-  res.sendFile(path.join(frontendDist, 'index.html'));
+  const surface = surfaceForHost(req.hostname);
+  if (!surface) return res.status(421).json({ success: false, error: 'host_not_allowed' });
+  return res.sendFile(path.join(surface.dist, 'index.html'));
 });
 
 // Global error handler

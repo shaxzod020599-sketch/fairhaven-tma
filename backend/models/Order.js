@@ -48,10 +48,41 @@ const orderSchema = new mongoose.Schema({
   isFirstOrder: { type: Boolean, default: false, index: true },
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'preparing', 'delivering', 'delivered', 'cancelled'],
+    enum: ['pending', 'confirmed', 'preparing', 'delivering', 'delivered', 'cancelled', 'returned'],
     default: 'pending',
     index: true,
   },
+
+  // Operator trail. Orders created before the workbench keep the defaults —
+  // an empty history reads as "no recorded transitions", never as an error.
+  statusHistory: {
+    type: [new mongoose.Schema({
+      status: { type: String, required: true },
+      at: { type: Date, default: Date.now },
+      by: {
+        telegramId: { type: Number, default: null },
+        name: { type: String, default: '' },
+      },
+      reason: { type: String, default: '' },
+    }, { _id: false })],
+    default: [],
+  },
+  internalNotes: {
+    type: [new mongoose.Schema({
+      text: { type: String, required: true },
+      at: { type: Date, default: Date.now },
+      by: {
+        telegramId: { type: Number, default: null },
+        name: { type: String, default: '' },
+      },
+    }, { _id: false })],
+    default: [],
+  },
+  claimedBy: {
+    telegramId: { type: Number, default: null },
+    name: { type: String, default: '' },
+  },
+  claimedAt: { type: Date, default: null },
   location: {
     type: locationSchema,
     default: null,

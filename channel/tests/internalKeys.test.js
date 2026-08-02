@@ -127,6 +127,30 @@ test('two keys issued in a row are different', async () => {
   assert.notEqual(a.body.key, b.body.key);
 });
 
+test('a Medicalka pair is issued together and may revoke the old pair', async () => {
+  const old = await call('POST', '/internal/keys', {
+    body: { channel: 'medicalka', kind: 'token', label: 'old connection' },
+  });
+
+  const res = await call('POST', '/internal/keys/pair', {
+    body: { label: 'new connection', revokeOld: true },
+  });
+
+  assert.equal(res.status, 200);
+  assert.match(res.body.token, /^fhm_t_[\w-]{43}$/);
+  assert.match(res.body.secret, /^fhm_s_[\w-]{43}$/);
+  assert.notEqual(res.body.tokenId, res.body.secretId);
+
+  const [token, secret, previous] = await Promise.all([
+    ChannelKey().findById(res.body.tokenId).lean(),
+    ChannelKey().findById(res.body.secretId).lean(),
+    ChannelKey().findById(old.body.id).lean(),
+  ]);
+  assert.equal(token.hash, ChannelKey.hashKey(res.body.token));
+  assert.equal(secret.hash, ChannelKey.hashKey(res.body.secret));
+  assert.equal(previous.active, false);
+});
+
 test('a kind that does not belong to a channel is refused', async () => {
   // Uzum has no read token; Medicalka has no OAuth client. Issuing one would
   // produce a credential that authenticates nothing.

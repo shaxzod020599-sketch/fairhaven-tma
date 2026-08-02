@@ -239,6 +239,24 @@ test('selling twice releases the reservation only once', async () => {
   }
 });
 
+test('selling records one immutable completion timestamp', async () => {
+  const stub = stubSale();
+  const { order } = await freshOrder();
+  try {
+    await orders.reserveOrder(order.internalOrderId);
+    const first = await orders.completeOrder(order.internalOrderId);
+    assert.ok(first.soldAt instanceof Date || typeof first.soldAt === 'string');
+    const firstTime = new Date(first.soldAt).toISOString();
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await orders.completeOrder(order.internalOrderId);
+    assert.equal(new Date(second.soldAt).toISOString(), firstTime);
+    assert.equal(stub.calls.filter((c) => c.fn === 'completeSale').length, 1);
+  } finally {
+    stub.restore();
+  }
+});
+
 test('cancelling returns the held units and releases the draft', async () => {
   const stub = stubSale();
   const { order, productId } = await freshOrder();

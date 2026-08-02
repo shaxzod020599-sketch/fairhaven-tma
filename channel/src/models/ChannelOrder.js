@@ -58,6 +58,12 @@ const channelOrderSchema = new mongoose.Schema({
     index: true,
   },
 
+  // Immutable business event used by analytics. `updatedAt` changes on retries,
+  // reconciliation and operator edits, so it cannot safely date a completed sale.
+  soldAt: { type: Date, default: null },
+  // True only when migration had to approximate a legacy sale using updatedAt.
+  soldAtEstimated: { type: Boolean, default: false },
+
   billz: {
     draftOrderId: { type: String, default: '' },
     orderNumber: { type: String, default: '' },
@@ -92,6 +98,7 @@ const channelOrderSchema = new mongoose.Schema({
 
 channelOrderSchema.index({ channel: 1, externalId: 1 }, { unique: true });
 channelOrderSchema.index({ status: 1, createdAt: -1 });
+channelOrderSchema.index({ channel: 1, soldAt: -1 });
 // Drives the hold sweeper. Partial so it only spans orders actually holding
 // stock, which is a small slice of the collection.
 channelOrderSchema.index(

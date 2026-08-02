@@ -4,7 +4,7 @@ const Product = require('../models/Product');
 const Collection = require('../models/Collection');
 const Setting = require('../models/Setting');
 const PromoCode = require('../models/PromoCode');
-const { resolveAdmin } = require('../middleware/adminAuth');
+const { resolveAdminAny: resolveAdmin } = require('../middleware/adminAuthUnified');
 const { errorLabel, sendError } = require('../utils/http');
 const { withTelegramRetry } = require('../utils/telegramRetry');
 
@@ -114,8 +114,26 @@ exports.listOrders = async (req, res) => {
       filter.$or = or;
     }
 
-    const orders = await Order.find(filter).sort({ createdAt: -1 }).limit(500);
-    res.json({ success: true, data: orders });
+    const { paged, page, limit } = resolvePagination(req);
+    const findQuery = Order.find(filter).sort({ createdAt: -1 });
+    if (paged) {
+      findQuery.skip((page - 1) * limit).limit(limit);
+    } else {
+      findQuery.limit(500);
+    }
+
+    let orders, total;
+    if (paged) {
+      [orders, total] = await Promise.all([findQuery, Order.countDocuments(filter)]);
+    } else {
+      orders = await findQuery;
+    }
+
+    res.json(
+      paged
+        ? { success: true, data: orders, meta: { total, page, limit } }
+        : { success: true, data: orders }
+    );
   } catch (err) {
     sendError(res, 500, err);
   }
@@ -129,12 +147,15 @@ exports.updateOrderStatus = async (req, res) => {
       return res.status(400).json({ success: false, error: 'invalid_status' });
     }
 
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true, runValidators: true }
-    );
+    const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ success: false, error: 'not_found' });
+
+    // The legacy endpoint stays free-form (the old panel depends on that), but
+    // it feeds the same trail the workbench reads — no silent transitions.
+    const { historyEntry } = require('../services/orderWorkflow');
+    order.status = status;
+    order.statusHistory.push(historyEntry(status, req.admin));
+    await order.save();
 
     const bot = req.app.locals.bot;
     if (bot && bot.telegram) {
@@ -165,7 +186,9 @@ exports.revertOrder = async (req, res) => {
       return res.status(409).json({ success: false, error: 'already_pending' });
     }
 
+    const { historyEntry } = require('../services/orderWorkflow');
     order.status = 'pending';
+    order.statusHistory.push(historyEntry('pending', req.admin, 'возврат в очередь'));
     await order.save();
 
     const bot = req.app.locals.bot;
@@ -183,6 +206,26 @@ exports.revertOrder = async (req, res) => {
 // Products — full CRUD
 // ───────────────────────────────────────────────────────────────────────────
 const PRODUCT_PAGE_MAX = 200;
+
+const LIST_PAGE_MAX = 100;
+
+// Optional server-side pagination shared by listOrders / listUsers / listPromos.
+// `data` stays a plain array and the response keeps its legacy shape unless a
+// caller actually asks for a page: when neither page nor limit is sent, returns
+// paged=false so the handler runs its old query verbatim (existing panel keeps
+// working). When either is present, returns the parsed page/limit (limit capped
+// at LIST_PAGE_MAX, page 1-based, floor 1).
+function resolvePagination(req) {
+  const hasPage = req.query.page !== undefined && req.query.page !== '';
+  const hasLimit = req.query.limit !== undefined && req.query.limit !== '';
+  if (!hasPage && !hasLimit) return { paged: false };
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const rawLimit = Number(req.query.limit);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0
+    ? Math.min(rawLimit, LIST_PAGE_MAX)
+    : LIST_PAGE_MAX;
+  return { paged: true, page, limit };
+}
 
 /**
  * Lists products for the admin panel.
@@ -293,6 +336,20 @@ exports.updateProduct = async (req, res) => {
       }
     }
 
+    if (beforePrice !== afterPrice || beforeOldPrice !== afterOldPrice) {
+      await require('../services/adminAudit').record({
+        admin: req.admin,
+        action: 'product.price',
+        entityType: 'product',
+        entityId: p._id,
+        summary: {
+          name: p.name,
+          price: { old: beforePrice, new: afterPrice },
+          oldPrice: { old: beforeOldPrice, new: afterOldPrice },
+        },
+      });
+    }
+
     res.json({ success: true, data: p });
   } catch (err) {
     sendError(res, 400, err);
@@ -307,6 +364,13 @@ exports.deleteProduct = async (req, res) => {
       { productIds: p._id },
       { $pull: { productIds: p._id } }
     );
+    await require('../services/adminAudit').record({
+      admin: req.admin,
+      action: 'product.delete',
+      entityType: 'product',
+      entityId: p._id,
+      summary: { name: p.name, price: p.price, sku: p.sku || '' },
+    });
     res.json({ success: true, message: 'Удалено' });
   } catch (err) {
     sendError(res, 500, err);
@@ -434,11 +498,28 @@ exports.listUsers = async (req, res) => {
       const asNum = Number(search);
       if (Number.isFinite(asNum)) filter.$or.push({ telegramId: asNum });
     }
-    const users = await User.find(filter)
-      .select('telegramId username photoUrl firstName lastName phone gender birthYear role registrationStep consentAccepted notificationsEnabled createdAt')
-      .sort({ createdAt: -1 })
-      .limit(500);
-    res.json({ success: true, data: users });
+    const { paged, page, limit } = resolvePagination(req);
+    const findQuery = User.find(filter)
+      .select('telegramId username photoUrl firstName lastName phone gender birthYear role registrationStep consentAccepted notificationsEnabled customerBlocked createdAt')
+      .sort({ createdAt: -1 });
+    if (paged) {
+      findQuery.skip((page - 1) * limit).limit(limit);
+    } else {
+      findQuery.limit(500);
+    }
+
+    let users, total;
+    if (paged) {
+      [users, total] = await Promise.all([findQuery, User.countDocuments(filter)]);
+    } else {
+      users = await findQuery;
+    }
+
+    res.json(
+      paged
+        ? { success: true, data: users, meta: { total, page, limit } }
+        : { success: true, data: users }
+    );
   } catch (err) {
     sendError(res, 500, err);
   }
@@ -452,7 +533,7 @@ exports.getUserDetail = async (req, res) => {
     }
     const user = await User.findOne({ telegramId }).lean();
     if (!user) return res.status(404).json({ success: false, error: 'not_found' });
-    const orders = await Order.find({ 'user.telegramId': telegramId })
+    const orders = await Order.find({ telegramId })
       .select('_id status totalAmount items createdAt')
       .sort({ createdAt: -1 })
       .limit(50)
@@ -497,6 +578,14 @@ exports.demoteAdmin = async (req, res) => {
       { new: true }
     );
     if (!user) return res.status(404).json({ success: false, error: 'not_found' });
+    await require('../services/adminSession').revokeAllForAdmin(telegramId);
+    await require('../services/adminAudit').record({
+      admin: req.admin,
+      action: 'admin.demote',
+      entityType: 'admin',
+      entityId: String(telegramId),
+      summary: { name: [user.firstName, user.lastName].filter(Boolean).join(' ') },
+    });
     res.json({ success: true, data: user });
   } catch (err) {
     sendError(res, 400, err);
@@ -666,14 +755,30 @@ async function tryRevertChannelCard(bot, order) {
 // ───────────────────────────────────────────────────────────────────────────
 // Promo codes — full CRUD
 // ───────────────────────────────────────────────────────────────────────────
-exports.listPromos = async (_req, res) => {
+exports.listPromos = async (req, res) => {
   try {
-    const items = await PromoCode.find({}).sort({ createdAt: -1 });
+    const { paged, page, limit } = resolvePagination(req);
+    const findQuery = PromoCode.find({}).sort({ createdAt: -1 });
+    if (paged) {
+      findQuery.skip((page - 1) * limit).limit(limit);
+    }
+
+    let items, total;
+    if (paged) {
+      [items, total] = await Promise.all([findQuery, PromoCode.countDocuments({})]);
+    } else {
+      items = await findQuery;
+    }
+
     const augmented = items.map((p) => ({
       ...p.toObject(),
       currentlyActive: p.isCurrentlyActive(),
     }));
-    res.json({ success: true, data: augmented });
+    res.json(
+      paged
+        ? { success: true, data: augmented, meta: { total, page, limit } }
+        : { success: true, data: augmented }
+    );
   } catch (err) {
     sendError(res, 500, err);
   }
@@ -757,6 +862,12 @@ function sanitizePromoBody(b = {}) {
   });
   return out;
 }
+
+// Reused by adminOperationsController so the workbench transition endpoint
+// produces the same channel-card edit and customer message as this file's
+// legacy status endpoint.
+exports.tryEditChannelCard = tryEditChannelCard;
+exports.tryNotifyCustomer = tryNotifyCustomer;
 
 async function tryNotifyCustomer(bot, order, status) {
   const shortId = order._id.toString().slice(-6).toUpperCase();

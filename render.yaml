@@ -14,9 +14,20 @@ services:
       - key: PORT
         value: 3000
       - key: FRONTEND_URL
-        fromService:
-          name: fairhaven
-          type: web
-          property: host
+        value: https://mini.fairhaven.uz
+      - key: PUBLIC_ORIGIN
+        value: https://fairhaven.uz
+      - key: ADMIN_ORIGIN
+        value: https://admin.fairhaven.uz
+      - key: TMA_ORIGIN
+        value: https://mini.fairhaven.uz
+      - key: ADMIN_PANEL_URL
+        value: https://admin.fairhaven.uz/
+      - key: ADMIN_CSRF_SECRET
+        sync: false
+      - key: WEB_JWT_SECRET
+        sync: false
+      - key: WEB_BOT_USERNAME
+        sync: false
       - key: NODE_ENV
         value: production

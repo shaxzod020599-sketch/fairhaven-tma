@@ -21,11 +21,13 @@ test('notifies customer when status changes without a channel message', async ()
     _id: { toString: () => '000000000000000000abcdef' },
     telegramId: 123456,
     channelMessageId: null,
+    statusHistory: [],
+    save: async () => order,
   };
   const restore = [
     stubModule('../models/User', {}),
     stubModule('../models/Order', {
-      findByIdAndUpdate: async () => order,
+      findById: async () => order,
     }),
     stubModule('../models/Product', {}),
     stubModule('../models/Collection', {}),

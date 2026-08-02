@@ -16,6 +16,7 @@ const {
   withTelegramRetry,
 } = require('../utils/telegramRetry');
 const { mapWithConcurrency } = require('../utils/pool');
+const adminLogin = require('../services/adminLogin');
 
 /**
  * Broadcast pacing.
@@ -192,6 +193,48 @@ async function finishPendingWebLogin(ctx, user) {
   if (claimed) {
     await ctx.replyWithHTML(webLoginSuccessText());
   }
+}
+
+// -----------------------------------------------------------------------------
+// Admin browser login handshake (t.me/<bot>?start=admin_<pollToken>)
+// -----------------------------------------------------------------------------
+const ADMIN_LOGIN_PAYLOAD_RE = /^admin_([A-Za-z0-9_-]{43})$/;
+
+async function handleAdminLoginPayload(ctx, user) {
+  const payload = String(ctx.startPayload || '');
+  const match = payload.match(ADMIN_LOGIN_PAYLOAD_RE);
+  if (!match) return false;
+
+  if (user.role !== 'admin') {
+    await ctx.reply('⛔️ Admin ruxsati yo‘q / Нет доступа администратора');
+    return true;
+  }
+
+  const attempt = await adminLogin.presentAttempt(match[1], user.telegramId);
+  if (!attempt) {
+    await ctx.reply('⌛️ Kirish so‘rovi eskirgan / Запрос на вход истёк');
+    return true;
+  }
+
+  const browser = escapeHtml(attempt.userAgent || 'Noma’lum / Неизвестно');
+  const ip = escapeHtml(attempt.ip || '—');
+  await ctx.replyWithHTML(
+    `🔐 <b>FairHaven Admin kirishi / Вход в FairHaven Admin</b>\n\n` +
+    `Brauzerdagi kod / Код в браузере: <code>${attempt.userCode}</code>\n` +
+    `IP: <code>${ip}</code>\n` +
+    `Qurilma / Устройство: ${browser}\n\n` +
+    `Kod brauzerdagi kod bilan bir xil bo‘lsa, tasdiqlang.\n` +
+    `Подтвердите только если код совпадает с кодом в браузере.`,
+    {
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '✅ Tasdiqlash / Подтвердить', callback_data: `admin_login:approve:${attempt._id}` },
+          { text: '❌ Rad etish / Отклонить', callback_data: `admin_login:deny:${attempt._id}` },
+        ]],
+      },
+    }
+  );
+  return true;
 }
 
 // -----------------------------------------------------------------------------
@@ -603,6 +646,11 @@ function createBot(token, frontendUrl) {
     if (user.botBlocked) user.botBlocked = false;
     await user.save();
 
+    // Admin login never auto-confirms: it opens a comparison-code prompt and
+    // waits for an explicit callback from this same numeric Telegram account.
+    const wasAdminLogin = await handleAdminLoginPayload(ctx, user);
+    if (wasAdminLogin) return;
+
     // Web-site login deep-link: confirm (or queue) and keep the shop flow.
     const wasWebLogin = await handleWebLoginPayload(ctx, user);
     if (wasWebLogin && user.isRegistered()) {
@@ -631,6 +679,23 @@ function createBot(token, frontendUrl) {
       `📄 /oferta — ommaviy oferta / публичная оферта\n\n` +
       `📞 ${process.env.SUPPORT_PHONE || '+998 00 000 00 00'}`
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // /admin — opens the standalone admin panel (admins only). The panel URL is
+  // configured via ADMIN_PANEL_URL (e.g. https://<domain>/admin/); silent for
+  // everyone else so the command's existence leaks nothing.
+  // ---------------------------------------------------------------------------
+  bot.command('admin', async (ctx) => {
+    const panelUrl = process.env.ADMIN_PANEL_URL;
+    if (!panelUrl) return;
+    const user = await User.findOne({ telegramId: ctx.from.id });
+    if (!user || user.role !== 'admin') return;
+    await ctx.reply('⚙️ Panel boshqaruvi / Панель управления', {
+      reply_markup: {
+        inline_keyboard: [[{ text: '⚙️ Ochish / Открыть', web_app: { url: panelUrl } }]],
+      },
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -681,6 +746,28 @@ function createBot(token, frontendUrl) {
     } catch (err) {
       console.error('Error fetching orders:', errorLabel(err));
       ctx.reply('❌ Xatolik / Ошибка');
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Callback: browser admin login approval / denial
+  // ---------------------------------------------------------------------------
+  bot.action(/^admin_login:(approve|deny):([a-fA-F0-9]{24})$/, async (ctx) => {
+    const [, action, attemptId] = ctx.match;
+    try {
+      const user = await User.findOne({ telegramId: ctx.from.id, role: 'admin' });
+      if (!user) return ctx.answerCbQuery('⛔️ Доступ запрещён');
+      const decided = await adminLogin.decideAttempt({
+        attemptId,
+        adminTelegramId: user.telegramId,
+        decision: action === 'approve' ? 'approved' : 'denied',
+      });
+      if (!decided) return ctx.answerCbQuery('⌛️ Запрос уже закрыт');
+      try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (_) {}
+      return ctx.answerCbQuery(action === 'approve' ? '✅ Вход подтверждён' : '❌ Вход отклонён');
+    } catch (err) {
+      console.error('admin login callback:', errorLabel(err));
+      return ctx.answerCbQuery('Ошибка');
     }
   });
 

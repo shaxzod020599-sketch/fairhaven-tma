@@ -46,6 +46,19 @@ const authLimiter = build({
   max: Number(process.env.RATE_LIMIT_AUTH_MAX || 30),
 });
 
+// Admin authentication has a much smaller legitimate volume than customer
+// login. Keep it separate so public traffic cannot consume the operator budget.
+const adminLoginLimiter = build({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_ADMIN_LOGIN_MAX || 5),
+});
+
+// Login status polls every ~2 seconds for at most three minutes.
+const adminPollLimiter = build({
+  windowMs: 5 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_ADMIN_POLL_MAX || 120),
+});
+
 // Uploads are keyed per admin rather than per IP: several admins may share one
 // office NAT, and an admin importing a batch of product photos is legitimate.
 // `req.admin` is set by the mini-app gate, `req.webUser` by the site gate.
@@ -60,4 +73,22 @@ const uploadLimiter = build({
   },
 });
 
-module.exports = { apiLimiter, authLimiter, uploadLimiter };
+// Excel generation is CPU/memory-heavy and can page through up to 5,000 rows.
+// Keyed per authenticated admin so one operator cannot consume every worker.
+const adminExportLimiter = build({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_ADMIN_EXPORT_MAX || 10),
+  keyGenerator: (req) => {
+    const id = req.admin?.telegramId;
+    return id ? `admin-export:${id}` : `ip:${ipKeyGenerator(req.ip)}`;
+  },
+});
+
+module.exports = {
+  adminExportLimiter,
+  adminLoginLimiter,
+  adminPollLimiter,
+  apiLimiter,
+  authLimiter,
+  uploadLimiter,
+};

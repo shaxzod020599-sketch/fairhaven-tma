@@ -1,0 +1,15 @@
+export const NAV_ITEMS = [
+  { path: '/', label: 'Обзор', icon: 'overview' },
+  { path: '/sales', label: 'Продажи', icon: 'sales' },
+  { path: '/billz', label: 'Billz', icon: 'billz' },
+  { path: '/orders', label: 'Заказы', icon: 'orders', attention: true },
+  { path: '/products', label: 'Товары', icon: 'products' },
+  { path: '/connections', label: 'Подключения', icon: 'plug' },
+  { path: '/customers', label: 'Клиенты', icon: 'users' },
+  { path: '/admins', label: 'Администраторы', icon: 'shield' },
+  { path: '/promos', label: 'Промокоды', icon: 'gift' },
+  { path: '/collections', label: 'Подборки', icon: 'stack' },
+  { path: '/gallery', label: 'Галерея', icon: 'image' },
+  { path: '/activity', label: 'История', icon: 'shield' },
+  { path: '/settings', label: 'Настройки', icon: 'settings' },
+];

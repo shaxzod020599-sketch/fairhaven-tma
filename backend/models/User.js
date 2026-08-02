@@ -55,6 +55,11 @@ const userSchema = new mongoose.Schema({
 
   notificationsEnabled: { type: Boolean, default: true },
 
+  // Operator-set flag from the admin panel. Separate from botBlocked (which
+  // Telegram reports): this one is a business decision — the customer is
+  // excluded from broadcasts and highlighted on their orders.
+  customerBlocked: { type: Boolean, default: false },
+
   // Set when Telegram reports the chat as permanently unreachable — the user
   // blocked the bot, or the account was deleted. Kept separate from
   // notificationsEnabled, which is the user's own choice: broadcasts skip these

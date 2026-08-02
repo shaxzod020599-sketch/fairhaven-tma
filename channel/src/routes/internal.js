@@ -6,6 +6,13 @@ const botOrders = require('../core/botOrders');
 const ChannelKey = require('../models/ChannelKey');
 const { generateKey, generateClientId, hashKey, describeKey } = require('../models/ChannelKey');
 const ChannelOrder = require('../models/ChannelOrder');
+const BillzProduct = require('../models/BillzProduct');
+const SyncLog = require('../models/SyncLog');
+const billz = require('../billz/client');
+const { parseChannelAnalyticsQuery } = require('../analytics/query');
+const { listChannelSales, summarizeChannelSales } = require('../analytics/channelSales');
+const { summarizeInventory } = require('../analytics/billzInventory');
+const { checkReportCapability } = require('../billz/reportCapability');
 const { runCatalogSync } = require('../sync/catalog');
 const { requireInternalToken } = require('../middleware/internalAuth');
 const notify = require('../notify/telegram');
@@ -41,6 +48,97 @@ router.post('/sync', async (req, res) => {
   } catch (err) {
     logger.error('manual sync failed', { err });
     res.status(500).json({ error: 'sync_failed' });
+  }
+});
+
+// ── Read-only analytics ────────────────────────────────────────────────────
+
+const ANALYTICS_CHANNELS = new Set(['medicalka', 'uzum']);
+
+function analyticsChannel(req, res) {
+  const channel = String(req.params.channel || '').toLowerCase();
+  if (!ANALYTICS_CHANNELS.has(channel)) {
+    res.status(404).json({ error: 'unsupported_channel' });
+    return null;
+  }
+  return channel;
+}
+
+function analyticsError(res, err) {
+  if (err?.code === 'invalid_analytics_query') {
+    return res.status(422).json({ error: err.code });
+  }
+  logger.error('internal analytics failed', { err });
+  return res.status(500).json({ error: 'internal_error' });
+}
+
+function periodShape(query) {
+  return {
+    preset: query.preset,
+    from: query.from,
+    to: query.to,
+    bucket: query.bucket,
+    currentBucketPartial: query.currentBucketPartial,
+  };
+}
+
+router.get('/analytics/channels/:channel/summary', async (req, res) => {
+  const channel = analyticsChannel(req, res);
+  if (!channel) return;
+  try {
+    const query = parseChannelAnalyticsQuery(req.query);
+    const summary = await summarizeChannelSales({
+      channel, from: query.from, to: query.to, Model: ChannelOrder(),
+    });
+    res.json({ channel, period: periodShape(query), summary, generatedAt: new Date() });
+  } catch (err) {
+    analyticsError(res, err);
+  }
+});
+
+router.get('/analytics/channels/:channel/sales', async (req, res) => {
+  const channel = analyticsChannel(req, res);
+  if (!channel) return;
+  try {
+    const query = parseChannelAnalyticsQuery(req.query);
+    const result = await listChannelSales({
+      channel,
+      from: query.from,
+      to: query.to,
+      status: query.status,
+      search: query.search,
+      page: query.page,
+      limit: query.limit,
+      Model: ChannelOrder(),
+    });
+    res.json({ channel, period: periodShape(query), ...result, generatedAt: new Date() });
+  } catch (err) {
+    analyticsError(res, err);
+  }
+});
+
+router.get('/analytics/billz/inventory', async (_req, res) => {
+  try {
+    const inventory = await summarizeInventory({
+      ProductModel: BillzProduct(),
+      SyncLogModel: SyncLog(),
+      lowStockThreshold: Number(process.env.BILLZ_LOW_STOCK_THRESHOLD || 5),
+    });
+    res.json({ inventory, generatedAt: new Date() });
+  } catch (err) {
+    analyticsError(res, err);
+  }
+});
+
+router.get('/analytics/billz/capability', async (req, res) => {
+  try {
+    const result = await checkReportCapability({
+      client: billz,
+      force: req.query.force === 'true',
+    });
+    res.json(result);
+  } catch (err) {
+    analyticsError(res, err);
   }
 });
 
@@ -172,6 +270,52 @@ router.get('/keys', async (_req, res) => {
     });
   } catch (err) {
     logger.error('key listing failed', { err });
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.post('/keys/pair', async (req, res) => {
+  const label = String(req.body?.label || 'Medicalka').trim().slice(0, 100) || 'Medicalka';
+  const revokeOld = req.body?.revokeOld === true;
+
+  try {
+    const token = generateKey('medicalka', 'token');
+    const secret = generateKey('medicalka', 'secret');
+    const tokenShape = describeKey(token);
+    const secretShape = describeKey(secret);
+    const records = await ChannelKey().insertMany([
+      {
+        channel: 'medicalka', kind: 'token', hash: hashKey(token),
+        prefix: tokenShape.prefix, last4: tokenShape.last4,
+        label: `${label} · TOKEN`, active: true,
+      },
+      {
+        channel: 'medicalka', kind: 'secret', hash: hashKey(secret),
+        prefix: secretShape.prefix, last4: secretShape.last4,
+        label: `${label} · SECRET`, active: true,
+      },
+    ]);
+
+    const ids = records.map((record) => record._id);
+    if (revokeOld) {
+      await ChannelKey().updateMany(
+        { channel: 'medicalka', active: true, _id: { $nin: ids } },
+        { $set: { active: false, revokedAt: new Date() } }
+      );
+    }
+
+    logger.info('medicalka key pair issued', {
+      tokenId: String(records[0]._id), secretId: String(records[1]._id), label, revokeOld,
+    });
+    res.json({
+      token,
+      secret,
+      tokenId: String(records[0]._id),
+      secretId: String(records[1]._id),
+      label,
+    });
+  } catch (err) {
+    logger.error('medicalka key pair issue failed', { err });
     res.status(500).json({ error: 'internal_error' });
   }
 });

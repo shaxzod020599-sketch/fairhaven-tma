@@ -226,7 +226,7 @@ function BillzPicker({ picked, onPick }) {
     timer.current = setTimeout(async () => {
       try {
         setBusy(true);
-        const res = await searchBillzProducts({ q: query.trim(), limit: 8 });
+        const res = await searchBillzProducts({ search: query.trim(), limit: 8 });
         if (current) setItems(res.data || []);
       } catch (_) {
         if (current) setItems([]);

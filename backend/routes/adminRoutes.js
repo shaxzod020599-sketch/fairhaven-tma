@@ -1,27 +1,81 @@
 const express = require('express');
 const router = express.Router();
-const adminAuth = require('../middleware/adminAuth');
+const adminAuth = require('../middleware/adminAuthUnified');
 const admin = require('../controllers/adminController');
+const adminAuthController = require('../controllers/adminAuthController');
+const ops = require('../controllers/adminOperationsController');
+const excel = require('../controllers/excelController');
 const upload = require('../controllers/uploadController');
 const channels = require('../controllers/channelController');
-const { authLimiter, uploadLimiter } = require('../middleware/rateLimit');
+const sales = require('../controllers/salesAnalyticsController');
+const salesExport = require('../controllers/salesExportController');
+const {
+  adminLoginLimiter,
+  adminPollLimiter,
+  adminExportLimiter,
+  uploadLimiter,
+} = require('../middleware/rateLimit');
+const adminHostGate = require('../middleware/adminHostGate');
+const adminCsrf = require('../middleware/adminCsrf');
+const { requireAdminOrigin } = require('../middleware/adminCsrf');
 
-// Unauthenticated probe used by the panel to decide whether to show itself.
-router.get('/whoami', authLimiter, admin.whoami);
+// Defense in depth: nginx routes by hostname, but application authorization
+// must not depend on proxy configuration staying perfect.
+router.use(adminHostGate);
+
+// Authentication surface. These routes still require exact admin Origin for
+// mutations, but cannot require a session or CSRF before a session exists.
+router.post('/auth/login/start', adminLoginLimiter, requireAdminOrigin, adminAuthController.startLogin);
+router.post('/auth/login/poll', adminPollLimiter, requireAdminOrigin, adminAuthController.pollLogin);
+router.post('/auth/telegram', adminLoginLimiter, requireAdminOrigin, adminAuthController.telegramLogin);
+router.post('/auth/dev', adminLoginLimiter, requireAdminOrigin, adminAuthController.devLogin);
+router.get('/auth/whoami', adminAuthController.whoami);
+// Compatibility alias for an already-open panel during rollout.
+router.get('/whoami', adminAuthController.whoami);
 
 // Everything below requires an admin user.
-router.use(adminAuth);
+router.use(adminAuth, adminCsrf);
+
+router.post('/auth/logout', adminAuthController.logout);
+router.post('/auth/sessions/revoke-all', adminAuthController.revokeAll);
 
 router.get('/stats', admin.stats);
+router.get('/dashboard', ops.dashboard);
+router.get('/search', ops.search);
+router.get('/activity', ops.listActivity);
+
+// Source-led sales analytics. Exact source names are part of contract:
+// fairhaven.uz, Medicalka and Uzum stay distinct; Billz remains a separate total.
+router.get('/sales/summary', sales.summary);
+router.get('/sales/history', sales.history);
+router.get('/sales/export', adminExportLimiter, salesExport.exportSales);
+router.get('/billz/summary', sales.billzSummary);
+router.get('/billz/history', sales.billzHistory);
+router.get('/billz/export', adminExportLimiter, salesExport.exportBillz);
+
+// Broadcasts: draft → mandatory self-test → confirmed send.
+router.get('/broadcasts', ops.listBroadcasts);
+router.post('/broadcasts/preview', ops.previewBroadcast);
+router.post('/broadcasts', ops.createBroadcast);
+router.post('/broadcasts/:id/test', ops.testBroadcast);
+router.post('/broadcasts/:id/send', ops.sendBroadcast);
 
 // Orders
 router.get('/orders', admin.listOrders);
+router.get('/orders/:id', ops.getOrderDetail);
+router.post('/orders/:id/transition', ops.transitionOrder);
+router.post('/orders/:id/notes', ops.addOrderNote);
+router.post('/orders/:id/claim', ops.claimOrder);
 router.patch('/orders/:id/status', admin.updateOrderStatus);
 router.post('/orders/:id/revert', admin.revertOrder);
 
 // Products
 router.get('/products', admin.listProducts);
 router.post('/products', admin.createProduct);
+// Excel export/import must sit above the `:id` patterns so "export"/"import"
+// are not captured as an id.
+router.get('/products/export', excel.exportProducts);
+router.post('/products/import', excel.importProducts);
 router.patch('/products/:id', admin.updateProduct);
 router.delete('/products/:id', admin.deleteProduct);
 router.patch('/products/:id/toggle', admin.toggleProductAvailability);
@@ -34,6 +88,8 @@ router.delete('/admins/:telegramId', admin.demoteAdmin);
 // Customers (end-users)
 router.get('/users', admin.listUsers);
 router.get('/users/:telegramId', admin.getUserDetail);
+router.patch('/users/:telegramId', ops.updateCustomer);
+router.patch('/users/:telegramId/block', ops.blockCustomer);
 
 // Collections (podborka)
 router.get('/collections', admin.listCollections);
@@ -69,6 +125,7 @@ router.put('/channels/settings', channels.updateSettings);
 // creates it, and is not stored on this side at all.
 router.get('/channels/keys', channels.listKeys);
 router.post('/channels/keys', channels.issueKey);
+router.post('/channels/keys/pair', channels.issueKeyPair);
 // Uzum hands us its client_id/client_secret rather than the other way round;
 // this registers the pair their system will present.
 router.post('/channels/keys/import', channels.importKey);

@@ -130,7 +130,18 @@ function serialise(product, mirror) {
     sku: product.sku || '',
     barcode: product.barcode || '',
     imageUrl: product.imageUrl || '',
-    botPrice: Number(product.price) || 0,
+    // Catalogue fields the Товары card and its editor render and mutate. The
+    // channel surfaces only ever read the Billz/channel values below, so these
+    // are passed through verbatim for the unified product card.
+    price: Number(product.price) || 0,
+    oldPrice: Number(product.oldPrice) || 0,
+    category: product.category || '',
+    nameUz: product.nameUz || '',
+    description: product.description || '',
+    descriptionUz: product.descriptionUz || '',
+    descriptionUzLat: product.descriptionUzLat || '',
+    images: Array.isArray(product.images) ? product.images : [],
+    tags: Array.isArray(product.tags) ? product.tags : [],
     isAvailable: product.isAvailable !== false,
     mxikCode: product.mxikCode || '',
     billzProductId: product.billzProductId || '',
@@ -627,6 +638,117 @@ exports.issueKey = async (req, res) => {
     // The secret travels exactly once, in this response. It is not stored here
     // and cannot be read back from anywhere.
     res.json({ success: true, data: result.body });
+  } catch (err) {
+    if (err.notConfigured) {
+      return res.status(503).json({ success: false, error: 'channel_hub_not_configured' });
+    }
+    sendError(res, 502, err, 'channel_hub_unreachable');
+  }
+};
+
+exports.issueKeyPair = async (req, res) => {
+  try {
+    const result = await channelHub.request('POST', '/internal/keys/pair', {
+      body: {
+        label: req.body?.label,
+        revokeOld: req.body?.revokeOld === true,
+      },
+    });
+    if (!result.ok) {
+      return res.status(result.status === 422 ? 400 : 502)
+        .json({ success: false, error: result.body?.error || 'pair_issue_failed' });
+    }
+    console.log(
+      `[channels] ${req.admin?.telegramId || 'admin'} issued a Medicalka key pair`
+    );
+    res.json({ success: true, data: result.body });
+  } catch (err) {
+    if (err.notConfigured) {
+      return res.status(503).json({ success: false, error: 'channel_hub_not_configured' });
+    }
+    sendError(res, 502, err, 'channel_hub_unreachable');
+  }
+};
+
+/**
+ * The Medicalka wizard's endpoint: catalog token and orders secret issued as
+ * one pair, revealed exactly once in this response.
+ *
+ * Old keys are revoked only when the operator explicitly asked, and only after
+ * both new keys exist — a failure halfway through issuance must never leave the
+ * integration with zero working credentials.
+ */
+exports.issueKeyPair = async (req, res) => {
+  const label = String(req.body?.label || '').slice(0, 120) || 'Основное подключение';
+  const revokeOld = req.body?.revokeOld === true;
+
+  try {
+    let previous = [];
+    if (revokeOld) {
+      const listed = await channelHub.request('GET', '/internal/keys');
+      if (listed.ok) {
+        previous = (listed.body.keys || []).filter(
+          (key) => key.channel === 'medicalka' && key.active
+        );
+      }
+    }
+
+    const tokenResult = await channelHub.request('POST', '/internal/keys', {
+      body: { channel: 'medicalka', kind: 'token', label },
+    });
+    if (!tokenResult.ok) {
+      return res.status(502).json({ success: false, error: tokenResult.body?.error || 'issue_failed' });
+    }
+    const secretResult = await channelHub.request('POST', '/internal/keys', {
+      body: { channel: 'medicalka', kind: 'secret', label },
+    });
+    if (!secretResult.ok) {
+      // The catalog token already exists but the pair is incomplete. Withdraw
+      // it so a retry starts clean instead of accumulating orphan tokens.
+      await channelHub.request('POST', `/internal/keys/${tokenResult.body.id}/revoke`).catch(() => {});
+      return res.status(502).json({ success: false, error: secretResult.body?.error || 'issue_failed' });
+    }
+
+    let revoked = 0;
+    for (const key of previous) {
+      const done = await channelHub.request('POST', `/internal/keys/${key.id}/revoke`).catch(() => null);
+      if (done?.ok) revoked += 1;
+    }
+
+    const adminAudit = require('../services/adminAudit');
+    await adminAudit.record({
+      admin: req.admin,
+      action: 'keys.pair',
+      entityType: 'channel-key',
+      entityId: tokenResult.body.id,
+      // Key names avoid the audit redactor's credential pattern — these are
+      // display fingerprints ("mk_ab…12cd"), not usable key material.
+      summary: {
+        channel: 'medicalka',
+        label,
+        fingerprints: { catalog: tokenResult.body.fingerprint, orders: secretResult.body.fingerprint },
+        revokedOld: revoked,
+      },
+    });
+
+    console.log(
+      `[channels] ${req.admin?.telegramId || 'admin'} issued a medicalka pair `
+      + `(${tokenResult.body.fingerprint} / ${secretResult.body.fingerprint})`
+      + (revoked ? `, revoked ${revoked} old` : '')
+    );
+
+    // The secrets travel exactly once, in this response.
+    res.json({
+      success: true,
+      data: {
+        token: tokenResult.body.key,
+        secret: secretResult.body.key,
+        tokenFingerprint: tokenResult.body.fingerprint,
+        secretFingerprint: secretResult.body.fingerprint,
+        revokedOld: revoked,
+        issuedAt: new Date().toISOString(),
+      },
+    });
   } catch (err) {
     if (err.notConfigured) {
       return res.status(503).json({ success: false, error: 'channel_hub_not_configured' });

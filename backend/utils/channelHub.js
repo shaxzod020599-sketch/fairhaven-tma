@@ -52,4 +52,26 @@ async function request(method, path, { body, timeoutMs = DEFAULT_TIMEOUT_MS } = 
   };
 }
 
-module.exports = { isConfigured, request };
+function buildPath(segments, query = {}) {
+  if (!Array.isArray(segments) || !segments.length) throw new Error('channel_hub_path_required');
+  const path = `/${segments.map((segment) => {
+    const value = String(segment ?? '');
+    if (!value) throw new Error('channel_hub_path_segment_required');
+    if (value === '.' || value === '..') throw new Error('channel_hub_path_segment_invalid');
+    return encodeURIComponent(value);
+  }).join('/')}`;
+  const params = new URLSearchParams();
+  for (const [key, raw] of Object.entries(query || {})) {
+    if (raw === undefined || raw === null || raw === '') continue;
+    const value = raw instanceof Date ? raw.toISOString() : String(raw);
+    params.set(key, value);
+  }
+  const encoded = params.toString();
+  return encoded ? `${path}?${encoded}` : path;
+}
+
+function requestInternal(method, segments, { query, ...options } = {}) {
+  return request(method, buildPath(segments, query), options);
+}
+
+module.exports = { buildPath, isConfigured, request, requestInternal };

@@ -1,0 +1,63 @@
+/*
+ * Desktop operator shell. The panel is a computer application on its own host:
+ * a persistent white rail, a command bar, and a wide workspace. Narrow widths
+ * degrade to an icon rail rather than to a phone layout — a 375px screen is not
+ * a supported working surface for this product.
+ */
+.fh-shell { min-height: 100vh; display: grid; grid-template-columns: 244px minmax(0, 1fr); background: var(--fh-canvas); }
+.fh-rail { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; padding: 22px 16px 18px; border-right: 1px solid var(--fh-line-soft); background: white; }
+.fh-brand { display: flex; align-items: center; gap: 12px; min-height: 48px; }
+.fh-brand__seal { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: var(--fh-burgundy); color: white; font-size: 14px; font-weight: 900; letter-spacing: -.06em; }
+.fh-brand b, .fh-brand small { display: block; }
+.fh-brand b { font-size: 17px; letter-spacing: -.03em; }
+.fh-brand small { margin-top: 2px; color: var(--fh-burgundy); font: 800 9px/1 var(--fh-font-mono); letter-spacing: .16em; }
+.fh-nav { display: grid; gap: 4px; margin-top: 32px; }
+.fh-nav__item { min-height: 46px; display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 10px; padding: 0 12px; border-radius: 12px; color: var(--fh-ink-2); text-decoration: none; font-size: 14px; font-weight: 700; transition: background var(--fh-fast), color var(--fh-fast); }
+.fh-nav__item:hover { background: var(--fh-canvas); }
+.fh-nav__item.is-active { background: var(--fh-burgundy-wash); color: var(--fh-burgundy-deep); }
+.fh-nav__item b { min-width: 24px; padding: 3px 6px; border-radius: 10px; background: var(--fh-burgundy); color: white; text-align: center; font: 800 11px/1 var(--fh-font-mono); }
+.fh-rail__identity { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 14px 8px 0; border-top: 1px solid var(--fh-line-soft); }
+.fh-rail__identity b, .fh-rail__identity small { display: block; max-width: 118px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fh-rail__identity b { font-size: 13px; }
+.fh-rail__identity small { margin-top: 3px; color: var(--fh-muted); font: 10px var(--fh-font-mono); }
+.fh-avatar { width: 36px; height: 36px; display: grid; place-items: center; flex: none; border-radius: 50%; background: var(--fh-burgundy-wash); color: var(--fh-burgundy-deep); font-weight: 900; }
+.fh-signout { margin-left: auto; width: 30px; height: 30px; display: grid; place-items: center; flex: none; border: 1px solid transparent; border-radius: 9px; background: none; color: var(--fh-muted); cursor: pointer; transition: color var(--fh-fast), border-color var(--fh-fast); }
+.fh-signout:hover { border-color: var(--fh-line); color: var(--fh-danger); }
+.fh-shell__body { min-width: 0; }
+.fh-commandbar { position: sticky; top: 0; z-index: 30; min-height: 70px; display: flex; align-items: center; gap: 18px; padding: 12px 28px; border-bottom: 1px solid var(--fh-line-soft); background: rgb(255 255 255 / 92%); backdrop-filter: blur(16px); }
+.fh-commandbar__search { width: min(500px, 48vw); height: 42px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; border: 1px solid var(--fh-line); border-radius: var(--fh-radius-pill); padding: 0 14px; background: var(--fh-canvas); color: var(--fh-muted); text-align: left; cursor: pointer; }
+.fh-commandbar__search:hover { border-color: var(--fh-burgundy); color: var(--fh-ink-2); }
+.fh-commandbar__search kbd { padding: 3px 7px; border: 1px solid var(--fh-line); border-radius: 6px; background: white; color: var(--fh-muted); font: 11px var(--fh-font-mono); }
+.fh-commandbar__status { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--fh-muted); font-size: 12px; }
+.fh-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fh-success); box-shadow: 0 0 0 4px var(--fh-success-wash); }
+.fh-workspace { width: min(1480px, 100%); margin: 0 auto; padding: 32px max(24px, 3vw) 80px; }
+
+/* Login screen */
+.fh-login-code { margin: 6px 0; font: 800 44px/1 var(--fh-font-mono); letter-spacing: .18em; color: var(--fh-burgundy); }
+.fh-login-hint { max-width: 420px; color: var(--fh-muted); font-size: 13px; }
+.fh-login-timer { color: var(--fh-muted); font: 12px var(--fh-font-mono); }
+
+@media (max-width: 1180px) {
+  .fh-shell { grid-template-columns: 82px minmax(0, 1fr); }
+  .fh-rail { align-items: center; padding-inline: 12px; }
+  .fh-brand > span:last-child, .fh-nav__item span, .fh-nav__item b, .fh-rail__identity > span:not(.fh-avatar), .fh-signout { display: none; }
+  .fh-nav { min-height: 0; overflow-y: auto; scrollbar-width: none; }
+  .fh-nav::-webkit-scrollbar { display: none; }
+  .fh-nav__item { width: 50px; grid-template-columns: 1fr; justify-items: center; }
+  .fh-commandbar { padding-inline: 18px; }
+  .fh-workspace { padding: 26px 18px 64px; }
+}
+
+@media (max-width: 620px) {
+  .fh-shell { grid-template-columns: 64px minmax(0, 1fr); }
+  .fh-rail { padding: 14px 7px 12px; }
+  .fh-brand__seal { width: 40px; height: 40px; }
+  .fh-nav { margin-top: 20px; }
+  .fh-nav__item { width: 46px; min-height: 44px; padding: 0 10px; }
+  .fh-rail__identity { padding-inline: 0; }
+  .fh-commandbar { min-height: 62px; gap: 12px; padding: 10px 14px; }
+  .fh-commandbar__search { width: 42px; flex: none; grid-template-columns: 1fr; place-items: center; padding: 0; }
+  .fh-commandbar__search > span, .fh-commandbar__search kbd { display: none; }
+  .fh-commandbar__status { gap: 0; font-size: 0; }
+  .fh-workspace { padding: 24px 14px 56px; }
+}

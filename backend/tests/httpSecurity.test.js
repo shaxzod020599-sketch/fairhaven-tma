@@ -77,3 +77,42 @@ test('inline scripts cannot execute', () => {
   assert.equal(scriptSrc.includes("'unsafe-inline'"), false);
   assert.equal(scriptSrc.includes("'unsafe-eval'"), false);
 });
+
+test('admin host gets isolated CSP and no-store admin API responses', () => {
+  const { securityHeaders } = require('../utils/http');
+  const res = responseRecorder();
+
+  securityHeaders({
+    hostname: 'admin.fairhaven.uz',
+    path: '/api/admin/orders',
+  }, res, () => {});
+
+  assert.match(res.headers['Content-Security-Policy'], /frame-ancestors 'none'/);
+  assert.match(res.headers['Content-Security-Policy'], /script-src 'self'(?:;|$)/);
+  assert.equal(res.headers['Content-Security-Policy'].includes('telegram.org'), false);
+  assert.equal(res.headers['Cache-Control'], 'no-store');
+});
+
+test('Telegram Mini App host retains Telegram framing and SDK allowlist', () => {
+  const { securityHeaders } = require('../utils/http');
+  const res = responseRecorder();
+
+  securityHeaders({ hostname: 'mini.fairhaven.uz', path: '/' }, res, () => {});
+
+  assert.match(res.headers['Content-Security-Policy'], /https:\/\/telegram\.org/);
+  assert.match(res.headers['Content-Security-Policy'], /frame-ancestors[^;]*https:\/\/\*\.telegram\.org/);
+});
+
+test('production responses enable HSTS for every FairHaven host', () => {
+  const previous = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  const { securityHeaders } = require('../utils/http');
+  const res = responseRecorder();
+
+  try {
+    securityHeaders({ hostname: 'admin.fairhaven.uz', path: '/' }, res, () => {});
+    assert.equal(res.headers['Strict-Transport-Security'], 'max-age=31536000; includeSubDomains');
+  } finally {
+    process.env.NODE_ENV = previous;
+  }
+});

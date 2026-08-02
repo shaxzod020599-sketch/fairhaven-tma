@@ -282,6 +282,10 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
     // release so a hold can never outlive the order that took it.
     await releaseHold(order);
     order.status = 'sold';
+    if (!order.soldAt) {
+      order.soldAt = new Date();
+      order.soldAtEstimated = false;
+    }
     order.billz.lastError = '';
     await order.save();
 
