@@ -1,7 +1,7 @@
 # FairHaven Sales Channels and Billz Analytics Design
 
-Date: 2026-08-02  
-Status: approved design, awaiting written-spec review  
+Date: 2026-08-02
+Status: approved design, awaiting written-spec review
 Target: desktop admin at `admin.fairhaven.uz`
 
 ## 1. Outcome
