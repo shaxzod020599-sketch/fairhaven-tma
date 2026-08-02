@@ -123,6 +123,25 @@ cd ~/fairhaven-tma/channel && pm2 start src/server.js --name channel-hub && pm2 
 curl -s http://127.0.0.1:3100/health/detail
 ```
 
+### Kanal sotuvlari tarixini tayyorlash
+
+Yangi analitika `soldAt` vaqtini ishlatadi. Eski sotilgan Medicalka/Uzum
+buyurtmalarini faqat hisobotdan keyin to'ldiring:
+
+```bash
+cd ~/fairhaven-tma/channel && node scripts/backfill-channel-sold-at.js
+```
+
+Natijadagi `eligible` sonini kanal buyurtmalari bilan solishtiring. Mos bo'lsa:
+
+```bash
+cd ~/fairhaven-tma/channel && node scripts/backfill-channel-sold-at.js --apply
+```
+
+`applied` soni `eligible` bilan teng bo'lishi shart. Shu tekshiruv tugamaguncha
+admin paneldagi kanal sotuvlari analitikasini ishlab chiqarish hisobotiga
+tayyor deb hisoblamang.
+
 ---
 
 ### Eski indeksni tozalash
