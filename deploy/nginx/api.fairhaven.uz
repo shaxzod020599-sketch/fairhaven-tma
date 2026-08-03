@@ -1,0 +1,33 @@
+# FairHaven channel API — api.fairhaven.uz → channel-hub on 127.0.0.1:3100
+#
+# Reached by Medicalka and Uzum only. The admin console (admin.fairhaven.uz)
+# and the mini app (mini.fairhaven.uz) do not use this host.
+#
+# certbot adds the 443 server block and the redirect on first issue; keep this
+# file as the plain-80 definition and let it manage the rest.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name api.fairhaven.uz;
+
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+
+    server_tokens off;
+    access_log /var/log/nginx/api.fairhaven.uz.access.log fh_api_nokeys;
+    error_log  /var/log/nginx/api.fairhaven.uz.error.log;
+
+    # Orders are small JSON documents. Nothing on this host uploads files, so a
+    # generous body limit would only widen what an unauthenticated caller can
+    # make the process read.
+    client_max_body_size 256k;
+
+    # Allow-list, not deny-list. The hub also serves /internal (the bot
+    # backend's private channel) and /health/detail (mirror counts, whether
+    # Billz writes are enabled). Neither belongs on the public internet, and a
+    # deny-list would miss whatever gets mounted next.
+    location /medicalka/ { include snippets/fairhaven-api-proxy.conf; }
+    location /uzum/     { include snippets/fairhaven-api-proxy.conf; }
+
+    location / { return 404; }
+}
