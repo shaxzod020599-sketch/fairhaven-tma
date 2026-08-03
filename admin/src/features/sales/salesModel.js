@@ -1,7 +1,7 @@
 export const SALES_SOURCES = [
-  { value: 'fairhaven.uz', label: 'fairhaven.uz', note: 'Sayt va bot buyurtmalari' },
-  { value: 'medicalka', label: 'Medicalka', note: 'Medicalka marketplace' },
-  { value: 'uzum', label: 'Uzum', note: 'Uzum Tezkor' },
+  { value: 'fairhaven.uz', label: 'fairhaven.uz', note: 'Наш сайт и Telegram-бот' },
+  { value: 'medicalka', label: 'Medicalka', note: 'Маркетплейс Medicalka' },
+  { value: 'uzum', label: 'Uzum', note: 'Маркетплейс Uzum Tezkor' },
 ];
 
 export const SALES_PERIODS = [

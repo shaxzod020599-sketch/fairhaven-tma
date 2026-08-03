@@ -5,25 +5,45 @@
   text-rendering: optimizeLegibility;
 
   --fh-white: #ffffff;
-  --fh-canvas: #f7f7f7;
+  --fh-canvas: #f7f6f7;
   --fh-surface: #ffffff;
   --fh-ink: #111111;
   --fh-ink-2: #303136;
   --fh-muted: #686a70;
   --fh-line: #dadce0;
   --fh-line-soft: #ececef;
+
+  /* Burgundy is the only accent. Three tints let a surface read as "Billz" or
+     "important" without ever going dark — the panel has no black blocks. */
   --fh-burgundy: #973961;
   --fh-burgundy-deep: #7d2f50;
   --fh-burgundy-wash: #f7eaf0;
+  --fh-burgundy-tint: #fdf7fa;
+  --fh-burgundy-line: #e8cfdb;
+
   --fh-danger: #b4232c;
   --fh-danger-wash: #fff0f1;
-  --fh-warning: #936214;
-  --fh-warning-wash: #fff7e8;
-  --fh-success: #286f63;
-  --fh-success-wash: #eaf7f4;
+  --fh-warning: #8a5a0f;
+  --fh-warning-wash: #fff6e6;
+  /* "Positive" is burgundy, not green: the brand forbids a green theme, and a
+     shop operator reads a filled burgundy chip as "on" just as well. */
+  --fh-success: #7d2f50;
+  --fh-success-wash: #f7eaf0;
 
   --fh-font-body: Arial, "Helvetica Neue", Helvetica, sans-serif;
   --fh-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  /* Type scale. Money and counts use --fh-num-*, which are deliberately modest:
+     an operator needs to READ the number, and a figure that outgrows its cell
+     gets truncated, which is worse than a smaller one. */
+  --fh-text-xs: 11px;
+  --fh-text-sm: 13px;
+  --fh-text-base: 15px;
+  --fh-text-lg: 18px;
+  --fh-text-xl: 22px;
+  --fh-num-sm: 17px;
+  --fh-num-md: 21px;
+  --fh-num-lg: 27px;
 
   --fh-radius-sm: 8px;
   --fh-radius-md: 16px;
@@ -31,11 +51,23 @@
   --fh-radius-pill: 999px;
 
   --fh-shadow-sm: 0 1px 2px rgb(17 17 17 / 5%), 0 8px 24px rgb(17 17 17 / 4%);
+  --fh-shadow-raised: 0 1px 2px rgb(17 17 17 / 6%), 0 4px 14px rgb(56 27 40 / 7%);
   --fh-shadow-float: 0 20px 60px rgb(56 27 40 / 14%);
 
   --fh-fast: 160ms cubic-bezier(.22, 1, .36, 1);
   --fh-mid: 260ms cubic-bezier(.22, 1, .36, 1);
+}
 
+/* Every figure the operator compares down a column — money, stock, counts —
+   uses tabular figures so the digits line up and nothing shifts on update. */
+.fh-mono,
+.fh-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.fh-mono {
+  font-family: var(--fh-font-mono);
 }
 
 @media (prefers-reduced-motion: reduce) {

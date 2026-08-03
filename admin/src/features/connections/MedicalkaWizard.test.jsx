@@ -15,8 +15,10 @@ describe('MedicalkaWizard', () => {
     expect(issuePair).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Создать два ключа' }));
 
-    expect(await screen.findByDisplayValue('fhm_t_demo')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('fhm_s_demo')).toBeInTheDocument();
+    // Rendered as wrapping <code>, not a single-line input: a 52-character key
+    // must be readable in full so the operator can verify what they copied.
+    expect(await screen.findByText('fhm_t_demo')).toBeInTheDocument();
+    expect(screen.getByText('fhm_s_demo')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Закрыть мастер' })).toBeDisabled();
 
     await userEvent.click(screen.getByRole('checkbox', { name: /скопировал/ }));

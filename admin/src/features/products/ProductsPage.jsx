@@ -14,29 +14,106 @@ import { ExcelDialog } from './ExcelDialog';
 
 const LIMIT = 24;
 
+/**
+ * Одна строка матрицы каналов.
+ *
+ * Раньше это был ряд безымянных полей с галочкой «Канал» и отдельной кнопкой
+ * «Сохранить» у каждого сервиса. Оператор не понимал, что означает каждое поле,
+ * и не видел, сохранились ли изменения. Теперь: понятный переключатель, поля с
+ * объяснением на человеческом языке и одна кнопка, которая появляется, только
+ * когда действительно есть что сохранять.
+ */
 function ChannelRow({ product, definition, onSave }) {
   const value = product.channels?.[definition.key] || {};
   const [draft, setDraft] = useState(value);
+  const [saving, setSaving] = useState(false);
   useEffect(() => setDraft(value), [value]);
+
+  const changed = ['enabled', 'price', 'forceStatus', 'minStock']
+    .some((key) => (draft[key] ?? '') !== (value[key] ?? ''));
+  const enabled = Boolean(draft.enabled);
+  const priceMissing = enabled && !Number(draft.price);
+
+  const save = async () => {
+    setSaving(true);
+    try { await onSave(definition.key, draft); } finally { setSaving(false); }
+  };
+
   return (
-    <div className="fh-channel-row">
-      <div className="fh-channel-row__name"><span>{definition.label}</span><Badge tone={value.live ? 'success' : 'neutral'}>{value.live ? 'В продаже' : 'Скрыт'}</Badge></div>
-      <label><span>Канал</span><input type="checkbox" checked={Boolean(draft.enabled)} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} /></label>
-      <label><span>Цена</span><input className="fh-input fh-mono" type="number" value={draft.price || 0} onChange={(event) => setDraft({ ...draft, price: Number(event.target.value) })} /></label>
-      <label><span>Наличие</span><select className="fh-select" value={draft.forceStatus || 'auto'} onChange={(event) => setDraft({ ...draft, forceStatus: event.target.value })}><option value="auto">По Billz</option><option value="in">Есть</option><option value="out">Нет</option></select></label>
-      <label><span>Защита остатка</span><input className="fh-input fh-mono" type="number" min="0" value={draft.minStock || 0} onChange={(event) => setDraft({ ...draft, minStock: Number(event.target.value) })} /></label>
-      <Button size="sm" onClick={() => onSave(definition.key, draft)}>Сохранить</Button>
+    <div className={`fh-channel-row ${enabled ? 'is-on' : ''}`}>
+      <div className="fh-channel-row__name">
+        <label className="fh-switch">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })}
+            aria-label={`Продавать «${product.name}» на ${definition.label}`}
+          />
+          <i aria-hidden="true" />
+          <span>{definition.label}</span>
+        </label>
+        <Badge tone={value.live ? 'success' : 'neutral'}>{value.live ? 'Сейчас в продаже' : 'Сейчас скрыт'}</Badge>
+      </div>
+
+      <label className="fh-channel-field">
+        <span>Цена на этой площадке</span>
+        <input
+          className={`fh-input fh-mono ${priceMissing ? 'is-invalid' : ''}`}
+          type="number"
+          min="0"
+          disabled={!enabled}
+          value={draft.price || 0}
+          onChange={(event) => setDraft({ ...draft, price: Number(event.target.value) })}
+        />
+        <small>{priceMissing ? 'Без цены товар не отправится' : 'сум'}</small>
+      </label>
+
+      <label className="fh-channel-field">
+        <span>Показывать как</span>
+        <select
+          className="fh-select"
+          disabled={!enabled}
+          value={draft.forceStatus || 'auto'}
+          onChange={(event) => setDraft({ ...draft, forceStatus: event.target.value })}
+        >
+          <option value="auto">Как на складе</option>
+          <option value="in">Всегда в наличии</option>
+          <option value="out">Всегда нет в наличии</option>
+        </select>
+        <small>обычно «как на складе»</small>
+      </label>
+
+      <label className="fh-channel-field">
+        <span>Оставлять себе</span>
+        <input
+          className="fh-input fh-mono"
+          type="number"
+          min="0"
+          disabled={!enabled}
+          value={draft.minStock || 0}
+          onChange={(event) => setDraft({ ...draft, minStock: Number(event.target.value) })}
+        />
+        <small>последние шт. не отдавать</small>
+      </label>
+
+      <div className="fh-channel-row__action">
+        {changed && (
+          <Button size="sm" variant="primary" disabled={saving} onClick={save}>
+            {saving ? 'Сохраняем…' : 'Сохранить'}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
 
 function BillzBlock({ product, onLink }) {
   if (!product.billz) {
-    return <div className="fh-billz fh-billz--empty"><div><p className="fh-eyebrow">BILLZ / НЕ СВЯЗАН</p><h3>Нет данных об остатке</h3><p>Свяжите карточку с номенклатурой Billz. Цена и остаток появятся здесь.</p></div><Button variant="primary" onClick={onLink}>Связать с Billz</Button></div>;
+    return <div className="fh-billz fh-billz--empty"><div><p className="fh-eyebrow">СКЛАД BILLZ</p><h3>Остаток неизвестен</h3><p>Этот товар ещё не связан с карточкой на складе Billz, поэтому мы не знаем, сколько его есть. Свяжите — и остаток появится здесь сам.</p></div><Button variant="primary" onClick={onLink}>Связать с Billz</Button></div>;
   }
   return (
     <div className="fh-billz">
-      <div className="fh-billz__head"><p className="fh-eyebrow">BILLZ / ИСТОЧНИК ОСТАТКА</p><span>{formatDateTime(product.billz.syncedAt)}</span></div>
+      <div className="fh-billz__head"><p className="fh-eyebrow">СКЛАД BILLZ · ОСТАТОК</p><span>{formatDateTime(product.billz.syncedAt)}</span></div>
       <div className="fh-billz__numbers"><div><span>Цена в Billz</span><strong>{formatMoney(product.billz.retailPrice)}</strong></div><div><span>Остаток</span><strong>{formatNumber(product.billz.stock)} шт.</strong></div><div><span>Доступно</span><strong>{formatNumber(product.billz.available)} шт.</strong></div></div>
       <div className="fh-billz__foot"><span>Резерв {product.billz.reservedQty || 0}</span><span>Ожидает {product.billz.pendingQty || 0}</span>{product.billz.deletedInBillz && <Badge tone="danger">Удалён в Billz</Badge>}</div>
     </div>
@@ -52,7 +129,7 @@ function ProductCard({ product, onEdit, onDuplicate, onLink, onChannel }) {
         <div className="fh-product-card__price"><span>Цена FairHaven</span><strong>{formatMoney(product.price)}</strong><div><Button size="sm" onClick={onEdit}>Изменить</Button><Button size="sm" variant="ghost" onClick={onDuplicate}>Дублировать</Button></div></div>
       </div>
       <BillzBlock product={product} onLink={onLink} />
-      <section className="fh-channel-matrix"><div className="fh-channel-matrix__head"><div><h3>Где продаётся</h3><p>Цена, наличие и защищённый остаток каждого сервиса.</p></div><div className="fh-mxik-chip"><span>ИКПУ</span><b className="fh-mono">{product.mxikCode || 'По умолчанию'}</b></div></div>{CHANNELS.map((definition) => <ChannelRow key={definition.key} product={product} definition={definition} onSave={onChannel} />)}</section>
+      <section className="fh-channel-matrix"><div className="fh-channel-matrix__head"><div><h3>Где продаётся</h3><p>Включите площадку, поставьте цену — и товар начнёт продаваться там.</p></div><div className="fh-mxik-chip" title="ИКПУ — код товара для налоговой"><span>Налоговый код</span>{product.mxikCode ? <b className="fh-mono">{product.mxikCode}</b> : <b>Общий</b>}</div></div>{CHANNELS.map((definition) => <ChannelRow key={definition.key} product={product} definition={definition} onSave={onChannel} />)}</section>
     </Card>
   );
 }

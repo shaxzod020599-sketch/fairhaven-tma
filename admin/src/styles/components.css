@@ -58,5 +58,5 @@
 
 .fh-pagination { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 18px 0; }
 .fh-toast-stack { position: fixed; right: 20px; bottom: 20px; z-index: 120; display: grid; gap: 8px; }
-.fh-toast { min-width: 260px; padding: 14px 18px; border-radius: 12px; background: var(--fh-ink); color: white; box-shadow: var(--fh-shadow-float); }
+.fh-toast { min-width: 260px; padding: 14px 18px; border-radius: 12px; background: var(--fh-burgundy-deep); color: white; box-shadow: var(--fh-shadow-float); }
 .fh-toast--danger { background: var(--fh-danger); }

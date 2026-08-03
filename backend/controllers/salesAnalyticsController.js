@@ -172,10 +172,10 @@ async function loadBillzState({ force = false } = {}) {
       checks: null,
     },
     warning: salesState === 'report_access_required'
-      ? 'Billz savdo hisobotiga o‘qish ruxsati kerak.'
+      ? 'Billz пока не разрешил читать отчёт о продажах. Попросите менеджера Billz открыть доступ к отчётам — после этого выручка появится здесь.'
       : salesState === 'normalization_required'
-        ? 'Billz hisobot formati tekshirilmaguncha daromad ko‘rsatilmaydi.'
-        : 'Billz savdo hisoboti hozir mavjud emas.',
+        ? 'Мы проверяем формат отчёта Billz. Пока проверка не закончена, выручку не показываем, чтобы не ввести вас в заблуждение.'
+        : 'Отчёт о продажах Billz сейчас недоступен. Остатки товаров при этом продолжают обновляться.',
     generatedAt: inventoryPayload?.generatedAt || new Date(),
   };
 }

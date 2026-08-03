@@ -29,7 +29,7 @@
 .fh-commandbar__search:hover { border-color: var(--fh-burgundy); color: var(--fh-ink-2); }
 .fh-commandbar__search kbd { padding: 3px 7px; border: 1px solid var(--fh-line); border-radius: 6px; background: white; color: var(--fh-muted); font: 11px var(--fh-font-mono); }
 .fh-commandbar__status { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--fh-muted); font-size: 12px; }
-.fh-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fh-success); box-shadow: 0 0 0 4px var(--fh-success-wash); }
+.fh-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fh-burgundy); box-shadow: 0 0 0 4px var(--fh-burgundy-wash); }
 .fh-workspace { width: min(1480px, 100%); margin: 0 auto; padding: 32px max(24px, 3vw) 80px; }
 
 /* Login screen */

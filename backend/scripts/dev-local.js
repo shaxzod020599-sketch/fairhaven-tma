@@ -25,7 +25,11 @@ process.env.FRONTEND_URL = 'http://localhost:5173';
 process.env.TELEGRAM_USE_WEBHOOK = '';
 process.env.STOCK_RECONCILE_ENABLED = '';
 process.env.BILLZ_BRIDGE_ENABLED = '';
-process.env.CHANNEL_HUB_URL = '';
+// A local stand-in for channel-hub so the Billz and Sales screens render with
+// realistic numbers instead of only their empty state (see dev-hub-fixture.js).
+process.env.CHANNEL_INTERNAL_TOKEN = 'dev-internal-token';
+process.env.CHANNEL_HUB_URL = 'http://127.0.0.1:3199';
+require('./dev-hub-fixture');
 
 const mongoose = require('mongoose');
 
