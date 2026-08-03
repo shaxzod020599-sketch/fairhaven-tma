@@ -1,0 +1,24 @@
+# Bootstrap-only vhost for the first Let's Encrypt certificate issuance.
+# Replace this file with the permanent api.fairhaven.uz vhost after issuance.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name api.fairhaven.uz;
+
+    server_tokens off;
+    # Medicalka query credentials can appear in nginx error request lines.
+    # The query-free access log and redacted app logs are authoritative.
+    access_log /var/log/nginx/api.fairhaven.uz.access.log fh_api_nokeys;
+    error_log /dev/null;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        try_files $uri =404;
+    }
+
+    location / {
+        default_type application/json;
+        return 404 '{"error":"not_found"}\n';
+    }
+}

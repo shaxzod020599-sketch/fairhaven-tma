@@ -1,33 +1,83 @@
-# FairHaven channel API — api.fairhaven.uz → channel-hub on 127.0.0.1:3100
-#
-# Reached by Medicalka and Uzum only. The admin console (admin.fairhaven.uz)
-# and the mini app (mini.fairhaven.uz) do not use this host.
-#
-# certbot adds the 443 server block and the redirect on first issue; keep this
-# file as the plain-80 definition and let it manage the rest.
+# Permanent FairHaven channel API vhost. Use api.fairhaven.uz.bootstrap only
+# while obtaining the first certificate, then install this file unchanged.
 
 server {
     listen 80;
     listen [::]:80;
     server_name api.fairhaven.uz;
 
-    location /.well-known/acme-challenge/ { root /var/www/certbot; }
-
     server_tokens off;
+    # Medicalka query credentials can appear in nginx error request lines.
+    # The query-free access log and redacted app logs are authoritative.
     access_log /var/log/nginx/api.fairhaven.uz.access.log fh_api_nokeys;
-    error_log  /var/log/nginx/api.fairhaven.uz.error.log;
+    error_log /dev/null;
 
-    # Orders are small JSON documents. Nothing on this host uploads files, so a
-    # generous body limit would only widen what an unauthenticated caller can
-    # make the process read.
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        try_files $uri =404;
+    }
+
+    location / {
+        return 308 https://api.fairhaven.uz$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name api.fairhaven.uz;
+
+    ssl_certificate     /etc/letsencrypt/live/api.fairhaven.uz/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.fairhaven.uz/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Certbot 2.9's managed options file above restricts protocols to TLS 1.2
+    # and TLS 1.3. Do not duplicate ssl_protocols here: nginx rejects duplicate
+    # declarations in the same server context.
+    server_tokens off;
     client_max_body_size 256k;
 
-    # Allow-list, not deny-list. The hub also serves /internal (the bot
-    # backend's private channel) and /health/detail (mirror counts, whether
-    # Billz writes are enabled). Neither belongs on the public internet, and a
-    # deny-list would miss whatever gets mounted next.
-    location /medicalka/ { include snippets/fairhaven-api-proxy.conf; }
-    location /uzum/     { include snippets/fairhaven-api-proxy.conf; }
+    # Medicalka query credentials can appear in nginx error request lines.
+    # The query-free access log and redacted app logs are authoritative.
+    access_log /var/log/nginx/api.fairhaven.uz.access.log fh_api_nokeys;
+    error_log /dev/null;
 
-    location / { return 404; }
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" always;
+    add_header Permissions-Policy "camera=(), geolocation=(), microphone=(), payment=(), usb=()" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Cache-Control "no-store" always;
+
+    error_page 429 = @fairhaven_rate_limited;
+
+    # Exact-or-slash-prefix allow-list. In particular, /internal, /health and
+    # /health/detail fall through to the JSON 404 and can never reach the hub.
+    location = /medicalka/v1 {
+        include snippets/fairhaven-api-proxy.conf;
+    }
+
+    location ^~ /medicalka/v1/ {
+        include snippets/fairhaven-api-proxy.conf;
+    }
+
+    location = /uzum {
+        include snippets/fairhaven-api-proxy.conf;
+    }
+
+    location ^~ /uzum/ {
+        include snippets/fairhaven-api-proxy.conf;
+    }
+
+    location @fairhaven_rate_limited {
+        default_type application/json;
+        return 429 '{"error":"rate_limited"}\n';
+    }
+
+    location / {
+        default_type application/json;
+        return 404 '{"error":"not_found"}\n';
+    }
 }

@@ -10,20 +10,13 @@
 
 | | |
 |---|---|
-| Базовый адрес | `https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1` |
+| Базовый адрес | `https://api.fairhaven.uz/medicalka/v1` |
 | Токен — чтение | параметр `?token=` |
 | Секрет — заказы | параметр `?secret=` |
 
 Два ключа на две задачи. Токен читает каталог и остатки (GET), секрет
-отправляет и обновляет заказы (POST). Ключи приходят отдельным сообщением.
-
-**Адрес временный — только на время теста.** Он ведёт на тот же сервер и
-отдаёт те же данные, но постоянным будет `https://api.fairhaven.uz/medicalka/v1`.
-Держите базовый адрес в настройке, а не в коде: на боевые ключи вы перейдёте
-вместе со сменой адреса, одним изменением конфигурации.
-
-Если временный адрес перестанет отвечать — напишите нам, мы пришлём
-действующий. На боевом адресе такого не будет.
+отправляет и обновляет заказы (POST). Тестовые ключи приходят отдельным
+сообщением. Держите адрес и ключи в настройках, а не в коде.
 
 Если ключ ушёл не в тот эндпоинт, ответ скажет об этом прямо:
 
@@ -35,48 +28,55 @@
 
 ## Что сейчас доступно для теста
 
-**В каталоге один товар.** Мы открыли одну позицию, чтобы вы могли пройти
-весь цикл на реальных данных, не затрагивая остальной ассортимент. Остальные
-позиции подключим после того, как тест пройдёт.
+**TEST MODE.** Сейчас доступен один товар и действуют тестовые ключи. Заказы
+принимаются и сохраняются, но `BILLZ_WRITE_ENABLED` выключен: записи в Billz
+не выполняются и реальные остатки не меняются. После успешной проверки мы
+отдельно включим проведение заказов, откроем каталог и выпустим боевые ключи.
 
-**Заказы принимаются и сохраняются, но пока не проводятся в учётной системе.**
-На время теста запись в товароучёт выключена — так ваши тестовые заказы не
-двигают реальные остатки на складе. Практически это значит:
+Практически это значит:
 
 | Вы отправили | Ответ |
 |---|---|
 | `POST /orders` | `200`, `{"wc_order_id": 1, "status": "received"}` |
 | статус `cancelled` / `cancelled_by_buyer` | `200`, `{"status": "cancelled"}` |
-| статус `paid` / `payment_confirmed` | `422` — заказ ещё не зарезервирован |
+| статус `paid` / `payment_confirmed` | `422` — заказ не зарезервирован |
 
-`422` на `paid` в тестовом режиме — ожидаемое поведение, а не ошибка
-интеграции. Мы включим проведение заказов вместе с остальным каталогом.
+`422` на `paid` в текущем тестовом режиме — ожидаемое поведение, а не ошибка
+интеграции. Оно изменится только после отдельного включения записи в Billz.
 
 ---
 
-## Шесть запросов
+## Семь запросов
 
 ```bash
+BASE="https://api.fairhaven.uz/medicalka/v1"
+
 # 1. Проверка ключа
-curl "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/pharmacies?token=ТОКЕН"
+curl "$BASE/pharmacies?token=ТОКЕН"
 # {"items":[{"id":1,"name":"FAIRHAVEN HEALTH",...}],"total":1}
 
 # 2. Каталог (skip / limit, limit до 1000)
-curl "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/products?limit=50&token=ТОКЕН"
+curl --get "$BASE/products" \
+  --data-urlencode "limit=50" \
+  --data-urlencode "token=ТОКЕН"
 
 # 3. Поиск — по названию, бренду, артикулу и штрихкоду
-curl -G --data-urlencode "q=BabyDance" \
-     --data-urlencode "token=ТОКЕН" \
-     "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/products/search"
+curl --get "$BASE/products/search" \
+  --data-urlencode "q=BabyDance" \
+  --data-urlencode "token=ТОКЕН"
 
 # 4. Остатки — только то, что есть в наличии
-curl "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/inventory?limit=100&token=ТОКЕН"
+curl --get "$BASE/inventory" \
+  --data-urlencode "limit=100" \
+  --data-urlencode "token=ТОКЕН"
 
 # 5. Остаток одного товара (нет в наличии → 404)
-curl "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/stock?product_id=1&token=ТОКЕН"
+curl --get "$BASE/stock" \
+  --data-urlencode "product_id=1" \
+  --data-urlencode "token=ТОКЕН"
 
 # 6. Заказ — с секретом, не с токеном
-curl -X POST "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/orders?secret=СЕКРЕТ" \
+curl --request POST "$BASE/orders?secret=СЕКРЕТ" \
   -H "Content-Type: application/json" \
   -d '{
     "order_id": "ваш-уникальный-id",
@@ -89,7 +89,8 @@ curl -X POST "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/
 # {"wc_order_id":1,"status":"received"}
 
 # 7. Смена статуса — по ВАШЕМУ order_id
-curl -X POST "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/orders/ваш-уникальный-id/status?secret=СЕКРЕТ" \
+curl --request POST \
+  "$BASE/orders/ваш-уникальный-id/status?secret=СЕКРЕТ" \
   -H "Content-Type: application/json" \
   -d '{"status":"cancelled_by_buyer"}'
 ```
@@ -152,7 +153,7 @@ curl -X POST "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/
 
 1. Вы подключаетесь тестовыми ключами и проходите цикл на одном товаре.
 2. Сообщаете, всё ли сходится с вашей стороны.
-3. Мы открываем полный каталог и включаем проведение заказов.
-4. Выпускаем боевые ключи; тестовые отзываем.
+3. Мы отдельно включаем проведение заказов в Billz и открываем полный каталог.
+4. Выпускаем боевые ключи; тестовые отзываем после перехода.
 
 Вопросы по интеграции — через вашего менеджера FairHaven Health.

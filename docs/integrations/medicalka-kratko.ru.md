@@ -28,12 +28,18 @@ GET  /products/{id}                    карточка
 GET  /inventory?skip=&limit=           остатки (только то, что в наличии)
 GET  /stock?product_id=                остаток одного товара; нет в наличии → 404
 POST /orders                           новый заказ
-POST /orders/{wc_order_id}/status      смена статуса
+POST /orders/{order_id}/status         смена статуса (`wc_order_id` тоже принят)
 ```
 
 ## Типы данных — важно
 
 `id`, `total` — **числа**. `price`, `quantity` — **строки** («301000.00»).
+
+## Текущий TEST MODE
+
+`BILLZ_WRITE_ENABLED=false`. `POST /orders` принимает и сохраняет заказ, но
+резерв в Billz не записывается. Статусы `paid` и `payment_confirmed` сейчас
+возвращают ожидаемый `422` до отдельного включения боевого режима.
 
 ## Заказ
 
@@ -56,6 +62,17 @@ POST /orders?secret=…
 
 Обращайтесь **по своему `order_id`** — тому, что вы сгенерировали при создании.
 Наш `wc_order_id` тоже принимается.
+
+```json
+POST /orders/{order_id}/status?secret=…   { "status": "paid" }
+→ HTTP 422 — заказ не зарезервирован
+```
+
+Для `payment_confirmed` ответ в текущем TEST MODE такой же.
+
+### После отдельной активации боевого режима
+
+Только после включения `BILLZ_WRITE_ENABLED=true` и перехода на боевые ключи:
 
 ```json
 POST /orders/{order_id}/status?secret=…   { "status": "paid" }
