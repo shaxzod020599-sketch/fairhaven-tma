@@ -113,7 +113,25 @@ async function listForChannel(channel, { skip = 0, limit = 50, search = '' } = {
   if (search) {
     const safe = String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const rx = new RegExp(safe, 'i');
-    filter.$or = [{ name: rx }, { brand: rx }, { sku: rx }, { barcode: rx }];
+
+    // A listing publishes `card.barcode || mirror.barcode`, and in the live
+    // shop no card carries one — all 25 are blank while every mirror row has
+    // its barcode from Billz. Searching the card alone therefore found nothing
+    // for any barcode this API had just published, and the integration guide
+    // states barcode is searchable. The mirror's name is searched for the same
+    // reason: cards are named in Russian for the shop, so a partner searching
+    // the manufacturer's own English wording matched nothing.
+    const mirrorHits = await BillzProduct()
+      .find({ $or: [{ barcode: rx }, { sku: rx }, { name: rx }] })
+      .select('billzProductId')
+      .lean();
+
+    filter.$or = [
+      { name: rx }, { brand: rx }, { sku: rx }, { barcode: rx },
+      ...(mirrorHits.length
+        ? [{ billzProductId: { $in: mirrorHits.map((m) => m.billzProductId) } }]
+        : []),
+    ];
   }
 
   const cards = await ProductCard()
