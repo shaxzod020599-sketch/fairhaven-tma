@@ -10,12 +10,20 @@
 
 | | |
 |---|---|
-| Базовый адрес | `https://api.fairhaven.uz/medicalka/v1` |
+| Базовый адрес | `https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1` |
 | Токен — чтение | параметр `?token=` |
 | Секрет — заказы | параметр `?secret=` |
 
 Два ключа на две задачи. Токен читает каталог и остатки (GET), секрет
 отправляет и обновляет заказы (POST). Ключи приходят отдельным сообщением.
+
+**Адрес временный — только на время теста.** Он ведёт на тот же сервер и
+отдаёт те же данные, но постоянным будет `https://api.fairhaven.uz/medicalka/v1`.
+Держите базовый адрес в настройке, а не в коде: на боевые ключи вы перейдёте
+вместе со сменой адреса, одним изменением конфигурации.
+
+Если временный адрес перестанет отвечать — напишите нам, мы пришлём
+действующий. На боевом адресе такого не будет.
 
 Если ключ ушёл не в тот эндпоинт, ответ скажет об этом прямо:
 
@@ -50,25 +58,25 @@
 
 ```bash
 # 1. Проверка ключа
-curl "https://api.fairhaven.uz/medicalka/v1/pharmacies?token=ТОКЕН"
+curl "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/pharmacies?token=ТОКЕН"
 # {"items":[{"id":1,"name":"FAIRHAVEN HEALTH",...}],"total":1}
 
 # 2. Каталог (skip / limit, limit до 1000)
-curl "https://api.fairhaven.uz/medicalka/v1/products?limit=50&token=ТОКЕН"
+curl "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/products?limit=50&token=ТОКЕН"
 
 # 3. Поиск — по названию, бренду, артикулу и штрихкоду
 curl -G --data-urlencode "q=BabyDance" \
      --data-urlencode "token=ТОКЕН" \
-     "https://api.fairhaven.uz/medicalka/v1/products/search"
+     "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/products/search"
 
 # 4. Остатки — только то, что есть в наличии
-curl "https://api.fairhaven.uz/medicalka/v1/inventory?limit=100&token=ТОКЕН"
+curl "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/inventory?limit=100&token=ТОКЕН"
 
 # 5. Остаток одного товара (нет в наличии → 404)
-curl "https://api.fairhaven.uz/medicalka/v1/stock?product_id=1&token=ТОКЕН"
+curl "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/stock?product_id=1&token=ТОКЕН"
 
 # 6. Заказ — с секретом, не с токеном
-curl -X POST "https://api.fairhaven.uz/medicalka/v1/orders?secret=СЕКРЕТ" \
+curl -X POST "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/orders?secret=СЕКРЕТ" \
   -H "Content-Type: application/json" \
   -d '{
     "order_id": "ваш-уникальный-id",
@@ -81,7 +89,7 @@ curl -X POST "https://api.fairhaven.uz/medicalka/v1/orders?secret=СЕКРЕТ" 
 # {"wc_order_id":1,"status":"received"}
 
 # 7. Смена статуса — по ВАШЕМУ order_id
-curl -X POST "https://api.fairhaven.uz/medicalka/v1/orders/ваш-уникальный-id/status?secret=СЕКРЕТ" \
+curl -X POST "https://chip-spoken-down-ministers.trycloudflare.com/medicalka/v1/orders/ваш-уникальный-id/status?secret=СЕКРЕТ" \
   -H "Content-Type: application/json" \
   -d '{"status":"cancelled_by_buyer"}'
 ```
