@@ -52,6 +52,23 @@ test.beforeEach(async () => {
   await ChannelOrder().deleteMany({});
 });
 
+/**
+ * Dates an order that never sold, inside the window under test.
+ *
+ * Only `sold` rows are placed by `soldAt`; everything else is placed by
+ * `updatedAt`, which mongoose stamps with the real clock on create. Leaving it
+ * there made these assertions depend on the day they were run — they passed on
+ * 2026-08-02, when "now" still fell inside [FROM, TO), and began failing on
+ * 2026-08-03 when it no longer did. Written through the driver because
+ * mongoose treats `updatedAt` as its own and overwrites it.
+ */
+async function placeInWindow(externalIds, when = new Date('2026-08-01T09:00:00.000Z')) {
+  await ChannelOrder().collection.updateMany(
+    { externalId: { $in: externalIds } },
+    { $set: { updatedAt: when } }
+  );
+}
+
 test('summary counts sold revenue only inside soldAt range and isolates source', async () => {
   await ChannelOrder().create([
     order({ externalId: 'MED-SOLD', totalAmount: 100_000 }),
@@ -62,6 +79,7 @@ test('summary counts sold revenue only inside soldAt range and isolates source',
     order({ externalId: 'MED-CANCEL', status: 'cancelled', soldAt: null }),
     order({ externalId: 'MED-FAIL', status: 'failed', soldAt: null }),
   ]);
+  await placeInWindow(['MED-CANCEL', 'MED-FAIL', 'MED-RES']);
 
   const summary = await summarizeChannelSales({
     channel: 'medicalka', from: FROM, to: TO, Model: ChannelOrder(),
@@ -139,6 +157,7 @@ test('status filter returns only requested lifecycle state', async () => {
     order({ externalId: 'SOLD' }),
     order({ externalId: 'FAILED', status: 'failed', soldAt: null }),
   ]);
+  await placeInWindow(['FAILED']);
   const result = await listChannelSales({
     channel: 'medicalka', from: FROM, to: TO, status: 'failed',
     page: 1, limit: 25, Model: ChannelOrder(),
