@@ -7,6 +7,7 @@ const notify = require('../../notify/telegram');
 const BillzProduct = require('../../models/BillzProduct');
 const ChannelOrder = require('../../models/ChannelOrder');
 const ProductCard = require('../../models/ProductCard');
+const { readSettings } = require('../../models/SettingView');
 const { requireKey, CHANNEL } = require('./auth');
 const { channelLimiter, authFailureLimiter } = require('../../middleware/rateLimit');
 const S = require('./serializers');
@@ -50,10 +51,16 @@ function notFound(res, detail) {
   return res.status(404).json({ detail });
 }
 
-/** Attaches the integer id and channel price each serialiser needs. */
-async function decorate(entry) {
+/* Tax-code fallbacks an operator sets in the admin panel. Same keys as the
+   Uzum feed reads — one product carries one pair of codes whoever asks. */
+const SETTING_KEYS = ['channels.defaultMxikCode', 'channels.defaultPackageCode'];
+
+const taxDefaults = () => readSettings(SETTING_KEYS).then(S.defaultsFrom);
+
+/** Attaches the integer id, channel price and tax codes each serialiser needs. */
+async function decorate(entry, defaults) {
   const medicalkaId = await catalog.ensureMedicalkaId(entry.mirror);
-  return { ...entry, medicalkaId, price: catalog.priceFor(entry.card, CHANNEL) };
+  return { ...entry, medicalkaId, price: catalog.priceFor(entry.card, CHANNEL), defaults };
 }
 
 const read = [requireKey('token'), channelLimiter];
@@ -72,9 +79,12 @@ router.get('/pharmacies', read, (_req, res) => {
 router.get('/products', read, async (req, res, next) => {
   try {
     const { skip, limit } = pagination(req);
-    const page = await catalog.listForChannel(CHANNEL, { skip, limit });
+    const [page, defaults] = await Promise.all([
+      catalog.listForChannel(CHANNEL, { skip, limit }),
+      taxDefaults(),
+    ]);
     const items = await Promise.all(page.items.map(async (entry) => {
-      return S.product(await decorate(entry));
+      return S.product(await decorate(entry, defaults));
     }));
     res.json(S.list(items, page.total));
   } catch (err) { next(err); }
@@ -85,9 +95,12 @@ router.get('/products/search', read, async (req, res, next) => {
     const query = String(req.query.q || req.query.query || '').trim();
     if (!query) return unprocessable(res, 'query parameter "q" is required');
     const { skip, limit } = pagination(req);
-    const page = await catalog.listForChannel(CHANNEL, { skip, limit, search: query });
+    const [page, defaults] = await Promise.all([
+      catalog.listForChannel(CHANNEL, { skip, limit, search: query }),
+      taxDefaults(),
+    ]);
     const items = await Promise.all(page.items.map(async (entry) => {
-      return S.product(await decorate(entry));
+      return S.product(await decorate(entry, defaults));
     }));
     res.json(S.list(items, page.total));
   } catch (err) { next(err); }
@@ -105,7 +118,12 @@ router.get('/products/:id', read, async (req, res, next) => {
     const entry = await catalog.findForChannel(CHANNEL, mirror.billzProductId);
     if (!entry) return notFound(res, `Product ${id} not found`);
 
-    res.json(S.product({ ...entry, medicalkaId: id, price: catalog.priceFor(entry.card, CHANNEL) }));
+    res.json(S.product({
+      ...entry,
+      medicalkaId: id,
+      price: catalog.priceFor(entry.card, CHANNEL),
+      defaults: await taxDefaults(),
+    }));
   } catch (err) { next(err); }
 });
 

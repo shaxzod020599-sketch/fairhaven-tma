@@ -178,7 +178,9 @@ function defaultsFrom(settings) {
     mxikCode: String(
       settings?.['channels.defaultMxikCode'] || config.defaultMxikCode || ''
     ).trim(),
-    packageCode: String(settings?.['channels.defaultPackageCode'] || '').trim(),
+    packageCode: String(
+      settings?.['channels.defaultPackageCode'] || config.defaultPackageCode || ''
+    ).trim(),
   };
 }
 

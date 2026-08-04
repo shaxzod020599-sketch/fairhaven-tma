@@ -106,7 +106,7 @@ curl "https://api.fairhaven.uz/uzum/v1/nomenclature/<STORE_ID>/composition" \
         { "url": "https://fairhaven.uz/uploads/1754…-a1b2.jpg", "hash": "9c1185a5c5e9fc54612808977ee8f548b2258d31" }
       ],
       "inStock": 12,
-      "serviceCodesUz": { "mxikCodeUz": "02106999028000000" }
+      "serviceCodesUz": { "mxikCodeUz": "02106999028000000", "packageCodeUz": "1490779" }
     }
   ]
 }
@@ -118,6 +118,10 @@ curl "https://api.fairhaven.uz/uzum/v1/nomenclature/<STORE_ID>/composition" \
 - `oldPrice` присылается только когда он действительно выше `price`.
 - `hash` — SHA-1 самих байтов картинки. Если байты не менялись, хеш тот же:
   можно не перекачивать.
+- `serviceCodesUz` несёт оба фискальных кода: `mxikCodeUz` — ИКПУ (что за
+  товар), `packageCodeUz` — код упаковки (в чём продаём). Оба строки из цифр,
+  задаются на нашей стороне: у товара может быть свой код, иначе действует общий
+  код магазина.
 - Товар без пригодной картинки в выдачу **не попадает**. Пустой массив картинок
   показал бы покупателю пустую плитку, поэтому мы предпочитаем не показывать
   товар вовсе.

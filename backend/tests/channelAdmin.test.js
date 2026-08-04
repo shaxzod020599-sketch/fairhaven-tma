@@ -3,6 +3,7 @@ const test = require('node:test');
 
 const { availability, serialise, POST_JOIN_FILTERS, CHANNELS } =
   require('../controllers/channelController');
+const { sanitizeProductBody } = require('../controllers/adminController');
 
 /**
  * The panel and the channel feed must agree on what is for sale.
@@ -113,10 +114,50 @@ test('out_of_stock filter counts reservations, not just Billz stock', () => {
   assert.equal(POST_JOIN_FILTERS.out_of_stock(reservedOut), true);
 });
 
+/**
+ * The panel's product editor writes through PATCH /products/:id. Both fiscal
+ * codes have to survive that path — a code the operator typed and the panel
+ * then dropped is worse than one they never typed, because the panel shows it
+ * as saved.
+ */
+test('the product editor persists both fiscal codes', () => {
+  const out = sanitizeProductBody({ name: 'OvaBoost', mxikCode: '02106999028000000', packageCode: '1490779' });
+
+  assert.equal(out.mxikCode, '02106999028000000');
+  assert.equal(out.packageCode, '1490779');
+});
+
+test('clearing a fiscal code is saved as empty, not ignored', () => {
+  const out = sanitizeProductBody({ mxikCode: '  ', packageCode: '' });
+
+  assert.equal(out.mxikCode, '');
+  assert.equal(out.packageCode, '');
+});
+
+test('a fiscal code that is not digits is refused, not stored', () => {
+  assert.throws(() => sanitizeProductBody({ mxikCode: '0210699902800000x' }), /ИКПУ/);
+  assert.throws(() => sanitizeProductBody({ packageCode: '14 90779' }), /упаковк/);
+});
+
+test('untouched fiscal codes stay absent from the update', () => {
+  const out = sanitizeProductBody({ name: 'OvaBoost' });
+
+  assert.equal('mxikCode' in out, false);
+  assert.equal('packageCode' in out, false);
+});
+
 test('no_mxik filter matches an empty code', () => {
   assert.equal(POST_JOIN_FILTERS.no_mxik(serialise(product(), mirror())), true);
   assert.equal(
     POST_JOIN_FILTERS.no_mxik(serialise(product({}, { mxikCode: '02106999028000000' }), mirror())),
+    false
+  );
+});
+
+test('no_package filter matches an empty code', () => {
+  assert.equal(POST_JOIN_FILTERS.no_package(serialise(product(), mirror())), true);
+  assert.equal(
+    POST_JOIN_FILTERS.no_package(serialise(product({}, { packageCode: '1490779' }), mirror())),
     false
   );
 });

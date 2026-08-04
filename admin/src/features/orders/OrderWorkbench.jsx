@@ -205,7 +205,10 @@ export function OrderWorkbench({ orderId, api, me, initial, onClose, onChanged, 
         <footer className="fh-workbench__footer" data-print-hide>
           <Button onClick={() => window.print()}>Печать чека</Button>
           <div className="fh-order-actions">
-            {detail.canRevert && !actions.length && (
+            {/* Any order past «Новый» can go back to the queue — the server
+                allows it, and an operator who accepted the wrong order needs
+                it long after the five-second undo toast is gone. */}
+            {detail.canRevert && (
               <Button size="sm" variant="ghost" onClick={() => onAction({ revert: true })}>Вернуть в очередь</Button>
             )}
             {actions.map((action) => (

@@ -169,9 +169,19 @@
 .fh-connection-card--billz p, .fh-connection-card--billz .fh-connection-mark { color: var(--fh-muted); }
 .fh-sync-ledger { width: 100%; display: grid; gap: 10px; margin: 22px 0; }
 .fh-sync-ledger > div { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 9px; border-bottom: 1px solid #373138; font-size: 12px; }.fh-sync-ledger span { color: #aaa2a7; }
-.fh-settings-strip { display: flex; align-items: center; justify-content: space-between; gap: 30px; padding: 28px; }
-.fh-settings-strip h2 { margin: 4px 0 6px; font-size: 25px; }.fh-settings-strip p { margin: 0; color: var(--fh-muted); }
-.fh-settings-strip > div:last-child { display: flex; gap: 8px; width: min(420px, 100%); }
+/* Two fiscal codes, side by side: an operator reads them together and a
+   single-line strip truncated the second one on a 13" screen. */
+.fh-tax-card { display: grid; gap: 22px; padding: 28px; }
+.fh-tax-card__lead h2 { margin: 4px 0 8px; font-size: 25px; }
+.fh-tax-card__lead p { margin: 0; max-width: 66ch; color: var(--fh-muted); line-height: 1.55; }
+.fh-tax-card__fields { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.fh-tax-card__fields label { display: grid; gap: 8px; align-content: start; }
+.fh-tax-card__fields label span { display: grid; gap: 3px; }
+.fh-tax-card__fields label b { font-size: 14px; }
+.fh-tax-card__fields label small { color: var(--fh-muted); font-size: 12px; line-height: 1.45; }
+.fh-tax-card footer { display: flex; justify-content: flex-end; padding-top: 18px; border-top: 1px solid var(--fh-line-soft); }
+.fh-tax-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+
 .fh-wizard { display: grid; gap: 20px; }
 .fh-wizard__step { display: grid; grid-template-columns: 34px 1fr; gap: 13px; align-items: start; }.fh-wizard__step > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--fh-burgundy-wash); color: var(--fh-burgundy); font-weight: 900; }.fh-wizard__step h3 { margin: 3px 0 5px; }.fh-wizard__step p { margin: 0; color: var(--fh-muted); line-height: 1.5; }
 .fh-check { display: flex; align-items: flex-start; gap: 10px; }.fh-check--ack { padding: 14px; border-radius: 12px; background: var(--fh-warning-wash); }
@@ -209,7 +219,6 @@
   .fh-metric-ledger { grid-template-columns: repeat(2, 1fr); }.fh-metric-ledger__item:nth-child(2) { border-right: 0; }.fh-metric-ledger__item:nth-child(-n+2) { border-bottom: 1px solid var(--fh-line); }
   .fh-dashboard-grid, .fh-connection-grid, .fh-settings-groups { grid-template-columns: 1fr; }
   .fh-product-card__identity { grid-template-columns: 72px 1fr; }.fh-product-card__image { width: 72px; height: 72px; }.fh-product-card__price { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; text-align: left; }.fh-product-card__price > span { display: none; }
-  .fh-settings-strip { align-items: stretch; flex-direction: column; }.fh-settings-strip > div:last-child { width: 100%; }
 }
 
 @media (max-width: 620px) {
@@ -221,7 +230,7 @@
   .fh-workbench__lead { flex-direction: column; }.fh-workbench__total { text-align: left; }
   .fh-product-card__identity { padding: 18px; }.fh-billz, .fh-channel-matrix { padding-inline: 18px; }.fh-billz--empty { grid-template-columns: 1fr; }.fh-billz__numbers { gap: 13px; grid-template-columns: 1fr; }.fh-billz__numbers > div, .fh-billz__numbers > div + div { padding: 0 0 10px; border-right: 0; border-bottom: 1px solid var(--fh-burgundy-line); }.fh-channel-matrix__head { flex-direction: column; }.fh-channel-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .fh-form-grid, .fh-key-grid, .fh-person-grid, .fh-promo-grid, .fh-collection-grid, .fh-gallery-grid { grid-template-columns: 1fr; }
-  .fh-settings-strip > div:last-child, .fh-search-row { flex-direction: column; }
+  .fh-search-row { flex-direction: column; }
   .fh-excel > section { grid-template-columns: 1fr; }.fh-excel-report > div { grid-template-columns: 1fr 1fr; }
   .fh-dialog-layer { align-items: end; padding: 0; }.fh-dialog { max-height: 92vh; border-radius: 22px 22px 0 0; }.fh-dialog__head, .fh-dialog__body { padding: 19px; }
 }

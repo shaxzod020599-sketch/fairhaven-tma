@@ -43,7 +43,48 @@ test('a product carries an integer id and string price', () => {
   assert.equal(typeof payload.price, 'string');
   assert.equal(payload.price, '600000.00');
   assert.deepEqual(Object.keys(payload).sort(),
-    ['barcode', 'id', 'manufacturer', 'name', 'price', 'updated_at']);
+    ['barcode', 'id', 'ikpu', 'manufacturer', 'name', 'package_code', 'price', 'updated_at']);
+});
+
+/**
+ * The fiscal codes end up on a customer's receipt, so "the field was there but
+ * empty" and "the wrong product's code" are both filing problems. A product's
+ * own code always wins; the operator's default only fills a blank.
+ */
+test('a product carries its own fiscal codes when it has them', () => {
+  const payload = S.product({
+    card: { name: 'OvaBoost', mxikCode: '02106999028000001', packageCode: '1490780' },
+    mirror: {},
+    medicalkaId: 1,
+    price: 1,
+    defaults: { mxikCode: '02106999028000000', packageCode: '1490779' },
+  });
+
+  assert.equal(payload.ikpu, '02106999028000001');
+  assert.equal(payload.package_code, '1490780');
+});
+
+test('a product without its own codes falls back to the shop defaults', () => {
+  const payload = S.product({
+    card: { name: 'OvaBoost', mxikCode: '', packageCode: '' },
+    mirror: {},
+    medicalkaId: 1,
+    price: 1,
+    defaults: { mxikCode: '02106999028000000', packageCode: '1490779' },
+  });
+
+  assert.equal(payload.ikpu, '02106999028000000');
+  assert.equal(payload.package_code, '1490779');
+});
+
+test('shop defaults come from the panel, falling back to the build constants', () => {
+  assert.deepEqual(S.defaultsFrom({
+    'channels.defaultMxikCode': '02106999028000002',
+    'channels.defaultPackageCode': '1490781',
+  }), { mxikCode: '02106999028000002', packageCode: '1490781' });
+
+  assert.deepEqual(S.defaultsFrom({}),
+    { mxikCode: '02106999028000000', packageCode: '1490779' });
 });
 
 test('an inventory row reports availability as always true', () => {

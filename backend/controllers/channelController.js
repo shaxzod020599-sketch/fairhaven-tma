@@ -18,6 +18,7 @@ const CHANNELS = ['medicalka', 'uzum'];
 const FORCE_STATUSES = ['auto', 'in', 'out'];
 const MAX_LIMIT = 200;
 const DEFAULT_MXIK_KEY = 'channels.defaultMxikCode';
+const DEFAULT_PACKAGE_KEY = 'channels.defaultPackageCode';
 
 function parsePaging(query) {
   const page = Math.max(1, Number(query.page) || 1);
@@ -144,6 +145,7 @@ function serialise(product, mirror) {
     tags: Array.isArray(product.tags) ? product.tags : [],
     isAvailable: product.isAvailable !== false,
     mxikCode: product.mxikCode || '',
+    packageCode: product.packageCode || '',
     billzProductId: product.billzProductId || '',
     billz: mirror ? {
       name: mirror.name,
@@ -167,6 +169,7 @@ const POST_JOIN_FILTERS = {
   unlinked: (row) => !row.billzProductId || !row.billz,
   no_price: (row) => CHANNELS.some((c) => row.channels[c].priceMissing),
   no_mxik: (row) => !row.mxikCode,
+  no_package: (row) => !row.packageCode,
   // Hidden from the shop for want of a photo — the one blocker an operator can
   // clear immediately, so it gets its own filter.
   no_image: (row) => !row.shop.image,
@@ -481,6 +484,16 @@ exports.updateProductMeta = async (req, res) => {
         return res.status(400).json({ success: false, error: 'invalid_mxik' });
       }
       $set.mxikCode = code;
+    }
+    // The packaging code the tax catalogue issues for this product's MXIK.
+    // It is per-product by nature: a package code minted under one MXIK is not
+    // valid under another, which is why it sits next to the code it belongs to.
+    if (req.body?.packageCode !== undefined) {
+      const code = String(req.body.packageCode).trim();
+      if (code && !/^\d{3,20}$/.test(code)) {
+        return res.status(400).json({ success: false, error: 'invalid_package_code' });
+      }
+      $set.packageCode = code;
     }
     if (req.body?.barcode !== undefined) $set.barcode = String(req.body.barcode).trim();
     if (!Object.keys($set).length) {
@@ -806,11 +819,13 @@ exports.revokeKey = async (req, res) => {
 
 exports.getSettings = async (_req, res) => {
   try {
-    const doc = await Setting.findOne({ key: DEFAULT_MXIK_KEY }).lean();
+    const docs = await Setting.find({ key: { $in: [DEFAULT_MXIK_KEY, DEFAULT_PACKAGE_KEY] } }).lean();
+    const byKey = Object.fromEntries(docs.map((doc) => [doc.key, doc.value]));
     res.json({
       success: true,
       data: {
-        defaultMxikCode: doc?.value || '',
+        defaultMxikCode: byKey[DEFAULT_MXIK_KEY] || '',
+        defaultPackageCode: byKey[DEFAULT_PACKAGE_KEY] || '',
         channels: CHANNELS,
       },
     });
@@ -819,18 +834,52 @@ exports.getSettings = async (_req, res) => {
   }
 };
 
+/**
+ * The two tax codes a marketplace receipt needs when a product carries none of
+ * its own. Each is written only when the caller actually sent it, so saving one
+ * field never blanks the other.
+ */
 exports.updateSettings = async (req, res) => {
   try {
-    const code = String(req.body?.defaultMxikCode ?? '').trim();
-    if (code && !/^\d{6,20}$/.test(code)) {
-      return res.status(400).json({ success: false, error: 'invalid_mxik' });
+    const writes = [];
+
+    if (req.body?.defaultMxikCode !== undefined) {
+      const code = String(req.body.defaultMxikCode).trim();
+      if (code && !/^\d{6,20}$/.test(code)) {
+        return res.status(400).json({ success: false, error: 'invalid_mxik' });
+      }
+      writes.push([DEFAULT_MXIK_KEY, code, 'ИКПУ по умолчанию']);
     }
-    await Setting.updateOne(
-      { key: DEFAULT_MXIK_KEY },
-      { $set: { key: DEFAULT_MXIK_KEY, value: code } },
-      { upsert: true }
-    );
-    res.json({ success: true, data: { defaultMxikCode: code } });
+
+    if (req.body?.defaultPackageCode !== undefined) {
+      const code = String(req.body.defaultPackageCode).trim();
+      if (code && !/^\d{3,20}$/.test(code)) {
+        return res.status(400).json({ success: false, error: 'invalid_package_code' });
+      }
+      writes.push([DEFAULT_PACKAGE_KEY, code, 'Код упаковки по умолчанию']);
+    }
+
+    if (!writes.length) {
+      return res.status(400).json({ success: false, error: 'nothing_to_update' });
+    }
+
+    for (const [key, value, label] of writes) {
+      await Setting.updateOne(
+        { key },
+        { $set: { key, value, label } },
+        { upsert: true }
+      );
+    }
+
+    const docs = await Setting.find({ key: { $in: [DEFAULT_MXIK_KEY, DEFAULT_PACKAGE_KEY] } }).lean();
+    const byKey = Object.fromEntries(docs.map((doc) => [doc.key, doc.value]));
+    res.json({
+      success: true,
+      data: {
+        defaultMxikCode: byKey[DEFAULT_MXIK_KEY] || '',
+        defaultPackageCode: byKey[DEFAULT_PACKAGE_KEY] || '',
+      },
+    });
   } catch (err) {
     sendError(res, 400, err);
   }

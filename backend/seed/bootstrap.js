@@ -42,6 +42,19 @@ const DEFAULT_SETTINGS = [
     value: 'Официальный дилер Fairhaven Health в Узбекистане',
     label: 'Брендовый слоган на главной',
   },
+  // Fiscal codes the marketplace feeds send with every product. Seeded so the
+  // panel shows the same value the feeds actually use — a blank field next to
+  // a working default reads as "nothing is set".
+  {
+    key: 'channels.defaultMxikCode',
+    value: '02106999028000000',
+    label: 'ИКПУ по умолчанию',
+  },
+  {
+    key: 'channels.defaultPackageCode',
+    value: '1490779',
+    label: 'Код упаковки по умолчанию',
+  },
 ];
 
 async function seedDefaultSettings() {

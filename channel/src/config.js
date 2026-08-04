@@ -100,9 +100,12 @@ const config = {
     imageBaseUrl: process.env.PUBLIC_IMAGE_BASE_URL || '',
   },
 
-  // Uzum requires a tax classification code per product; Billz carries none, so
-  // they live with us. A product without its own falls back to this.
+  // Marketplaces need two tax codes per product for the fiscal receipt: the
+  // MXIK (what the product is) and the package code (the unit it is sold in).
+  // Billz carries neither, so they live with us. A product without its own
+  // falls back to these, and an operator overrides both from the panel.
   defaultMxikCode: process.env.DEFAULT_MXIK_CODE || '02106999028000000',
+  defaultPackageCode: process.env.DEFAULT_PACKAGE_CODE || '1490779',
 
   // Where the bot backend writes uploaded product images. Read-only here, and
   // only to hash them: Uzum wants a hash per image, and a hash that does not

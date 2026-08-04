@@ -8,6 +8,8 @@
  * their side, so the conversion lives here and nowhere else.
  */
 
+const config = require('../../config');
+
 /** Money and quantities as fixed 2-decimal strings, per their examples. */
 function decimalString(value) {
   const n = Number(value);
@@ -29,12 +31,41 @@ function pharmacy(shop) {
   };
 }
 
-function product({ card, mirror, medicalkaId, price }) {
+/**
+ * The two tax codes a fiscal receipt needs, resolved per product.
+ *
+ * `ikpu` (ИКПУ/MXIK) says what the product is; `package_code` says which unit
+ * it is sold in. Billz stores neither, so both live on our product card, and a
+ * product without its own falls back to the operator's default from the panel.
+ * Empty strings rather than omitted keys — their client reads the field either
+ * way, and a missing key is harder to notice than a blank one.
+ */
+function taxCodes(card, defaults = {}) {
+  return {
+    ikpu: String(card.mxikCode || defaults.mxikCode || '').trim(),
+    package_code: String(card.packageCode || defaults.packageCode || '').trim(),
+  };
+}
+
+/** Panel-set defaults, falling back to the build-time constants. */
+function defaultsFrom(settings) {
+  return {
+    mxikCode: String(
+      settings?.['channels.defaultMxikCode'] || config.defaultMxikCode || ''
+    ).trim(),
+    packageCode: String(
+      settings?.['channels.defaultPackageCode'] || config.defaultPackageCode || ''
+    ).trim(),
+  };
+}
+
+function product({ card, mirror, medicalkaId, price, defaults }) {
   return {
     id: medicalkaId,
     name: card.name || mirror.name || '',
     manufacturer: card.brand || mirror.brandName || '',
     barcode: card.barcode || mirror.barcode || '',
+    ...taxCodes(card, defaults),
     price: decimalString(price),
     updated_at: timestamp(card.updatedAt || mirror.syncedAt),
   };
@@ -60,4 +91,6 @@ function list(items, total) {
   return { items, total: Number(total) || 0 };
 }
 
-module.exports = { decimalString, timestamp, pharmacy, product, inventoryRow, list };
+module.exports = {
+  decimalString, timestamp, pharmacy, product, inventoryRow, list, defaultsFrom,
+};

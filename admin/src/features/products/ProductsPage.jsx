@@ -129,7 +129,7 @@ function ProductCard({ product, onEdit, onDuplicate, onLink, onChannel }) {
         <div className="fh-product-card__price"><span>Цена FairHaven</span><strong>{formatMoney(product.price)}</strong><div><Button size="sm" onClick={onEdit}>Изменить</Button><Button size="sm" variant="ghost" onClick={onDuplicate}>Дублировать</Button></div></div>
       </div>
       <BillzBlock product={product} onLink={onLink} />
-      <section className="fh-channel-matrix"><div className="fh-channel-matrix__head"><div><h3>Где продаётся</h3><p>Включите площадку, поставьте цену — и товар начнёт продаваться там.</p></div><div className="fh-mxik-chip" title="ИКПУ — код товара для налоговой"><span>Налоговый код</span>{product.mxikCode ? <b className="fh-mono">{product.mxikCode}</b> : <b>Общий</b>}</div></div>{CHANNELS.map((definition) => <ChannelRow key={definition.key} product={product} definition={definition} onSave={onChannel} />)}</section>
+      <section className="fh-channel-matrix"><div className="fh-channel-matrix__head"><div><h3>Где продаётся</h3><p>Включите площадку, поставьте цену — и товар начнёт продаваться там.</p></div><div className="fh-tax-chips"><div className="fh-mxik-chip" title="ИКПУ — код товара для налоговой"><span>ИКПУ</span>{product.mxikCode ? <b className="fh-mono">{product.mxikCode}</b> : <b>Общий</b>}</div><div className="fh-mxik-chip" title="Код упаковки — единица, в которой товар продаётся"><span>Упаковка</span>{product.packageCode ? <b className="fh-mono">{product.packageCode}</b> : <b>Общий</b>}</div></div></div>{CHANNELS.map((definition) => <ChannelRow key={definition.key} product={product} definition={definition} onSave={onChannel} />)}</section>
     </Card>
   );
 }
@@ -187,7 +187,8 @@ function ProductEditor({ draft: initial, api, onClose, onSaved }) {
         <Field label="SKU"><input className="fh-input fh-mono" value={draft.sku || ''} onChange={(e) => set('sku', e.target.value)} /></Field>
         <Field label="Цена FairHaven" error={errors.price}><input className="fh-input fh-mono" type="number" value={draft.price || 0} onChange={(e) => set('price', Number(e.target.value))} /></Field>
         <Field label="Старая цена"><input className="fh-input fh-mono" type="number" value={draft.oldPrice || 0} onChange={(e) => set('oldPrice', Number(e.target.value))} /></Field>
-        <Field label="ИКПУ" hint="Оставьте пустым — применится общий код." error={errors.mxikCode}><input className="fh-input fh-mono" value={draft.mxikCode || ''} onChange={(e) => set('mxikCode', e.target.value)} /></Field>
+        <Field label="ИКПУ (код товара)" hint="Оставьте пустым — применится общий код." error={errors.mxikCode}><input className="fh-input fh-mono" value={draft.mxikCode || ''} onChange={(e) => set('mxikCode', e.target.value)} /></Field>
+        <Field label="Код упаковки" hint="Единица продажи для чека. Пусто — применится общий код." error={errors.packageCode}><input className="fh-input fh-mono" value={draft.packageCode || ''} onChange={(e) => set('packageCode', e.target.value)} /></Field>
         <Field label="Главное изображение"><input className="fh-input" value={draft.imageUrl || ''} onChange={(e) => set('imageUrl', e.target.value)} /></Field>
       </div>
       <div className="fh-form-stack"><Field label="Описание на русском"><textarea className="fh-textarea" value={draft.description || ''} onChange={(e) => set('description', e.target.value)} /></Field><Field label="Описание на узбекском"><textarea className="fh-textarea" value={draft.descriptionUz || ''} onChange={(e) => set('descriptionUz', e.target.value)} /></Field><Field label="O‘zbekcha tavsif"><textarea className="fh-textarea" value={draft.descriptionUzLat || ''} onChange={(e) => set('descriptionUzLat', e.target.value)} /></Field></div>
@@ -226,7 +227,7 @@ export function ProductsPage({ api = productsApi }) {
   const saveChannel = async (product, channel, body) => { try { const response = await api.updateChannel(product._id, channel, body); replace(response.data); toast?.success?.(`${channel === 'medicalka' ? 'Medicalka' : 'Uzum'} обновлён`); } catch (err) { toast?.error?.(err.message); } };
   const saved = (product) => { setEditor(null); setRows((current) => current.some((row) => row._id === product._id) ? current.map((row) => row._id === product._id ? { ...row, ...product } : row) : [product, ...current]); toast?.success?.('Товар сохранён'); };
 
-  const chips = [['', 'Все', summary.total], ['unlinked', 'Без Billz', summary.unlinked], ['out_of_stock', 'Нет остатка', summary.out_of_stock], ['no_price', 'Нет цены', summary.no_price], ['no_mxik', 'Без ИКПУ', summary.no_mxik]];
+  const chips = [['', 'Все', summary.total], ['unlinked', 'Без Billz', summary.unlinked], ['out_of_stock', 'Нет остатка', summary.out_of_stock], ['no_price', 'Нет цены', summary.no_price], ['no_mxik', 'Без ИКПУ', summary.no_mxik], ['no_package', 'Без упаковки', summary.no_package]];
   return (
     <div className="fh-page fh-products">
       <header className="fh-page-head"><div><p className="fh-eyebrow">КАТАЛОГ + КАНАЛЫ</p><h1>Товары</h1><p>Billz, FairHaven, Medicalka и Uzum — в одной карточке.</p></div><div className="fh-head-actions"><Button onClick={() => setEditor(emptyProduct())}>Добавить товар</Button><Button variant="primary" onClick={() => setExcel(true)}>Excel</Button></div></header>

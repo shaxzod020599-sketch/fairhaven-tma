@@ -53,6 +53,7 @@ export function ConnectionsPage({ api = connectionsApi }) {
   const [sync, setSync] = useState(null);
   const [keys, setKeys] = useState([]);
   const [defaultMxikCode, setDefaultMxikCode] = useState('');
+  const [defaultPackageCode, setDefaultPackageCode] = useState('');
   const [errors, setErrors] = useState({});
   const [medicalka, setMedicalka] = useState(false);
   const [uzum, setUzum] = useState(false);
@@ -68,7 +69,10 @@ export function ConnectionsPage({ api = connectionsApi }) {
       setSync(syncResult.value.data);
       setErrors((e) => ({ ...e, sync: '' }));
     } else setErrors((e) => ({ ...e, sync: syncResult.reason.message }));
-    if (settingsResult.status === 'fulfilled') setDefaultMxikCode(settingsResult.value.data.defaultMxikCode || '');
+    if (settingsResult.status === 'fulfilled') {
+      setDefaultMxikCode(settingsResult.value.data.defaultMxikCode || '');
+      setDefaultPackageCode(settingsResult.value.data.defaultPackageCode || '');
+    }
     if (keysResult.status === 'fulfilled') {
       setKeys(keysResult.value.data || []);
       setErrors((e) => ({ ...e, keys: '' }));
@@ -76,9 +80,11 @@ export function ConnectionsPage({ api = connectionsApi }) {
   }, [api]);
   useEffect(() => { load(); }, [load]);
 
-  const saveMxik = async () => {
-    try { await api.saveSettings({ defaultMxikCode }); toast?.success?.('Общий код сохранён'); }
-    catch (err) { toast?.error?.(err.message); }
+  const saveTaxCodes = async () => {
+    try {
+      await api.saveSettings({ defaultMxikCode, defaultPackageCode });
+      toast?.success?.('Общие коды сохранены');
+    } catch (err) { toast?.error?.(err.message); }
   };
   const runSync = async () => {
     try {
@@ -209,22 +215,48 @@ export function ConnectionsPage({ api = connectionsApi }) {
         </Card>
       )}
 
-      <Card className="fh-settings-strip">
-        <div>
-          <p className="fh-eyebrow">НАЛОГОВЫЙ КОД ТОВАРА</p>
-          <h2>Общий код для товаров, у которых нет своего</h2>
-          <p>ИКПУ — код товара для налоговой. Если у товара указан свой код, используется он; если нет — вот этот.</p>
+      <Card className="fh-tax-card">
+        <div className="fh-tax-card__lead">
+          <p className="fh-eyebrow">НАЛОГОВЫЕ КОДЫ ТОВАРА</p>
+          <h2>Общие коды для товаров, у которых нет своих</h2>
+          <p>
+            Эти два кода уходят вместе с товаром в Medicalka и Uzum — они нужны
+            для чека покупателя. Если у товара заполнен свой код, берётся он;
+            если поле пустое — вот этот общий. Поменять код у одного товара
+            можно на странице «Товары».
+          </p>
         </div>
-        <div>
-          <input
-            className="fh-input fh-mono"
-            value={defaultMxikCode}
-            onChange={(e) => setDefaultMxikCode(e.target.value)}
-            placeholder="17 цифр"
-            aria-label="Общий код ИКПУ"
-          />
-          <Button onClick={saveMxik}>Сохранить</Button>
+        <div className="fh-tax-card__fields">
+          <label>
+            <span>
+              <b>ИКПУ — что это за товар</b>
+              <small>Код категории товара из справочника налоговой, 17 цифр.</small>
+            </span>
+            <input
+              className="fh-input fh-mono"
+              value={defaultMxikCode}
+              onChange={(e) => setDefaultMxikCode(e.target.value)}
+              placeholder="02106999028000000"
+              aria-label="Общий код ИКПУ"
+            />
+          </label>
+          <label>
+            <span>
+              <b>Код упаковки — в чём продаём</b>
+              <small>Единица продажи: банка, упаковка, штука. Обычно 7 цифр.</small>
+            </span>
+            <input
+              className="fh-input fh-mono"
+              value={defaultPackageCode}
+              onChange={(e) => setDefaultPackageCode(e.target.value)}
+              placeholder="1490779"
+              aria-label="Общий код упаковки"
+            />
+          </label>
         </div>
+        <footer>
+          <Button variant="primary" onClick={saveTaxCodes}>Сохранить коды</Button>
+        </footer>
       </Card>
 
       <MedicalkaWizard open={medicalka} api={api} onClose={() => setMedicalka(false)} onDone={() => load()} />

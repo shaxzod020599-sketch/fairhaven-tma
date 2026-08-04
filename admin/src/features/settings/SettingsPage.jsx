@@ -19,11 +19,21 @@ function groupFor(key) {
  * operator reading `delivery_fee` glued to the setting's name.
  */
 const EXPLANATIONS = {
-  'delivery.fee': 'Сколько добавляется к каждому заказу за доставку, в сумах.',
-  delivery_fee: 'Сколько добавляется к каждому заказу за доставку, в сумах.',
-  'delivery.freeFrom': 'С какой суммы заказа доставка становится бесплатной.',
-  'support.phone': 'Телефон, который клиент видит в боте и на сайте.',
   support_phone: 'Телефон, который клиент видит в боте и на сайте.',
+  support_phone_tel: 'Тот же телефон в виде ссылки для звонка — только цифры и «+».',
+  support_hours: 'Часы работы контакт-центра, как их видит клиент.',
+  free_delivery_threshold: 'С какой суммы заказа доставка становится бесплатной, в сумах.',
+  delivery_city: 'Город, в который мы доставляем.',
+  delivery_region_ru: 'Название района или области — по-русски.',
+  delivery_region_uz: 'Название района или области — по-узбекски.',
+  brand_tagline: 'Короткая строка под названием магазина на главной странице.',
+};
+
+/* Названия для настроек, у которых в базе нет своего label — иначе оператор
+   видит вместо имени техническое delivery_region_ru. */
+const FALLBACK_LABELS = {
+  delivery_region_ru: 'Район доставки (рус.)',
+  delivery_region_uz: 'Район доставки (узб.)',
 };
 
 function hintFor(setting) {
@@ -94,7 +104,7 @@ export function SettingsPage({ api = settingsApi }) {
                     return (
                       <label key={setting.key} title={`Техническое имя: ${setting.key}`}>
                         <span>
-                          <b>{setting.label || setting.key}</b>
+                          <b>{setting.label || FALLBACK_LABELS[setting.key] || setting.key}</b>
                           {hint && <small>{hint}</small>}
                           {structured && <small>Это сложное значение — его меняют разработчики, не трогайте здесь.</small>}
                         </span>

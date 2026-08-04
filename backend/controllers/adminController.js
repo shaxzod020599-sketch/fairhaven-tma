@@ -404,6 +404,13 @@ exports.toggleProductAvailability = async (req, res) => {
   }
 };
 
+/* The two fiscal codes, with the shape the tax office expects. Empty is a
+   valid answer and means "fall back to the shop-wide default". */
+const TAX_CODES = {
+  mxikCode: { pattern: /^\d{6,20}$/, label: 'ИКПУ' },
+  packageCode: { pattern: /^\d{3,20}$/, label: 'Код упаковки' },
+};
+
 function sanitizeProductBody(b = {}) {
   const out = {};
   const fields = [
@@ -412,6 +419,16 @@ function sanitizeProductBody(b = {}) {
     'isAvailable', 'brand', 'sku', 'tags',
   ];
   for (const f of fields) if (b[f] !== undefined) out[f] = b[f];
+
+  // Marketplace feeds read these off the product, so a typo here becomes a
+  // wrong line on a customer's receipt. Reject rather than store.
+  for (const [field, { pattern, label }] of Object.entries(TAX_CODES)) {
+    if (b[field] === undefined) continue;
+    const code = String(b[field]).trim();
+    if (code && !pattern.test(code)) throw new Error(`${label}: только цифры`);
+    out[field] = code;
+  }
+
   // Setting availability by hand pins the product to manual. Without this the
   // stock reconciler hands it straight back to Billz on its next pass and the
   // operator's edit is undone a couple of minutes later, with no trace.
@@ -892,3 +909,5 @@ async function tryNotifyCustomer(bot, order, status) {
     { tier: 'normal' }
   );
 }
+
+exports.sanitizeProductBody = sanitizeProductBody;
