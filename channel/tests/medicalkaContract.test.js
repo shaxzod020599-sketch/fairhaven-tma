@@ -83,8 +83,27 @@ test('shop defaults come from the panel, falling back to the build constants', (
     'channels.defaultPackageCode': '1490781',
   }), { mxikCode: '02106999028000002', packageCode: '1490781' });
 
+  // No rows at all — a fresh install before the seed has run.
   assert.deepEqual(S.defaultsFrom({}),
     { mxikCode: '02106999028000000', packageCode: '1490779' });
+  assert.deepEqual(S.defaultsFrom(null),
+    { mxikCode: '02106999028000000', packageCode: '1490779' });
+});
+
+test('a default the operator cleared stays cleared on the wire', () => {
+  // The panel showing an empty field while the feed sends a hardcoded tax code
+  // is a filing problem the operator cannot see. An empty row is an answer.
+  const cleared = S.defaultsFrom({
+    'channels.defaultMxikCode': '',
+    'channels.defaultPackageCode': '',
+  });
+  assert.deepEqual(cleared, { mxikCode: '', packageCode: '' });
+
+  const payload = S.product({
+    card: { name: 'OvaBoost' }, mirror: {}, medicalkaId: 1, price: 1, defaults: cleared,
+  });
+  assert.equal(payload.ikpu, '');
+  assert.equal(payload.package_code, '');
 });
 
 test('an inventory row reports availability as always true', () => {

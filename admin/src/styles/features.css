@@ -181,6 +181,10 @@
 .fh-tax-card__fields label small { color: var(--fh-muted); font-size: 12px; line-height: 1.45; }
 .fh-tax-card footer { display: flex; justify-content: flex-end; padding-top: 18px; border-top: 1px solid var(--fh-line-soft); }
 .fh-tax-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+/* An inherited code is real and will be sent — shown, but quieter than one the
+   operator typed on this product. */
+.fh-mxik-chip[data-inherited] { border-style: dashed; }
+.fh-mxik-chip[data-inherited] b { color: var(--fh-muted); font-weight: 600; }
 
 .fh-wizard { display: grid; gap: 20px; }
 .fh-wizard__step { display: grid; grid-template-columns: 34px 1fr; gap: 13px; align-items: start; }.fh-wizard__step > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--fh-burgundy-wash); color: var(--fh-burgundy); font-weight: 900; }.fh-wizard__step h3 { margin: 3px 0 5px; }.fh-wizard__step p { margin: 0; color: var(--fh-muted); line-height: 1.5; }

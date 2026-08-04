@@ -8,6 +8,7 @@ function query(path, params) {
 export const productsApi = {
   list: (params) => apiRequest(query('/channels/products', params)),
   summary: () => apiRequest('/channels/summary'),
+  settings: () => apiRequest('/channels/settings'),
   create: (body) => apiRequest('/products', { method: 'POST', body }),
   update: (id, body) => apiRequest(`/products/${id}`, { method: 'PATCH', body }),
   remove: (id) => apiRequest(`/products/${id}`, { method: 'DELETE' }),

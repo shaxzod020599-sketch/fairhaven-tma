@@ -7,7 +7,7 @@ const notify = require('../../notify/telegram');
 const BillzProduct = require('../../models/BillzProduct');
 const ChannelOrder = require('../../models/ChannelOrder');
 const ProductCard = require('../../models/ProductCard');
-const { readSettings } = require('../../models/SettingView');
+const settingView = require('../../models/SettingView');
 const { requireKey, CHANNEL } = require('./auth');
 const { channelLimiter, authFailureLimiter } = require('../../middleware/rateLimit');
 const S = require('./serializers');
@@ -55,7 +55,16 @@ function notFound(res, detail) {
    Uzum feed reads — one product carries one pair of codes whoever asks. */
 const SETTING_KEYS = ['channels.defaultMxikCode', 'channels.defaultPackageCode'];
 
-const taxDefaults = () => readSettings(SETTING_KEYS).then(S.defaultsFrom);
+/* The panel's values when they are readable, the compiled constants when they
+   are not. `settings` belongs to the bot backend, not to us — a blip there must
+   not take Medicalka's catalogue offline, and the fallback is the same pair of
+   codes the operator would see anyway. */
+const taxDefaults = () => settingView.readSettings(SETTING_KEYS)
+  .then(S.defaultsFrom)
+  .catch((err) => {
+    logger.warn('tax defaults unreadable — falling back to configured codes', { err });
+    return S.defaultsFrom(null);
+  });
 
 /** Attaches the integer id, channel price and tax codes each serialiser needs. */
 async function decorate(entry, defaults) {
@@ -134,13 +143,16 @@ router.get('/products/:id', read, async (req, res, next) => {
 router.get('/inventory', read, async (req, res, next) => {
   try {
     const { skip, limit } = pagination(req);
-    const page = await catalog.listForChannel(CHANNEL, { skip: 0, limit: Number.MAX_SAFE_INTEGER });
+    const [page, defaults] = await Promise.all([
+      catalog.listForChannel(CHANNEL, { skip: 0, limit: Number.MAX_SAFE_INTEGER }),
+      taxDefaults(),
+    ]);
     const inStock = page.items.filter(({ card, mirror }) =>
       catalog.isAvailable(card, mirror, CHANNEL));
 
     const window = inStock.slice(skip, skip + limit);
     const items = await Promise.all(window.map(async (entry) => {
-      const decorated = await decorate(entry);
+      const decorated = await decorate(entry, defaults);
       return S.inventoryRow({
         pharmacyId: PHARMACY_ID,
         medicalkaId: decorated.medicalkaId,

@@ -125,6 +125,34 @@ test('GET /products/{id} carries them too', async () => {
   assert.equal(res.body.package_code, '1490780');
 });
 
+test('an unreadable settings collection does not take the catalogue down', async () => {
+  // `settings` belongs to the bot backend. A blip there used to be invisible to
+  // Medicalka; after fiscal codes it must stay that way — the feed falls back
+  // to the compiled codes rather than returning 500 to a partner poll.
+  const SettingView = require('../src/models/SettingView');
+  SettingView.clearCache();
+  const real = SettingView.readSettings;
+  SettingView.readSettings = async () => { throw new Error('settings unavailable'); };
+
+  try {
+    const list = await get('/products');
+    assert.equal(list.status, 200);
+    assert.equal(list.body.items.length, 2);
+    // The product with its own codes is unaffected either way.
+    assert.equal(byId(list.body.items, 601).ikpu, '02106999028000001');
+    // The one relying on the shop default gets the compiled constants.
+    assert.equal(byId(list.body.items, 602).ikpu, '02106999028000000');
+    assert.equal(byId(list.body.items, 602).package_code, '1490779');
+
+    assert.equal((await get('/products/601')).status, 200);
+    assert.equal((await get('/products/search?q=кодов')).status, 200);
+    assert.equal((await get('/inventory')).status, 200);
+  } finally {
+    SettingView.readSettings = real;
+    SettingView.clearCache();
+  }
+});
+
 test('changing the default in the panel changes what the feed sends', async () => {
   await db.getConnection().collection('settings').updateOne(
     { key: 'channels.defaultPackageCode' },

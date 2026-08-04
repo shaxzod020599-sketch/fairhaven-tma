@@ -47,15 +47,26 @@ function taxCodes(card, defaults = {}) {
   };
 }
 
+/**
+ * One shop-wide code, honouring a deliberate blank.
+ *
+ * An operator who empties the field in the panel is answering "we have no
+ * shop-wide code", and the feed has to say the same thing — the panel showing
+ * blank while the wire carries a fabricated tax code is exactly the kind of
+ * silent mismatch that lands on a customer's receipt. Only a row that is not
+ * there at all (a fresh install before the seed runs) falls back to the
+ * compiled constant.
+ */
+function shopDefault(settings, key, fallback) {
+  const has = settings && Object.prototype.hasOwnProperty.call(settings, key);
+  return String((has ? settings[key] : fallback) ?? '').trim();
+}
+
 /** Panel-set defaults, falling back to the build-time constants. */
 function defaultsFrom(settings) {
   return {
-    mxikCode: String(
-      settings?.['channels.defaultMxikCode'] || config.defaultMxikCode || ''
-    ).trim(),
-    packageCode: String(
-      settings?.['channels.defaultPackageCode'] || config.defaultPackageCode || ''
-    ).trim(),
+    mxikCode: shopDefault(settings, 'channels.defaultMxikCode', config.defaultMxikCode),
+    packageCode: shopDefault(settings, 'channels.defaultPackageCode', config.defaultPackageCode),
   };
 }
 

@@ -22,6 +22,7 @@ describe('ProductsPage', () => {
       list: vi.fn().mockResolvedValue({ data: [product], meta: { total: 1, page: 1, limit: 24 } }),
       summary: vi.fn().mockResolvedValue({ data: { counts: { total: 1, unlinked: 0, out_of_stock: 0, no_price: 0, no_mxik: 1 } } }),
       update: vi.fn(), updateMeta: vi.fn(), updateChannel: vi.fn(), link: vi.fn(), searchBillz: vi.fn(), create: vi.fn(), remove: vi.fn(),
+      settings: vi.fn().mockResolvedValue({ data: { defaultMxikCode: '02106999028000000', defaultPackageCode: '1490779' } }),
     };
     render(<ProductsPage api={api} />);
 
@@ -35,6 +36,27 @@ describe('ProductsPage', () => {
     expect(screen.getByRole('button', { name: 'Без ИКПУ1' })).toBeInTheDocument();
   });
 
+  it('shows which shop-wide code a blank product field inherits', async () => {
+    // A blank ИКПУ is not "no code" — the shop default goes to the marketplace
+    // in its place, and the operator has to see which one without leaving.
+    const api = {
+      list: vi.fn().mockResolvedValue({ data: [product], meta: { total: 1, page: 1, limit: 24 } }),
+      summary: vi.fn().mockResolvedValue({ data: { counts: { total: 1 } } }),
+      update: vi.fn(), updateMeta: vi.fn(), updateChannel: vi.fn(), link: vi.fn(), searchBillz: vi.fn(), create: vi.fn(), remove: vi.fn(),
+      settings: vi.fn().mockResolvedValue({ data: { defaultMxikCode: '02106999028000000', defaultPackageCode: '1490779' } }),
+    };
+    render(<ProductsPage api={api} />);
+    await screen.findByText('OvaBoost for Women');
+
+    expect(await screen.findByText('02106999028000000')).toBeInTheDocument();
+    expect(screen.getByText('1490779')).toBeInTheDocument();
+    expect(screen.getByText('ИКПУ · общий')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Изменить' }));
+    expect(screen.getByLabelText(/ИКПУ \(код товара\)/)).toHaveAttribute('placeholder', '02106999028000000');
+    expect(screen.getByLabelText(/Код упаковки/)).toHaveAttribute('placeholder', '1490779');
+  });
+
   it('opens Billz list before typing when linking an unlinked product', async () => {
     const unlinked = { ...product, _id: 'p2', billzProductId: '', billz: null };
     const api = {
@@ -43,6 +65,7 @@ describe('ProductsPage', () => {
       searchBillz: vi.fn().mockResolvedValue({ data: [{ billzProductId: 'b9', name: 'FertilAid for Men', sku: 'FH-2091', retailPrice: 520000, stock: 3, linkedTo: null }] }),
       link: vi.fn().mockResolvedValue({ data: { ...unlinked, billzProductId: 'b9' } }),
       update: vi.fn(), updateMeta: vi.fn(), updateChannel: vi.fn(), create: vi.fn(), remove: vi.fn(),
+      settings: vi.fn().mockResolvedValue({ data: { defaultMxikCode: '02106999028000000', defaultPackageCode: '1490779' } }),
     };
     render(<ProductsPage api={api} />);
     await screen.findByText('OvaBoost for Women');

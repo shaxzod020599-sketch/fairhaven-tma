@@ -23,6 +23,24 @@ const LIMIT = 24;
  * объяснением на человеческом языке и одна кнопка, которая появляется, только
  * когда действительно есть что сохранять.
  */
+/**
+ * One fiscal code on the product card.
+ *
+ * A blank field is not «no code» — it means the shop-wide default applies, and
+ * the operator has to be able to see WHICH code that is without leaving the
+ * page. So a blank shows the inherited value, marked as inherited.
+ */
+function TaxChip({ label, title, own, fallback }) {
+  const inherited = !own;
+  const value = own || fallback;
+  return (
+    <div className="fh-mxik-chip" data-inherited={inherited ? '' : undefined} title={title}>
+      <span>{label}{inherited ? ' · общий' : ''}</span>
+      {value ? <b className="fh-mono">{value}</b> : <b>—</b>}
+    </div>
+  );
+}
+
 function ChannelRow({ product, definition, onSave }) {
   const value = product.channels?.[definition.key] || {};
   const [draft, setDraft] = useState(value);
@@ -120,7 +138,7 @@ function BillzBlock({ product, onLink }) {
   );
 }
 
-function ProductCard({ product, onEdit, onDuplicate, onLink, onChannel }) {
+function ProductCard({ product, taxDefaults, onEdit, onDuplicate, onLink, onChannel }) {
   return (
     <Card className="fh-product-card">
       <div className="fh-product-card__identity">
@@ -129,7 +147,7 @@ function ProductCard({ product, onEdit, onDuplicate, onLink, onChannel }) {
         <div className="fh-product-card__price"><span>Цена FairHaven</span><strong>{formatMoney(product.price)}</strong><div><Button size="sm" onClick={onEdit}>Изменить</Button><Button size="sm" variant="ghost" onClick={onDuplicate}>Дублировать</Button></div></div>
       </div>
       <BillzBlock product={product} onLink={onLink} />
-      <section className="fh-channel-matrix"><div className="fh-channel-matrix__head"><div><h3>Где продаётся</h3><p>Включите площадку, поставьте цену — и товар начнёт продаваться там.</p></div><div className="fh-tax-chips"><div className="fh-mxik-chip" title="ИКПУ — код товара для налоговой"><span>ИКПУ</span>{product.mxikCode ? <b className="fh-mono">{product.mxikCode}</b> : <b>Общий</b>}</div><div className="fh-mxik-chip" title="Код упаковки — единица, в которой товар продаётся"><span>Упаковка</span>{product.packageCode ? <b className="fh-mono">{product.packageCode}</b> : <b>Общий</b>}</div></div></div>{CHANNELS.map((definition) => <ChannelRow key={definition.key} product={product} definition={definition} onSave={onChannel} />)}</section>
+      <section className="fh-channel-matrix"><div className="fh-channel-matrix__head"><div><h3>Где продаётся</h3><p>Включите площадку, поставьте цену — и товар начнёт продаваться там.</p></div><div className="fh-tax-chips"><TaxChip label="ИКПУ" title="ИКПУ — код товара для налоговой" own={product.mxikCode} fallback={taxDefaults.mxikCode} /><TaxChip label="Упаковка" title="Код упаковки — единица, в которой товар продаётся" own={product.packageCode} fallback={taxDefaults.packageCode} /></div></div>{CHANNELS.map((definition) => <ChannelRow key={definition.key} product={product} definition={definition} onSave={onChannel} />)}</section>
     </Card>
   );
 }
@@ -164,7 +182,7 @@ function BillzPicker({ product, api, onClose, onLinked }) {
   );
 }
 
-function ProductEditor({ draft: initial, api, onClose, onSaved }) {
+function ProductEditor({ draft: initial, api, taxDefaults, onClose, onSaved }) {
   const isNew = !initial._id;
   const [draft, setDraft] = useState(initial);
   const [errors, setErrors] = useState({});
@@ -187,8 +205,8 @@ function ProductEditor({ draft: initial, api, onClose, onSaved }) {
         <Field label="SKU"><input className="fh-input fh-mono" value={draft.sku || ''} onChange={(e) => set('sku', e.target.value)} /></Field>
         <Field label="Цена FairHaven" error={errors.price}><input className="fh-input fh-mono" type="number" value={draft.price || 0} onChange={(e) => set('price', Number(e.target.value))} /></Field>
         <Field label="Старая цена"><input className="fh-input fh-mono" type="number" value={draft.oldPrice || 0} onChange={(e) => set('oldPrice', Number(e.target.value))} /></Field>
-        <Field label="ИКПУ (код товара)" hint="Оставьте пустым — применится общий код." error={errors.mxikCode}><input className="fh-input fh-mono" value={draft.mxikCode || ''} onChange={(e) => set('mxikCode', e.target.value)} /></Field>
-        <Field label="Код упаковки" hint="Единица продажи для чека. Пусто — применится общий код." error={errors.packageCode}><input className="fh-input fh-mono" value={draft.packageCode || ''} onChange={(e) => set('packageCode', e.target.value)} /></Field>
+        <Field label="ИКПУ (код товара)" hint={taxDefaults.mxikCode ? `Пусто — применится общий код ${taxDefaults.mxikCode}.` : 'Оставьте пустым — применится общий код.'} error={errors.mxikCode}><input className="fh-input fh-mono" placeholder={taxDefaults.mxikCode} value={draft.mxikCode || ''} onChange={(e) => set('mxikCode', e.target.value)} /></Field>
+        <Field label="Код упаковки" hint={taxDefaults.packageCode ? `Единица продажи для чека. Пусто — применится ${taxDefaults.packageCode}.` : 'Единица продажи для чека. Пусто — применится общий код.'} error={errors.packageCode}><input className="fh-input fh-mono" placeholder={taxDefaults.packageCode} value={draft.packageCode || ''} onChange={(e) => set('packageCode', e.target.value)} /></Field>
         <Field label="Главное изображение"><input className="fh-input" value={draft.imageUrl || ''} onChange={(e) => set('imageUrl', e.target.value)} /></Field>
       </div>
       <div className="fh-form-stack"><Field label="Описание на русском"><textarea className="fh-textarea" value={draft.description || ''} onChange={(e) => set('description', e.target.value)} /></Field><Field label="Описание на узбекском"><textarea className="fh-textarea" value={draft.descriptionUz || ''} onChange={(e) => set('descriptionUz', e.target.value)} /></Field><Field label="O‘zbekcha tavsif"><textarea className="fh-textarea" value={draft.descriptionUzLat || ''} onChange={(e) => set('descriptionUzLat', e.target.value)} /></Field></div>
@@ -211,6 +229,9 @@ export function ProductsPage({ api = productsApi }) {
   const [editor, setEditor] = useState(null);
   const [linking, setLinking] = useState(null);
   const [excel, setExcel] = useState(false);
+  /* Shop-wide fiscal codes, so a blank field on a product can show what it
+     inherits. Loaded once — they change from Connections, not from here. */
+  const [taxDefaults, setTaxDefaults] = useState({ mxikCode: '', packageCode: '' });
 
   useEffect(() => { const timer = window.setTimeout(() => { setQuery(search.trim()); setPage(1); }, 300); return () => window.clearTimeout(timer); }, [search]);
   const load = useCallback(async () => {
@@ -222,6 +243,12 @@ export function ProductsPage({ api = productsApi }) {
     finally { setLoading(false); }
   }, [api, filter, page, query]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    api.settings().then((r) => setTaxDefaults({
+      mxikCode: r.data?.defaultMxikCode || '',
+      packageCode: r.data?.defaultPackageCode || '',
+    })).catch(() => {});
+  }, [api]);
 
   const replace = (updated) => setRows((current) => current.map((row) => row._id === updated._id ? { ...row, ...updated } : row));
   const saveChannel = async (product, channel, body) => { try { const response = await api.updateChannel(product._id, channel, body); replace(response.data); toast?.success?.(`${channel === 'medicalka' ? 'Medicalka' : 'Uzum'} обновлён`); } catch (err) { toast?.error?.(err.message); } };
@@ -233,10 +260,10 @@ export function ProductsPage({ api = productsApi }) {
       <header className="fh-page-head"><div><p className="fh-eyebrow">КАТАЛОГ + КАНАЛЫ</p><h1>Товары</h1><p>Billz, FairHaven, Medicalka и Uzum — в одной карточке.</p></div><div className="fh-head-actions"><Button onClick={() => setEditor(emptyProduct())}>Добавить товар</Button><Button variant="primary" onClick={() => setExcel(true)}>Excel</Button></div></header>
       <div className="fh-toolbar fh-toolbar--stack"><input className="fh-input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Название, бренд, SKU или штрихкод" aria-label="Поиск товаров" /><div className="fh-filter-chips">{chips.map(([key, label, count]) => <button key={key} type="button" className={filter === key ? 'is-active' : ''} onClick={() => { setFilter(key); setPage(1); }}>{label}<b>{count || 0}</b></button>)}</div></div>
       {error && rows.length > 0 && <div className="fh-stale-note">Не удалось обновить каталог. Показываем предыдущие данные.</div>}
-      {loading && rows.length === 0 ? <div className="fh-page-skeleton"><span /><span /><span /></div> : error && rows.length === 0 ? <DataState tone="error" title="Каталог недоступен" message={error} actionLabel="Повторить" onAction={load} /> : rows.length === 0 ? <DataState title="Товары не найдены" message="Измените фильтр или добавьте первый товар." actionLabel="Добавить товар" onAction={() => setEditor(emptyProduct())} /> : <div className="fh-product-list">{rows.map((product) => <ProductCard key={product._id} product={product} onEdit={() => setEditor(product)} onDuplicate={() => setEditor(duplicateDraft(product))} onLink={() => setLinking(product)} onChannel={(channel, body) => saveChannel(product, channel, body)} />)}</div>}
+      {loading && rows.length === 0 ? <div className="fh-page-skeleton"><span /><span /><span /></div> : error && rows.length === 0 ? <DataState tone="error" title="Каталог недоступен" message={error} actionLabel="Повторить" onAction={load} /> : rows.length === 0 ? <DataState title="Товары не найдены" message="Измените фильтр или добавьте первый товар." actionLabel="Добавить товар" onAction={() => setEditor(emptyProduct())} /> : <div className="fh-product-list">{rows.map((product) => <ProductCard key={product._id} product={product} taxDefaults={taxDefaults} onEdit={() => setEditor(product)} onDuplicate={() => setEditor(duplicateDraft(product))} onLink={() => setLinking(product)} onChannel={(channel, body) => saveChannel(product, channel, body)} />)}</div>}
       <Pagination page={page} total={total} limit={LIMIT} onPage={setPage} />
       {linking && <BillzPicker product={linking} api={api} onClose={() => setLinking(null)} onLinked={(updated) => { replace(updated); setLinking(null); toast?.success?.('Товар связан с Billz'); }} />}
-      {editor && <ProductEditor draft={editor} api={api} onClose={() => setEditor(null)} onSaved={saved} />}
+      {editor && <ProductEditor draft={editor} api={api} taxDefaults={taxDefaults} onClose={() => setEditor(null)} onSaved={saved} />}
       <ExcelDialog open={excel} api={api} onClose={() => setExcel(false)} onApplied={() => { load(); toast?.success?.('Изменения из Excel применены'); }} />
     </div>
   );
