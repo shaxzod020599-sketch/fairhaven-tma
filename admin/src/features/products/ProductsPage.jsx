@@ -8,6 +8,7 @@ import { Card } from '../../ui/Card';
 import { DataState } from '../../ui/DataState';
 import { Dialog } from '../../ui/Dialog';
 import { Field } from '../../ui/Field';
+import { NumberInput } from '../../ui/NumberInput';
 import { Pagination } from '../../ui/Pagination';
 import { useToast } from '../../ui/ToastProvider';
 import { ExcelDialog } from './ExcelDialog';
@@ -75,13 +76,12 @@ function ChannelRow({ product, definition, onSave }) {
 
       <label className="fh-channel-field">
         <span>Цена на этой площадке</span>
-        <input
+        <NumberInput
           className={`fh-input fh-mono ${priceMissing ? 'is-invalid' : ''}`}
-          type="number"
           min="0"
           disabled={!enabled}
-          value={draft.price || 0}
-          onChange={(event) => setDraft({ ...draft, price: Number(event.target.value) })}
+          value={draft.price}
+          onChange={(price) => setDraft({ ...draft, price })}
         />
         <small>{priceMissing ? 'Без цены товар не отправится' : 'сум'}</small>
       </label>
@@ -103,13 +103,12 @@ function ChannelRow({ product, definition, onSave }) {
 
       <label className="fh-channel-field">
         <span>Оставлять себе</span>
-        <input
+        <NumberInput
           className="fh-input fh-mono"
-          type="number"
           min="0"
           disabled={!enabled}
-          value={draft.minStock || 0}
-          onChange={(event) => setDraft({ ...draft, minStock: Number(event.target.value) })}
+          value={draft.minStock}
+          onChange={(minStock) => setDraft({ ...draft, minStock })}
         />
         <small>последние шт. не отдавать</small>
       </label>
@@ -125,20 +124,65 @@ function ChannelRow({ product, definition, onSave }) {
   );
 }
 
-function BillzBlock({ product, onLink }) {
+function BillzBlock({ product, onLink, onUnlink }) {
   if (!product.billz) {
     return <div className="fh-billz fh-billz--empty"><div><p className="fh-eyebrow">СКЛАД BILLZ</p><h3>Остаток неизвестен</h3><p>Этот товар ещё не связан с карточкой на складе Billz, поэтому мы не знаем, сколько его есть. Свяжите — и остаток появится здесь сам.</p></div><Button variant="primary" onClick={onLink}>Связать с Billz</Button></div>;
   }
   return (
     <div className="fh-billz">
       <div className="fh-billz__head"><p className="fh-eyebrow">СКЛАД BILLZ · ОСТАТОК</p><span>{formatDateTime(product.billz.syncedAt)}</span></div>
+      {/* Which card on the shelf this is tied to. Without the name a wrong
+          link looks exactly like a right one — the numbers are plausible
+          either way, and the operator has nothing to check them against. */}
+      <div className="fh-billz__link">
+        <div>
+          <span>Связан с карточкой Billz</span>
+          <b>{product.billz.name || 'Без названия'}</b>
+          <small className="fh-mono">{product.billz.sku || 'SKU не указан'}{product.billz.barcode ? ` · ${product.billz.barcode}` : ''}</small>
+        </div>
+        <div className="fh-billz__link-actions">
+          <Button size="sm" variant="ghost" onClick={onLink}>Выбрать другую</Button>
+          <Button size="sm" variant="ghost" onClick={onUnlink}>Отвязать</Button>
+        </div>
+      </div>
       <div className="fh-billz__numbers"><div><span>Цена в Billz</span><strong>{formatMoney(product.billz.retailPrice)}</strong></div><div><span>Остаток</span><strong>{formatNumber(product.billz.stock)} шт.</strong></div><div><span>Доступно</span><strong>{formatNumber(product.billz.available)} шт.</strong></div></div>
       <div className="fh-billz__foot"><span>Резерв {product.billz.reservedQty || 0}</span><span>Ожидает {product.billz.pendingQty || 0}</span>{product.billz.deletedInBillz && <Badge tone="danger">Удалён в Billz</Badge>}</div>
     </div>
   );
 }
 
-function ProductCard({ product, taxDefaults, onEdit, onDuplicate, onLink, onChannel }) {
+/**
+ * Unlinking is not destructive to the product, but it does pull it off every
+ * marketplace — the feed publishes only products that carry a Billz id. That
+ * consequence is not visible from the button, so it is spelled out here.
+ */
+function UnlinkDialog({ product, onClose, onConfirm }) {
+  const [busy, setBusy] = useState(false);
+  const confirm = async () => {
+    setBusy(true);
+    try { await onConfirm(); } finally { setBusy(false); }
+  };
+  return (
+    <Dialog open title="Отвязать от склада Billz?" description={product.name} onClose={onClose} width="560px">
+      <div className="fh-form-stack">
+        <p>Сейчас товар связан с карточкой <b>{product.billz?.name}</b>{product.billz?.sku ? <> (<span className="fh-mono">{product.billz.sku}</span>)</> : null}.</p>
+        <p>После отвязки:</p>
+        <ul className="fh-plain-list">
+          <li>остаток со склада перестанет подтягиваться;</li>
+          <li>товар пропадёт с Medicalka и Uzum, пока не будет связан снова;</li>
+          <li>сам товар, цены и описания останутся на месте.</li>
+        </ul>
+        <p>Если карточка выбрана по ошибке — проще нажать «Выбрать другую» и указать правильную.</p>
+        <div className="fh-dialog-actions">
+          <Button onClick={onClose}>Отмена</Button>
+          <Button variant="danger" disabled={busy} onClick={confirm}>{busy ? 'Отвязываем…' : 'Да, отвязать'}</Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+function ProductCard({ product, taxDefaults, onEdit, onDuplicate, onLink, onUnlink, onChannel }) {
   return (
     <Card className="fh-product-card">
       <div className="fh-product-card__identity">
@@ -146,7 +190,7 @@ function ProductCard({ product, taxDefaults, onEdit, onDuplicate, onLink, onChan
         <div><p>{product.brand || 'Fairhaven Health'}</p><h2>{product.name}</h2><div className="fh-product-card__meta"><span className="fh-mono">{product.sku || 'SKU не указан'}</span><span>{CATEGORIES.find(([key]) => key === product.category)?.[1] || product.category}</span><Badge tone={product.shop?.visible || product.isAvailable ? 'success' : 'neutral'}>{product.shop?.visible || product.isAvailable ? 'На fairhaven.uz' : 'Скрыт с fairhaven.uz'}</Badge></div></div>
         <div className="fh-product-card__price"><span>Цена FairHaven</span><strong>{formatMoney(product.price)}</strong><div><Button size="sm" onClick={onEdit}>Изменить</Button><Button size="sm" variant="ghost" onClick={onDuplicate}>Дублировать</Button></div></div>
       </div>
-      <BillzBlock product={product} onLink={onLink} />
+      <BillzBlock product={product} onLink={onLink} onUnlink={onUnlink} />
       <section className="fh-channel-matrix"><div className="fh-channel-matrix__head"><div><h3>Где продаётся</h3><p>Включите площадку, поставьте цену — и товар начнёт продаваться там.</p></div><div className="fh-tax-chips"><TaxChip label="ИКПУ" title="ИКПУ — код товара для налоговой" own={product.mxikCode} fallback={taxDefaults.mxikCode} /><TaxChip label="Упаковка" title="Код упаковки — единица, в которой товар продаётся" own={product.packageCode} fallback={taxDefaults.packageCode} /></div></div>{CHANNELS.map((definition) => <ChannelRow key={definition.key} product={product} definition={definition} onSave={onChannel} />)}</section>
     </Card>
   );
@@ -203,8 +247,8 @@ function ProductEditor({ draft: initial, api, taxDefaults, onClose, onSaved }) {
         <Field label="Бренд"><input className="fh-input" value={draft.brand || ''} onChange={(e) => set('brand', e.target.value)} /></Field>
         <Field label="Категория" error={errors.category}><select className="fh-select" value={draft.category || ''} onChange={(e) => set('category', e.target.value)}>{CATEGORIES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></Field>
         <Field label="SKU"><input className="fh-input fh-mono" value={draft.sku || ''} onChange={(e) => set('sku', e.target.value)} /></Field>
-        <Field label="Цена FairHaven" error={errors.price}><input className="fh-input fh-mono" type="number" value={draft.price || 0} onChange={(e) => set('price', Number(e.target.value))} /></Field>
-        <Field label="Старая цена"><input className="fh-input fh-mono" type="number" value={draft.oldPrice || 0} onChange={(e) => set('oldPrice', Number(e.target.value))} /></Field>
+        <Field label="Цена FairHaven" error={errors.price}><NumberInput className="fh-input fh-mono" value={draft.price} onChange={(price) => set('price', price)} /></Field>
+        <Field label="Старая цена"><NumberInput className="fh-input fh-mono" value={draft.oldPrice} onChange={(oldPrice) => set('oldPrice', oldPrice)} /></Field>
         <Field label="ИКПУ (код товара)" hint={taxDefaults.mxikCode ? `Пусто — применится общий код ${taxDefaults.mxikCode}.` : 'Оставьте пустым — применится общий код.'} error={errors.mxikCode}><input className="fh-input fh-mono" placeholder={taxDefaults.mxikCode} value={draft.mxikCode || ''} onChange={(e) => set('mxikCode', e.target.value)} /></Field>
         <Field label="Код упаковки" hint={taxDefaults.packageCode ? `Единица продажи для чека. Пусто — применится ${taxDefaults.packageCode}.` : 'Единица продажи для чека. Пусто — применится общий код.'} error={errors.packageCode}><input className="fh-input fh-mono" placeholder={taxDefaults.packageCode} value={draft.packageCode || ''} onChange={(e) => set('packageCode', e.target.value)} /></Field>
         <Field label="Главное изображение"><input className="fh-input" value={draft.imageUrl || ''} onChange={(e) => set('imageUrl', e.target.value)} /></Field>
@@ -228,6 +272,7 @@ export function ProductsPage({ api = productsApi }) {
   const [error, setError] = useState('');
   const [editor, setEditor] = useState(null);
   const [linking, setLinking] = useState(null);
+  const [unlinking, setUnlinking] = useState(null);
   const [excel, setExcel] = useState(false);
   /* Shop-wide fiscal codes, so a blank field on a product can show what it
      inherits. Loaded once — they change from Connections, not from here. */
@@ -251,6 +296,14 @@ export function ProductsPage({ api = productsApi }) {
   }, [api]);
 
   const replace = (updated) => setRows((current) => current.map((row) => row._id === updated._id ? { ...row, ...updated } : row));
+  const unlink = async (product) => {
+    try {
+      const response = await api.link(product._id, '');
+      replace(response.data);
+      setUnlinking(null);
+      toast?.success?.('Товар отвязан от склада Billz');
+    } catch (err) { toast?.error?.(err.message); }
+  };
   const saveChannel = async (product, channel, body) => { try { const response = await api.updateChannel(product._id, channel, body); replace(response.data); toast?.success?.(`${channel === 'medicalka' ? 'Medicalka' : 'Uzum'} обновлён`); } catch (err) { toast?.error?.(err.message); } };
   const saved = (product) => { setEditor(null); setRows((current) => current.some((row) => row._id === product._id) ? current.map((row) => row._id === product._id ? { ...row, ...product } : row) : [product, ...current]); toast?.success?.('Товар сохранён'); };
 
@@ -260,9 +313,10 @@ export function ProductsPage({ api = productsApi }) {
       <header className="fh-page-head"><div><p className="fh-eyebrow">КАТАЛОГ + КАНАЛЫ</p><h1>Товары</h1><p>Billz, FairHaven, Medicalka и Uzum — в одной карточке.</p></div><div className="fh-head-actions"><Button onClick={() => setEditor(emptyProduct())}>Добавить товар</Button><Button variant="primary" onClick={() => setExcel(true)}>Excel</Button></div></header>
       <div className="fh-toolbar fh-toolbar--stack"><input className="fh-input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Название, бренд, SKU или штрихкод" aria-label="Поиск товаров" /><div className="fh-filter-chips">{chips.map(([key, label, count]) => <button key={key} type="button" className={filter === key ? 'is-active' : ''} onClick={() => { setFilter(key); setPage(1); }}>{label}<b>{count || 0}</b></button>)}</div></div>
       {error && rows.length > 0 && <div className="fh-stale-note">Не удалось обновить каталог. Показываем предыдущие данные.</div>}
-      {loading && rows.length === 0 ? <div className="fh-page-skeleton"><span /><span /><span /></div> : error && rows.length === 0 ? <DataState tone="error" title="Каталог недоступен" message={error} actionLabel="Повторить" onAction={load} /> : rows.length === 0 ? <DataState title="Товары не найдены" message="Измените фильтр или добавьте первый товар." actionLabel="Добавить товар" onAction={() => setEditor(emptyProduct())} /> : <div className="fh-product-list">{rows.map((product) => <ProductCard key={product._id} product={product} taxDefaults={taxDefaults} onEdit={() => setEditor(product)} onDuplicate={() => setEditor(duplicateDraft(product))} onLink={() => setLinking(product)} onChannel={(channel, body) => saveChannel(product, channel, body)} />)}</div>}
+      {loading && rows.length === 0 ? <div className="fh-page-skeleton"><span /><span /><span /></div> : error && rows.length === 0 ? <DataState tone="error" title="Каталог недоступен" message={error} actionLabel="Повторить" onAction={load} /> : rows.length === 0 ? <DataState title="Товары не найдены" message="Измените фильтр или добавьте первый товар." actionLabel="Добавить товар" onAction={() => setEditor(emptyProduct())} /> : <div className="fh-product-list">{rows.map((product) => <ProductCard key={product._id} product={product} taxDefaults={taxDefaults} onEdit={() => setEditor(product)} onDuplicate={() => setEditor(duplicateDraft(product))} onLink={() => setLinking(product)} onUnlink={() => setUnlinking(product)} onChannel={(channel, body) => saveChannel(product, channel, body)} />)}</div>}
       <Pagination page={page} total={total} limit={LIMIT} onPage={setPage} />
       {linking && <BillzPicker product={linking} api={api} onClose={() => setLinking(null)} onLinked={(updated) => { replace(updated); setLinking(null); toast?.success?.('Товар связан с Billz'); }} />}
+      {unlinking && <UnlinkDialog product={unlinking} onClose={() => setUnlinking(null)} onConfirm={() => unlink(unlinking)} />}
       {editor && <ProductEditor draft={editor} api={api} taxDefaults={taxDefaults} onClose={() => setEditor(null)} onSaved={saved} />}
       <ExcelDialog open={excel} api={api} onClose={() => setExcel(false)} onApplied={() => { load(); toast?.success?.('Изменения из Excel применены'); }} />
     </div>

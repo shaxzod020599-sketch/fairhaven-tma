@@ -8,7 +8,7 @@ const product = {
   _id: 'p1', name: 'OvaBoost for Women', brand: 'Fairhaven Health', sku: 'FH-1001',
   price: 420000, category: 'vitamins', imageUrl: '', images: [], isAvailable: true,
   billzProductId: 'b1', mxikCode: '',
-  billz: { retailPrice: 425000, stock: 14, reservedQty: 2, pendingQty: 1, available: 11, syncedAt: '2026-08-02T09:00:00.000Z' },
+  billz: { name: 'OvaBoost for Women, №120', sku: 'BZ-7781', barcode: '895749000851', retailPrice: 425000, stock: 14, reservedQty: 2, pendingQty: 1, available: 11, syncedAt: '2026-08-02T09:00:00.000Z' },
   channels: {
     medicalka: { enabled: true, price: 450000, forceStatus: 'auto', minStock: 2, live: true },
     uzum: { enabled: false, price: 0, forceStatus: 'out', minStock: 3, live: false },
@@ -55,6 +55,43 @@ describe('ProductsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Изменить' }));
     expect(screen.getByLabelText(/ИКПУ \(код товара\)/)).toHaveAttribute('placeholder', '02106999028000000');
     expect(screen.getByLabelText(/Код упаковки/)).toHaveAttribute('placeholder', '1490779');
+  });
+
+  it('names the Billz card a product is tied to, so a wrong link is visible', async () => {
+    // Stock numbers look plausible for any card. Without the name, linking
+    // «OvaBoost» to the wrong shelf card is indistinguishable from success.
+    const api = {
+      list: vi.fn().mockResolvedValue({ data: [product], meta: { total: 1, page: 1, limit: 24 } }),
+      summary: vi.fn().mockResolvedValue({ data: { counts: { total: 1 } } }),
+      update: vi.fn(), updateMeta: vi.fn(), updateChannel: vi.fn(), link: vi.fn(), searchBillz: vi.fn(), create: vi.fn(), remove: vi.fn(),
+      settings: vi.fn().mockResolvedValue({ data: {} }),
+    };
+    render(<ProductsPage api={api} />);
+    await screen.findByText('OvaBoost for Women');
+
+    expect(screen.getByText('OvaBoost for Women, №120')).toBeInTheDocument();
+    expect(screen.getByText(/BZ-7781/)).toBeInTheDocument();
+  });
+
+  it('unlinks a product tied to the wrong Billz card, after saying what that costs', async () => {
+    const unlinked = { ...product, billzProductId: '', billz: null };
+    const api = {
+      list: vi.fn().mockResolvedValue({ data: [product], meta: { total: 1, page: 1, limit: 24 } }),
+      summary: vi.fn().mockResolvedValue({ data: { counts: { total: 1 } } }),
+      link: vi.fn().mockResolvedValue({ data: unlinked }),
+      update: vi.fn(), updateMeta: vi.fn(), updateChannel: vi.fn(), searchBillz: vi.fn(), create: vi.fn(), remove: vi.fn(),
+      settings: vi.fn().mockResolvedValue({ data: {} }),
+    };
+    render(<ProductsPage api={api} />);
+    await screen.findByText('OvaBoost for Women');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Отвязать' }));
+    // The consequence an operator cannot infer from the button.
+    expect(screen.getByText(/пропадёт с Medicalka и Uzum/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Да, отвязать' }));
+    expect(api.link).toHaveBeenCalledWith('p1', '');
+    expect(await screen.findByText('Остаток неизвестен')).toBeInTheDocument();
   });
 
   it('opens Billz list before typing when linking an unlinked product', async () => {

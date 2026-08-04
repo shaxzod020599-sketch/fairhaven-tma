@@ -103,6 +103,18 @@
 .fh-billz--empty { grid-template-columns: 1fr auto; align-items: center; }
 .fh-billz--empty h3 { margin: 4px 0; }.fh-billz--empty p { margin: 0; color: var(--fh-muted); }
 .fh-billz__head, .fh-billz__foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--fh-muted); font-size: 12px; }
+/* Which Billz card this product is tied to. The numbers below are plausible
+   for any card, so the name is what makes a wrong link visible. */
+.fh-billz__link { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--fh-burgundy-line); }
+.fh-billz__link > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.fh-billz__link span { color: var(--fh-muted); font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.fh-billz__link b { font-size: 15px; overflow-wrap: anywhere; }
+.fh-billz__link small { color: var(--fh-muted); font-size: 12px; }
+.fh-billz__link-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+.fh-plain-list { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--fh-muted); }
+.fh-plain-list li { line-height: 1.5; }
+
 .fh-billz__numbers { display: grid; grid-template-columns: repeat(3, 1fr); }
 .fh-billz__numbers > div { min-width: 0; display: grid; gap: 6px; padding-right: 20px; border-right: 1px solid var(--fh-burgundy-line); }
 .fh-billz__numbers > div + div { padding-left: 20px; }
@@ -232,7 +244,7 @@
   .fh-metric-ledger { border-inline: 1px solid var(--fh-line); }.fh-metric-ledger__item { padding: 17px; }.fh-metric-ledger__item strong { font-size: 25px; }
   .fh-order-row__open { grid-template-columns: 72px 1fr auto; gap: 10px; }.fh-order-row__open > span:nth-of-type(3), .fh-order-row__open > strong { display: none; }
   .fh-workbench__lead { flex-direction: column; }.fh-workbench__total { text-align: left; }
-  .fh-product-card__identity { padding: 18px; }.fh-billz, .fh-channel-matrix { padding-inline: 18px; }.fh-billz--empty { grid-template-columns: 1fr; }.fh-billz__numbers { gap: 13px; grid-template-columns: 1fr; }.fh-billz__numbers > div, .fh-billz__numbers > div + div { padding: 0 0 10px; border-right: 0; border-bottom: 1px solid var(--fh-burgundy-line); }.fh-channel-matrix__head { flex-direction: column; }.fh-channel-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .fh-product-card__identity { padding: 18px; }.fh-billz, .fh-channel-matrix { padding-inline: 18px; }.fh-billz--empty { grid-template-columns: 1fr; }.fh-billz__link { align-items: stretch; flex-direction: column; gap: 12px; }.fh-billz__numbers { gap: 13px; grid-template-columns: 1fr; }.fh-billz__numbers > div, .fh-billz__numbers > div + div { padding: 0 0 10px; border-right: 0; border-bottom: 1px solid var(--fh-burgundy-line); }.fh-channel-matrix__head { flex-direction: column; }.fh-channel-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .fh-form-grid, .fh-key-grid, .fh-person-grid, .fh-promo-grid, .fh-collection-grid, .fh-gallery-grid { grid-template-columns: 1fr; }
   .fh-search-row { flex-direction: column; }
   .fh-excel > section { grid-template-columns: 1fr; }.fh-excel-report > div { grid-template-columns: 1fr 1fr; }
