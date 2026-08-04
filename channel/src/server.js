@@ -99,7 +99,7 @@ function checkUzumConfig() {
   if (!config.uzum.tokenSigningKey || config.uzum.tokenSigningKey.length < 32) {
     missing.push('UZUM_TOKEN_SIGNING_KEY (32+ characters)');
   }
-  if (!config.uzum.imageBaseUrl) missing.push('PUBLIC_IMAGE_BASE_URL');
+  if (!config.publicImageBaseUrl) missing.push('PUBLIC_IMAGE_BASE_URL');
   if (missing.length) {
     throw new Error(`UZUM_ENABLED is on but ${missing.join(', ')} is not set`);
   }
@@ -128,6 +128,12 @@ function checkInternalExposure() {
 
 async function start() {
   checkUzumConfig();
+  // Medicalka reads pictures too, and it is on by default. Without a base URL
+  // every product ships `images: []` — a partner-visible gap with no error
+  // anywhere, so it is said once at boot rather than never.
+  if (!config.publicImageBaseUrl) {
+    logger.warn('PUBLIC_IMAGE_BASE_URL is not set — channel feeds will publish no images');
+  }
   checkInternalExposure();
   await db.connect();
 

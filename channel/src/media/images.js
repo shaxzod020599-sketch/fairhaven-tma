@@ -83,7 +83,7 @@ function publicUrl(url) {
   const raw = String(url || '');
   if (!raw) return '';
   if (/^https?:\/\//i.test(raw)) return raw;
-  const base = String(config.uzum.imageBaseUrl || '').replace(/\/+$/, '');
+  const base = String(config.publicImageBaseUrl || '').replace(/\/+$/, '');
   if (!base) return '';
   return `${base}${raw.startsWith('/') ? '' : '/'}${raw}`;
 }

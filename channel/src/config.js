@@ -95,9 +95,6 @@ const config = {
     // Signs the bearer tokens we issue. No default on purpose — a shared
     // default would mean a token minted against any deployment is accepted here.
     tokenSigningKey: process.env.UZUM_TOKEN_SIGNING_KEY || '',
-    // Public base for product images. Billz forbids serving media from their
-    // CDN, and Uzum needs a hash per image, so both are served from ours.
-    imageBaseUrl: process.env.PUBLIC_IMAGE_BASE_URL || '',
   },
 
   // Marketplaces need two tax codes per product for the fiscal receipt: the
@@ -110,6 +107,11 @@ const config = {
   // Where the bot backend writes uploaded product images. Read-only here, and
   // only to hash them: Uzum wants a hash per image, and a hash that does not
   // describe the bytes is worse than none.
+  // Public base for product images. Billz forbids serving media from their CDN,
+  // so every channel that shows a picture is handed one of ours. Shop-wide, not
+  // per-channel: the same file backs the same product on every marketplace.
+  publicImageBaseUrl: process.env.PUBLIC_IMAGE_BASE_URL || '',
+
   uploadsDir: process.env.UPLOADS_DIR
     || path.resolve(__dirname, '../../backend/uploads'),
 

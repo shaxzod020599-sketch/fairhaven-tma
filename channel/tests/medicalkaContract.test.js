@@ -43,7 +43,8 @@ test('a product carries an integer id and string price', () => {
   assert.equal(typeof payload.price, 'string');
   assert.equal(payload.price, '600000.00');
   assert.deepEqual(Object.keys(payload).sort(),
-    ['barcode', 'id', 'ikpu', 'manufacturer', 'name', 'package_code', 'price', 'updated_at']);
+    ['barcode', 'id', 'ikpu', 'images', 'manufacturer', 'name', 'package_code',
+     'price', 'updated_at']);
 });
 
 /**

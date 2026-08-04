@@ -9,6 +9,7 @@
  */
 
 const config = require('../../config');
+const media = require('../../media/images');
 
 /** Money and quantities as fixed 2-decimal strings, per their examples. */
 function decimalString(value) {
@@ -70,6 +71,20 @@ function defaultsFrom(settings) {
   };
 }
 
+/**
+ * Product pictures, as public URLs with the SHA-1 of the bytes behind each.
+ *
+ * The files are ours — Billz forbids serving media from their CDN — and they
+ * are the same pictures the shop shows. The hash is there so a consumer that
+ * caches images can tell an edited picture from an unchanged one without
+ * downloading it again; the same shape Uzum already receives.
+ *
+ * The URLs are public and carry no key. That is deliberate: a marketplace
+ * copies product images onto its own CDN, so a token inside an image URL would
+ * end up in their HTML and their logs — spreading the credential rather than
+ * protecting the picture. An empty array means the product has no uploaded
+ * image, which is also the reason the shop itself would not show it.
+ */
 function product({ card, mirror, medicalkaId, price, defaults }) {
   return {
     id: medicalkaId,
@@ -77,6 +92,7 @@ function product({ card, mirror, medicalkaId, price, defaults }) {
     manufacturer: card.brand || mirror.brandName || '',
     barcode: card.barcode || mirror.barcode || '',
     ...taxCodes(card, defaults),
+    images: media.imagesFor(card),
     price: decimalString(price),
     updated_at: timestamp(card.updatedAt || mirror.syncedAt),
   };
