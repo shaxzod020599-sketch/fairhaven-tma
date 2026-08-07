@@ -2367,9 +2367,13 @@ a.contact-channel:hover { transform: translateY(-2px); }
   line-height: 1.4;
 }
 @media (max-width: 640px) {
-  .map-modal-overlay { padding: 0; align-items: stretch; }
-  .map-modal { width: 100%; max-height: none; border-radius: 0; }
-  .map-modal-canvas { flex: 1; height: auto; }
+  .map-modal-overlay { padding: 0; align-items: stretch; height: 100dvh; }
+  /* Full-bleed, but never taller than the screen — otherwise the address bar
+     and the confirm button drop below the fold with body scroll locked. */
+  .map-modal { width: 100%; max-height: 100dvh; border-radius: 0; }
+  /* min-height:0 lets the map shrink; the flex default (auto) would size it
+     to the map's own content and push the footer out. */
+  .map-modal-canvas { flex: 1; height: auto; min-height: 0; }
   .map-modal-foot { flex-direction: column; align-items: stretch; gap: 10px; }
 }
 

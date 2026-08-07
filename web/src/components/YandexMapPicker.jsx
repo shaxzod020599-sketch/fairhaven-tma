@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, m } from 'motion/react';
 import { useI18n } from '../i18n/index.jsx';
 
@@ -108,7 +109,11 @@ export default function YandexMapPicker({ open, onConfirm, onClose }) {
     onConfirm({ lat: coords.lat, lng: coords.lng, address });
   };
 
-  return (
+  // Portalled to <body>: the route-transition wrapper in App.jsx carries a
+  // transform, and a transformed ancestor becomes the containing block for
+  // `position: fixed` — which would size this overlay to the page, not the
+  // viewport, pushing the confirm button off-screen on phones.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <m.div
@@ -162,6 +167,7 @@ export default function YandexMapPicker({ open, onConfirm, onClose }) {
           </m.div>
         </m.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

@@ -1744,6 +1744,10 @@ ul, ol {
 
 .map-container {
   flex: 1;
+  /* min-height:0 overrides the flex default (auto), which sizes this item to
+     the map canvas and pushes the address bar — and the confirm button — off
+     the bottom of the screen once a long address wraps to a second line. */
+  min-height: 0;
   position: relative;
   background: var(--paper-soft);
 }
