@@ -63,9 +63,15 @@ test('content security policy locks down script origins and plugins', () => {
   assert.match(CONTENT_SECURITY_POLICY, /script-src [^;]*https:\/\/telegram\.org/);
   assert.match(CONTENT_SECURITY_POLICY, /object-src 'none'/);
   assert.match(CONTENT_SECURITY_POLICY, /base-uri 'self'/);
-  // No external script host may be reachable beyond telegram.org.
+  // The script allow-list is closed: the Telegram SDK, and the two hosts the
+  // checkout map loads from. Anything else has to be argued for here first.
   const scriptSrc = CONTENT_SECURITY_POLICY.split('; ').find((d) => d.startsWith('script-src'));
-  assert.equal(/https:\/\/(?!telegram\.org)/.test(scriptSrc), false);
+  const hosts = scriptSrc.match(/https:\/\/[^\s;]+/g) || [];
+  assert.deepEqual(hosts.sort(), [
+    'https://api-maps.yandex.ru',
+    'https://telegram.org',
+    'https://yastatic.net',
+  ]);
 });
 
 test('inline scripts cannot execute', () => {

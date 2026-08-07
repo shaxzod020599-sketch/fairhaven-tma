@@ -15,14 +15,20 @@ const FRAME_ANCESTORS = ["'self'", 'https://telegram.org', 'https://*.telegram.o
 // style-src keeps 'unsafe-inline' because React writes style attributes and
 // Vite injects a stylesheet at runtime. Inline styles cannot exfiltrate or
 // execute, so the trade-off is not the same one.
+// api-maps.yandex.ru and yastatic.net are here because the checkout map is the
+// only way to set a delivery address in the Mini App — with them absent the
+// script is blocked and an order cannot be placed at all. Tiles and the
+// telemetry beacon are images, already covered by img-src https:, and the
+// geocoder answers over connect-src. Verified against the live API: no
+// 'unsafe-inline' or 'unsafe-eval' is required for any of it.
 const TMA_CSP_DIRECTIVES = [
   "default-src 'self'",
-  "script-src 'self' https://telegram.org",
+  "script-src 'self' https://telegram.org https://api-maps.yandex.ru https://yastatic.net",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
   "media-src 'self' data: blob: https:",
-  "connect-src 'self'",
+  "connect-src 'self' https://api-maps.yandex.ru https://*.maps.yandex.net",
   `frame-ancestors ${FRAME_ANCESTORS.join(' ')}`,
   "form-action 'self'",
   "base-uri 'self'",
