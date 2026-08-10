@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { whoami } from './adminApi';
+import { openAdminSession, rememberCsrfToken, whoami } from './adminApi';
 import {
   pushBackButton,
   popBackButton,
@@ -14,18 +14,20 @@ import Collections from './pages/Collections';
 import Settings from './pages/Settings';
 import Gallery from './pages/Gallery';
 import PromoCodes from './pages/PromoCodes';
-import Channels from './pages/Channels';
 import AdminToast from './components/Toast';
 import Icon from './components/Icon';
 
 // Icons are SVG rather than emoji: emoji render from the device's own font, so
 // they changed shape between iOS, Android and desktop Telegram, ignored colour
 // and weight, and sat off the text baseline.
+// Marketplace channels are absent on purpose: that screen configures the
+// Billz/Uzum/Medicalka integrations and hands out their credentials, which is
+// desk work, not phone work. It stays on admin.fairhaven.uz, and the server
+// refuses /channels on this host regardless of what the UI offers.
 const NAV = [
   { key: 'dashboard', label: 'Обзор', icon: 'dashboard' },
   { key: 'orders', label: 'Заказы', icon: 'orders' },
   { key: 'products', label: 'Товары', icon: 'products' },
-  { key: 'channels', label: 'Каналы', icon: 'channels' },
   { key: 'collections', label: 'Подборки', icon: 'collections' },
   { key: 'promos', label: 'Промокоды', icon: 'promos' },
   { key: 'gallery', label: 'Галерея', icon: 'gallery' },
@@ -35,13 +37,12 @@ const NAV = [
 ];
 
 // Bottom nav stays at five items (Material guidance); everything else lives
-// behind "Ещё". Channels replaces Promo here — it is checked daily, promo codes
-// are not.
+// behind "Ещё".
 const MOBILE_NAV = [
   { key: 'dashboard', label: 'Обзор', icon: 'dashboard' },
   { key: 'orders', label: 'Заказы', icon: 'orders' },
   { key: 'products', label: 'Товары', icon: 'products' },
-  { key: 'channels', label: 'Каналы', icon: 'channels' },
+  { key: 'collections', label: 'Подборки', icon: 'collections' },
   { key: 'more', label: 'Ещё', icon: 'more' },
 ];
 
@@ -68,17 +69,24 @@ export default function AdminApp({ onExit, embedded }) {
     [showToast]
   );
 
+  // Reuse the session this web view already has before spending initData on a
+  // new one: Telegram signs that payload once, and the server refuses a repeat.
   const check = useCallback(async () => {
+    const accept = (data) => {
+      rememberCsrfToken(data.csrfToken);
+      setMe(data);
+      setStatus('ready');
+    };
     try {
-      const res = await whoami();
-      if (res?.data?.isAdmin) {
-        setMe(res.data);
-        setStatus('ready');
-      } else {
-        setStatus('login');
-      }
+      const existing = await whoami();
+      if (existing?.data?.isAdmin) return accept(existing.data);
+
+      await openAdminSession();
+      const opened = await whoami();
+      if (opened?.data?.isAdmin) return accept(opened.data);
+      return setStatus('login');
     } catch (_) {
-      setStatus('login');
+      return setStatus('login');
     }
   }, []);
 
@@ -139,7 +147,6 @@ export default function AdminApp({ onExit, embedded }) {
       case 'admins': return <Admins me={me} toast={toastApi} />;
       case 'collections': return <Collections toast={toastApi} />;
       case 'promos': return <PromoCodes toast={toastApi} />;
-      case 'channels': return <Channels toast={toastApi} />;
       case 'gallery': return <Gallery toast={toastApi} />;
       case 'settings': return <Settings toast={toastApi} />;
       default: return <Dashboard onNavigate={navigate} />;

@@ -681,29 +681,10 @@ function createBot(token, frontendUrl) {
     );
   });
 
-  // ---------------------------------------------------------------------------
-  // /admin — opens the operator panel that lives inside the Mini App (admins
-  // only); silent for everyone else so the command's existence leaks nothing.
-  //
-  // It deliberately does not point at the standalone panel on its own host:
-  // that one signs you in by handing you a t.me link to confirm in the bot,
-  // and a Telegram web view cannot follow such a link — the button led to a
-  // login screen with no way forward. The Mini App authenticates from initData
-  // Telegram already provides, so opening it here just works.
-  // ---------------------------------------------------------------------------
-  bot.command('admin', async (ctx) => {
-    if (!FRONTEND) return;
-    const user = await User.findOne({ telegramId: ctx.from.id });
-    if (!user || user.role !== 'admin') return;
-    await ctx.reply('⚙️ Panel boshqaruvi / Панель управления', {
-      reply_markup: {
-        inline_keyboard: [[{
-          text: '⚙️ Ochish / Открыть',
-          web_app: { url: `${FRONTEND}/?admin=1` },
-        }]],
-      },
-    });
-  });
+  // There is no /admin command. An operator opens the shop like anyone else and
+  // reaches the panel from the "Админ-панель" card on their profile, which only
+  // renders for the role the server resolved — one door, and it is already the
+  // one they know.
 
   // ---------------------------------------------------------------------------
   // /oferta

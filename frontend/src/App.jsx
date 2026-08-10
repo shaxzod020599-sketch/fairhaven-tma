@@ -70,23 +70,6 @@ export default function App() {
       });
   }, [authStatus]);
 
-  // Deep-link: the bot's /admin button opens the Mini App straight into the
-  // operator panel, so an admin never has to go hunting through Profile. The
-  // flag only asks for that surface — rendering it still depends on the role
-  // the server resolved for this Telegram account, checked below.
-  useEffect(() => {
-    if (authStatus !== AUTH.READY) return;
-    const params = new URLSearchParams(window.location.search);
-    const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param || '';
-    if (params.get('admin') !== '1' && startParam !== 'admin') return;
-    setAdminMode(true);
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('admin');
-      window.history.replaceState({}, '', url.toString());
-    } catch (_) {}
-  }, [authStatus]);
-
   const syncUser = async () => {
     try {
       const tgUser = getTelegramUser();

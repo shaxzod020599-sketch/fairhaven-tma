@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const AdminSession = require('../models/AdminSession');
 const User = require('../models/User');
-const { configuredAdminHost } = require('../middleware/adminHostGate');
+const { configuredAdminHost, configuredTmaHost } = require('../middleware/adminHostGate');
 
 const ABSOLUTE_TTL_MS = 8 * 60 * 60 * 1000;
 const IDLE_TTL_MS = 30 * 60 * 1000;
@@ -58,8 +58,13 @@ function requestUserAgent(req) {
 async function issueSession({ admin, req, res }) {
   if (!admin || admin.role && admin.role !== 'admin') throw new Error('admin_required');
   if (!Number.isSafeInteger(Number(admin.telegramId))) throw new Error('admin_telegram_id_required');
+  // Issued on whichever surface asked for it, and stored with that host —
+  // `sessionUsable` refuses the cookie anywhere else, so a Mini App session
+  // cannot be replayed against the panel's own origin, or the other way round.
   const host = String(req.hostname || '').toLowerCase();
-  if (host !== configuredAdminHost()) throw new Error('admin_host_required');
+  if (host !== configuredAdminHost() && host !== configuredTmaHost()) {
+    throw new Error('admin_host_required');
+  }
 
   const rawToken = crypto.randomBytes(32).toString('base64url');
   const now = new Date();

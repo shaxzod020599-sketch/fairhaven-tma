@@ -17,8 +17,9 @@ function responseRecorder() {
   };
 }
 
-function loadHostGate(origin = 'https://admin.fairhaven.uz') {
+function loadHostGate(origin = 'https://admin.fairhaven.uz', tmaOrigin = 'https://mini.fairhaven.uz') {
   process.env.ADMIN_ORIGIN = origin;
+  process.env.TMA_ORIGIN = tmaOrigin;
   const target = require.resolve('../middleware/adminHostGate');
   delete require.cache[target];
   return require('../middleware/adminHostGate');
@@ -54,19 +55,23 @@ function signedInitData(user, token = '123456:test-token') {
   return params.toString();
 }
 
-test('admin host gate accepts only configured admin hostname', () => {
-  const gate = loadHostGate();
-  const res = responseRecorder();
-  let called = false;
+// Two hosts reach the admin API: the panel's own origin, and the Mini App,
+// where the operator panel is how this shop is run from a phone. Nothing else.
+for (const hostname of ['admin.fairhaven.uz', 'mini.fairhaven.uz']) {
+  test(`admin host gate accepts ${hostname}`, () => {
+    const gate = loadHostGate();
+    const res = responseRecorder();
+    let called = false;
 
-  gate({ hostname: 'admin.fairhaven.uz' }, res, () => { called = true; });
+    gate({ hostname }, res, () => { called = true; });
 
-  assert.equal(called, true);
-  assert.equal(res.statusCode, 200);
-});
+    assert.equal(called, true);
+    assert.equal(res.statusCode, 200);
+  });
+}
 
-for (const hostname of ['fairhaven.uz', 'mini.fairhaven.uz', 'evil.example']) {
-  test(`admin host gate rejects ${hostname}`, () => {
+for (const hostname of ['fairhaven.uz', 'evil.example', 'admin.fairhaven.uz.evil.example', '']) {
+  test(`admin host gate rejects ${hostname || '(no host)'}`, () => {
     const gate = loadHostGate();
     const res = responseRecorder();
     let called = false;
@@ -78,6 +83,25 @@ for (const hostname of ['fairhaven.uz', 'mini.fairhaven.uz', 'evil.example']) {
     assert.deepEqual(res.body, { success: false, error: 'admin_host_required' });
   });
 }
+
+// Marketplace wiring hands out integration credentials, so it stays behind the
+// panel's own origin even though the Mini App is past the outer gate.
+test('admin-host-only routes stay closed to the Mini App host', () => {
+  const { requireAdminHost } = loadHostGate();
+
+  for (const hostname of ['mini.fairhaven.uz', 'fairhaven.uz', 'evil.example']) {
+    const res = responseRecorder();
+    let called = false;
+    requireAdminHost({ hostname }, res, () => { called = true; });
+    assert.equal(called, false, `${hostname} must not reach an admin-host route`);
+    assert.equal(res.statusCode, 421);
+  }
+
+  const res = responseRecorder();
+  let called = false;
+  requireAdminHost({ hostname: 'admin.fairhaven.uz' }, res, () => { called = true; });
+  assert.equal(called, true);
+});
 
 test('configured admin host is derived from URL without port', () => {
   const gate = loadHostGate('http://admin.localhost:5173');
@@ -98,6 +122,7 @@ test('invalid production admin origin fails closed', () => {
 function loadSessionService({ sessionModel, userModel } = {}) {
   process.env.NODE_ENV = 'production';
   process.env.ADMIN_ORIGIN = 'https://admin.fairhaven.uz';
+  process.env.TMA_ORIGIN = 'https://mini.fairhaven.uz';
   process.env.ADMIN_CSRF_SECRET = 'test-csrf-secret-with-enough-entropy-123';
   const restores = [];
   if (sessionModel) restores.push(stubModule('../models/AdminSession', sessionModel));
@@ -147,6 +172,48 @@ test('admin session stores only token hash and emits hardened host-only cookie',
       maxAge: 8 * 60 * 60 * 1000,
     });
     assert.equal(issued.csrfToken, loaded.service.csrfForToken(cookie.value));
+  } finally {
+    loaded.restore();
+  }
+});
+
+// The Mini App signs in with initData rather than the browser handshake, so it
+// issues sessions of its own — recorded against its host, and refused anywhere
+// else. The __Host- cookie prefix keeps the two apart in the browser as well:
+// it forbids a Domain attribute, so the cookie never leaves the host that set it.
+test('Mini App host issues a session bound to itself and unusable on the panel', async () => {
+  let stored;
+  const loaded = loadSessionService({
+    sessionModel: {
+      create: async (doc) => { stored = doc; return doc; },
+    },
+  });
+
+  try {
+    await loaded.service.issueSession({
+      admin: { telegramId: 10001 },
+      req: { hostname: 'mini.fairhaven.uz', ip: '127.0.0.1', get: () => 'Telegram' },
+      res: { cookie() {} },
+    });
+
+    assert.equal(stored.host, 'mini.fairhaven.uz');
+
+    const session = {
+      host: 'mini.fairhaven.uz',
+      expiresAt: new Date(Date.now() + 60_000),
+      lastSeenAt: new Date(),
+    };
+    assert.equal(loaded.service.sessionUsable(session, 'mini.fairhaven.uz'), true);
+    assert.equal(loaded.service.sessionUsable(session, 'admin.fairhaven.uz'), false);
+
+    await assert.rejects(
+      loaded.service.issueSession({
+        admin: { telegramId: 10001 },
+        req: { hostname: 'fairhaven.uz', ip: '127.0.0.1', get: () => 'Browser' },
+        res: { cookie() {} },
+      }),
+      /admin_host_required/
+    );
   } finally {
     loaded.restore();
   }
@@ -214,6 +281,7 @@ function requestWithHeaders(method, headers = {}) {
 test('CSRF middleware exempts read-only methods', () => {
   process.env.NODE_ENV = 'production';
   process.env.ADMIN_ORIGIN = 'https://admin.fairhaven.uz';
+  process.env.TMA_ORIGIN = 'https://mini.fairhaven.uz';
   const target = require.resolve('../middleware/adminCsrf');
   delete require.cache[target];
   const csrf = require('../middleware/adminCsrf');
@@ -235,6 +303,7 @@ for (const [name, headers] of [
   test(`CSRF middleware rejects mutation with ${name}`, () => {
     process.env.NODE_ENV = 'production';
     process.env.ADMIN_ORIGIN = 'https://admin.fairhaven.uz';
+  process.env.TMA_ORIGIN = 'https://mini.fairhaven.uz';
     const target = require.resolve('../middleware/adminCsrf');
     delete require.cache[target];
     const csrf = require('../middleware/adminCsrf');
@@ -254,6 +323,7 @@ for (const [name, headers] of [
 test('CSRF middleware accepts exact origin and session-bound token', () => {
   process.env.NODE_ENV = 'production';
   process.env.ADMIN_ORIGIN = 'https://admin.fairhaven.uz';
+  process.env.TMA_ORIGIN = 'https://mini.fairhaven.uz';
   const target = require.resolve('../middleware/adminCsrf');
   delete require.cache[target];
   const csrf = require('../middleware/adminCsrf');
@@ -270,6 +340,47 @@ test('CSRF middleware accepts exact origin and session-bound token', () => {
 
   assert.equal(called, true);
   assert.equal(res.statusCode, 200);
+});
+
+// A page on one surface must not be able to spend a session belonging to the
+// other, so the Origin a mutation carries is judged against the host it was
+// sent to — not against one fixed origin for both.
+test('CSRF middleware ties each host to its own origin', () => {
+  process.env.NODE_ENV = 'production';
+  process.env.ADMIN_ORIGIN = 'https://admin.fairhaven.uz';
+  process.env.TMA_ORIGIN = 'https://mini.fairhaven.uz';
+  const target = require.resolve('../middleware/adminCsrf');
+  delete require.cache[target];
+  const csrf = require('../middleware/adminCsrf');
+
+  const attempt = (hostname, origin) => {
+    const req = requestWithHeaders('PATCH', {
+      origin,
+      'x-fh-csrf': 'valid-token',
+      'sec-fetch-site': 'same-origin',
+    });
+    req.hostname = hostname;
+    req.adminCsrfToken = 'valid-token';
+    const res = responseRecorder();
+    let called = false;
+    csrf(req, res, () => { called = true; });
+    return { called, res };
+  };
+
+  const tmaOnItsOwn = attempt('mini.fairhaven.uz', 'https://mini.fairhaven.uz');
+  assert.equal(tmaOnItsOwn.called, true);
+
+  const adminOnItsOwn = attempt('admin.fairhaven.uz', 'https://admin.fairhaven.uz');
+  assert.equal(adminOnItsOwn.called, true);
+
+  // Cross-surface: the right token, the wrong origin for that host.
+  const adminOriginOnTma = attempt('mini.fairhaven.uz', 'https://admin.fairhaven.uz');
+  assert.equal(adminOriginOnTma.called, false);
+  assert.equal(adminOriginOnTma.res.statusCode, 403);
+
+  const tmaOriginOnAdmin = attempt('admin.fairhaven.uz', 'https://mini.fairhaven.uz');
+  assert.equal(tmaOriginOnAdmin.called, false);
+  assert.equal(tmaOriginOnAdmin.res.statusCode, 403);
 });
 
 function loadAdminLoginService({ attemptModel, consumedModel, userModel, sessionService, telegramAuth } = {}) {
@@ -581,6 +692,7 @@ test('development login endpoint is inert in production', async () => {
 test('public admin auth endpoints require exact admin Origin without CSRF', () => {
   process.env.NODE_ENV = 'production';
   process.env.ADMIN_ORIGIN = 'https://admin.fairhaven.uz';
+  process.env.TMA_ORIGIN = 'https://mini.fairhaven.uz';
   const target = require.resolve('../middleware/adminCsrf');
   delete require.cache[target];
   const { requireAdminOrigin } = require('../middleware/adminCsrf');
@@ -664,6 +776,7 @@ test('surface routing maps each exact hostname to one build and rejects unknown 
   process.env.PUBLIC_ORIGIN = 'https://fairhaven.uz';
   process.env.ADMIN_ORIGIN = 'https://admin.fairhaven.uz';
   process.env.TMA_ORIGIN = 'https://mini.fairhaven.uz';
+  process.env.TMA_ORIGIN = 'https://mini.fairhaven.uz';
   const target = require.resolve('../utils/surfaces');
   delete require.cache[target];
   const { surfaceForHost } = require('../utils/surfaces');
@@ -679,6 +792,7 @@ test('public admin path redirects to isolated admin origin only on public host',
   process.env.NODE_ENV = 'production';
   process.env.PUBLIC_ORIGIN = 'https://fairhaven.uz';
   process.env.ADMIN_ORIGIN = 'https://admin.fairhaven.uz';
+  process.env.TMA_ORIGIN = 'https://mini.fairhaven.uz';
   process.env.TMA_ORIGIN = 'https://mini.fairhaven.uz';
   const target = require.resolve('../utils/surfaces');
   delete require.cache[target];

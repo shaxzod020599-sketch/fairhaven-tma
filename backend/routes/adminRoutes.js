@@ -16,19 +16,25 @@ const {
   uploadLimiter,
 } = require('../middleware/rateLimit');
 const adminHostGate = require('../middleware/adminHostGate');
+const { requireAdminHost } = require('../middleware/adminHostGate');
 const adminCsrf = require('../middleware/adminCsrf');
-const { requireAdminOrigin } = require('../middleware/adminCsrf');
+const { requireAdminOrigin, requireSurfaceOrigin } = require('../middleware/adminCsrf');
 
 // Defense in depth: nginx routes by hostname, but application authorization
 // must not depend on proxy configuration staying perfect.
 router.use(adminHostGate);
 
-// Authentication surface. These routes still require exact admin Origin for
+// Authentication surface. These routes still require an exact Origin for
 // mutations, but cannot require a session or CSRF before a session exists.
-router.post('/auth/login/start', adminLoginLimiter, requireAdminOrigin, adminAuthController.startLogin);
-router.post('/auth/login/poll', adminPollLimiter, requireAdminOrigin, adminAuthController.pollLogin);
-router.post('/auth/telegram', adminLoginLimiter, requireAdminOrigin, adminAuthController.telegramLogin);
-router.post('/auth/dev', adminLoginLimiter, requireAdminOrigin, adminAuthController.devLogin);
+//
+// The browser handshake signs you in by showing a code to compare in the bot,
+// which only the panel's own origin can drive — a Telegram web view cannot
+// follow the t.me link it hands out. The Mini App uses the initData exchange
+// instead, so that one route accepts either surface's own Origin.
+router.post('/auth/login/start', adminLoginLimiter, requireAdminHost, requireAdminOrigin, adminAuthController.startLogin);
+router.post('/auth/login/poll', adminPollLimiter, requireAdminHost, requireAdminOrigin, adminAuthController.pollLogin);
+router.post('/auth/telegram', adminLoginLimiter, requireSurfaceOrigin, adminAuthController.telegramLogin);
+router.post('/auth/dev', adminLoginLimiter, requireAdminHost, requireAdminOrigin, adminAuthController.devLogin);
 router.get('/auth/whoami', adminAuthController.whoami);
 // Compatibility alias for an already-open panel during rollout.
 router.get('/whoami', adminAuthController.whoami);
@@ -109,7 +115,10 @@ router.patch('/promos/:id', admin.updatePromo);
 router.delete('/promos/:id', admin.deletePromo);
 router.patch('/promos/:id/toggle', admin.togglePromo);
 
-// Sales channels (Medicalka, Uzum Tezkor)
+// Sales channels (Medicalka, Uzum Tezkor). Marketplace wiring is not work that
+// gets done from a phone, and it hands out integration credentials, so it stays
+// on the panel's own origin rather than riding along on the Mini App host.
+router.use('/channels', requireAdminHost);
 router.get('/channels/products', channels.listProducts);
 router.get('/channels/summary', channels.summary);
 router.patch('/channels/products/:id/meta', channels.updateProductMeta);

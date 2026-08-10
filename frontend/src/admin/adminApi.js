@@ -3,21 +3,62 @@ import { getTelegramInitData } from '../utils/telegram';
 const API = '/api/admin';
 const PUBLIC = '/api';
 
+const READ_ONLY = new Set(['GET', 'HEAD']);
+
 /**
- * Every admin call authenticates with Telegram's signed initData and nothing
- * else. There was once a pair of helpers here for a locally-stored Telegram id;
- * they only ever removed a key nothing wrote, and the login form that called
- * them could not succeed. Accepting a typed id would have been no proof of
- * identity at all, so the form is gone rather than repaired.
+ * Admin calls ride a server-side session, the same one the standalone panel
+ * uses. Telegram's signed initData is not a credential the protected routes
+ * accept — it buys a session, once, at /auth/telegram, and the CSRF token that
+ * comes back guards every mutation after it.
+ *
+ * There was once a pair of helpers here for a locally-stored Telegram id; they
+ * only ever removed a key nothing wrote, and the login form that called them
+ * could not succeed. Accepting a typed id would have been no proof of identity
+ * at all, so the form is gone rather than repaired.
  */
-async function adminRequest(endpoint, options = {}) {
+let csrfToken = '';
+
+export function rememberCsrfToken(token) {
+  csrfToken = token || '';
+}
+
+/**
+ * Spends this web view's initData for a session cookie. Telegram signs the
+ * payload and the server refuses one older than five minutes or already seen,
+ * so this is called only when there is no usable session left to reuse.
+ */
+export async function openAdminSession() {
   const initData = getTelegramInitData();
+  if (!initData) {
+    const err = new Error('Открыть панель можно только из Telegram');
+    err.code = 'telegram_init_data_missing';
+    throw err;
+  }
+  const res = await fetch(`${API}/auth/telegram`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ initData }),
+  });
+  const data = await res.json().catch(() => ({ success: false, error: 'bad_json' }));
+  if (!res.ok || data.success === false) {
+    const err = new Error(data.error || data.message || 'Не удалось войти');
+    err.status = res.status;
+    err.code = data.error;
+    throw err;
+  }
+  rememberCsrfToken(data?.data?.csrfToken);
+  return data;
+}
+
+async function adminRequest(endpoint, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase();
   const headers = {
     'Content-Type': 'application/json',
-    ...(initData ? { 'X-Telegram-Init-Data': initData } : {}),
+    ...(READ_ONLY.has(method) ? {} : { 'X-FH-CSRF': csrfToken }),
     ...(options.headers || {}),
   };
-  const config = { ...options, headers };
+  const config = { ...options, credentials: 'same-origin', headers };
   if (config.body && typeof config.body === 'object') {
     config.body = JSON.stringify(config.body);
   }
