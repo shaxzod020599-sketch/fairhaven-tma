@@ -682,18 +682,25 @@ function createBot(token, frontendUrl) {
   });
 
   // ---------------------------------------------------------------------------
-  // /admin — opens the standalone admin panel (admins only). The panel URL is
-  // configured via ADMIN_PANEL_URL (e.g. https://<domain>/admin/); silent for
-  // everyone else so the command's existence leaks nothing.
+  // /admin — opens the operator panel that lives inside the Mini App (admins
+  // only); silent for everyone else so the command's existence leaks nothing.
+  //
+  // It deliberately does not point at the standalone panel on its own host:
+  // that one signs you in by handing you a t.me link to confirm in the bot,
+  // and a Telegram web view cannot follow such a link — the button led to a
+  // login screen with no way forward. The Mini App authenticates from initData
+  // Telegram already provides, so opening it here just works.
   // ---------------------------------------------------------------------------
   bot.command('admin', async (ctx) => {
-    const panelUrl = process.env.ADMIN_PANEL_URL;
-    if (!panelUrl) return;
+    if (!FRONTEND) return;
     const user = await User.findOne({ telegramId: ctx.from.id });
     if (!user || user.role !== 'admin') return;
     await ctx.reply('⚙️ Panel boshqaruvi / Панель управления', {
       reply_markup: {
-        inline_keyboard: [[{ text: '⚙️ Ochish / Открыть', web_app: { url: panelUrl } }]],
+        inline_keyboard: [[{
+          text: '⚙️ Ochish / Открыть',
+          web_app: { url: `${FRONTEND}/?admin=1` },
+        }]],
       },
     });
   });
