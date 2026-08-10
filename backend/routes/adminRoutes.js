@@ -39,6 +39,12 @@ router.get('/auth/whoami', adminAuthController.whoami);
 // Compatibility alias for an already-open panel during rollout.
 router.get('/whoami', adminAuthController.whoami);
 
+// Marketplace channels configure the Billz, Uzum and Medicalka integrations and
+// issue their credentials — desk work, not phone work. Refused on the Mini App
+// host before a session is even looked at, so the wrong surface is turned away
+// on its own merits rather than incidentally failing to authenticate.
+router.use('/channels', requireAdminHost);
+
 // Everything below requires an admin user.
 router.use(adminAuth, adminCsrf);
 
@@ -115,10 +121,7 @@ router.patch('/promos/:id', admin.updatePromo);
 router.delete('/promos/:id', admin.deletePromo);
 router.patch('/promos/:id/toggle', admin.togglePromo);
 
-// Sales channels (Medicalka, Uzum Tezkor). Marketplace wiring is not work that
-// gets done from a phone, and it hands out integration credentials, so it stays
-// on the panel's own origin rather than riding along on the Mini App host.
-router.use('/channels', requireAdminHost);
+// Sales channels (Medicalka, Uzum Tezkor) — host-gated above.
 router.get('/channels/products', channels.listProducts);
 router.get('/channels/summary', channels.summary);
 router.patch('/channels/products/:id/meta', channels.updateProductMeta);
