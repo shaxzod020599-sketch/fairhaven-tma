@@ -210,7 +210,7 @@ const write = [requireKey('secret'), channelLimiter];
  * Their status vocabulary, mapped to what it means for stock.
  *
  * `received` and `accepted` are acknowledgements that change nothing on our
- * side — the reservation is already made when the order arrives.
+ * side — the sale is already complete when the order arrives.
  */
 const STATUS_ACTIONS = {
   paid: 'sell',
@@ -222,9 +222,9 @@ const STATUS_ACTIONS = {
 /**
  * What we report back, in their vocabulary rather than ours.
  *
- * Their examples answer `received` on creation and `processing` after a
- * payment. Our internal names — `reserved`, `sold` — are ours; sending them
- * would make an integrator match on words their own guide never mentions.
+ * Their examples use `processing` after a payment. Our internal names —
+ * `reserved`, `sold` — are ours; sending them would make an integrator match
+ * on words their own guide never mentions.
  */
 const STATUS_OUT = {
   received: 'received',
@@ -315,7 +315,7 @@ router.post('/orders', write, async (req, res, next) => {
         : unprocessable(res, parsed.error);
     }
 
-    const { order, created } = await orders.acceptOrder(CHANNEL, {
+    const { order } = await orders.acceptOrder(CHANNEL, {
       externalId: parsed.externalId,
       items: parsed.items,
       customer: parsed.customer,
@@ -325,26 +325,26 @@ router.post('/orders', write, async (req, res, next) => {
     // Allocated once and stored, so a resend answers with the same number
     // rather than burning a fresh one each time.
     const publicId = await orders.ensurePublicOrderId(order.internalOrderId);
+    const outcome = await orders.completeIncomingSale(order.internalOrderId);
 
-    // Answer before touching Billz. A resend gets the same answer as the
-    // original, which is what stops one customer order becoming two sales.
-    res.json({ wc_order_id: publicId, status: 'received' });
+    // Informational only, after the orchestrator has stored its final outcome.
+    // Telegram is not allowed to approve, retry or cancel an order.
+    notify.announceOrder(CHANNEL, parsed.externalId)
+      .catch((err) => logger.warn('order announcement failed', { err }));
 
-    if (created) {
-      orders.reserveOrder(order.internalOrderId)
-        .catch((err) => {
-          // Already recorded on the order as `failed`; an operator retries from
-          // the panel. Rejecting the request instead would make the marketplace
-          // resend an order we have in fact accepted.
-          logger.error('reservation failed after accepting order', {
-            internalOrderId: order.internalOrderId, err,
-          });
-        })
-        // Announced either way: a reservation that failed is precisely what an
-        // operator needs to see, and the card carries the reason.
-        .finally(() => notify.announceOrder(CHANNEL, parsed.externalId)
-          .catch((err) => logger.warn('order announcement failed', { err })));
+    if (outcome.kind === 'sold') {
+      return res.json({ wc_order_id: publicId, status: 'accepted' });
     }
+    if (outcome.kind === 'upstream_failure') {
+      return res.status(502).json({
+        code: 'mk_upstream_error',
+        detail: 'order could not be completed',
+      });
+    }
+    return res.status(503).json({
+      code: 'mk_unavailable',
+      detail: 'order processing is temporarily unavailable',
+    });
   } catch (err) { next(err); }
 });
 

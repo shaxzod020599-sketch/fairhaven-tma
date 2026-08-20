@@ -34,6 +34,8 @@ const DEFAULT_HOLD_TTL_MS = config.bot.holdTtlMs;
 // Long enough for the normal queued write sequence; expiry fences the owner
 // into reconciliation rather than allowing another worker to take over.
 const BILLZ_OPERATION_STALE_MS = 5 * 60 * 1000;
+const INCOMING_SALE_OBSERVE_MS = 30 * 1000;
+const INCOMING_SALE_POLL_MS = 50;
 
 class BillzOperationError extends Error {
   constructor(message, code) {
@@ -498,6 +500,104 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
   }
 }
 
+function incomingSaleOutcome(kind, order) {
+  return {
+    kind,
+    order: order?.toObject ? order.toObject() : order,
+  };
+}
+
+async function observeIncomingSale(
+  internalOrderId,
+  { observeTimeoutMs = INCOMING_SALE_OBSERVE_MS, observePollMs = INCOMING_SALE_POLL_MS } = {}
+) {
+  const deadline = Date.now() + observeTimeoutMs;
+
+  while (true) {
+    const order = await ChannelOrder().findOne({ internalOrderId }).lean();
+    if (!order) throw new Error(`unknown order ${internalOrderId}`);
+    if (order.status === 'sold') return incomingSaleOutcome('sold', order);
+    if (order.billz.reconciliationRequired || order.status === 'cancelled') {
+      return incomingSaleOutcome('temporary_failure', order);
+    }
+
+    const operationFinished = !order.billz.operationToken;
+    const failedReservation = operationFinished && order.status === 'failed';
+    const failedPayment = operationFinished
+      && order.status === 'reserved'
+      && Boolean(order.billz.lastError);
+    if (failedReservation || failedPayment) {
+      return incomingSaleOutcome('upstream_failure', order);
+    }
+    if (Date.now() >= deadline) return incomingSaleOutcome('temporary_failure', order);
+
+    await new Promise((resolve) => setTimeout(resolve, observePollMs));
+  }
+}
+
+async function classifyIncomingSaleFailure(internalOrderId, err, options) {
+  if (err.code === 'BILLZ_OPERATION_IN_PROGRESS') {
+    return observeIncomingSale(internalOrderId, options);
+  }
+
+  const order = await ChannelOrder().findOne({ internalOrderId }).lean();
+  if (!order) throw new Error(`unknown order ${internalOrderId}`);
+  if (order.status === 'sold') return incomingSaleOutcome('sold', order);
+  if (order.billz.reconciliationRequired
+    || err.code === 'BILLZ_RECONCILIATION_REQUIRED'
+    || err.code === 'BILLZ_OPERATION_OWNERSHIP_LOST') {
+    return incomingSaleOutcome('temporary_failure', order);
+  }
+  return incomingSaleOutcome('upstream_failure', order);
+}
+
+/**
+ * Converts an incoming marketplace order into a stored sale before acceptance.
+ *
+ * Billz writes stay inside reserveOrder/completeOrder so their atomic operation
+ * leases remain the sole ownership guard. A caller that loses that race becomes
+ * an observer: it waits for the winner's stored result and never takes over the
+ * external write itself.
+ */
+async function completeIncomingSale(internalOrderId, options = {}) {
+  let order = await ChannelOrder().findOne({ internalOrderId }).lean();
+  if (!order) throw new Error(`unknown order ${internalOrderId}`);
+  if (order.status === 'sold') return incomingSaleOutcome('sold', order);
+  if (order.billz.reconciliationRequired) {
+    return incomingSaleOutcome('temporary_failure', order);
+  }
+  if (!config.billzWriteEnabled) {
+    return incomingSaleOutcome('temporary_failure', order);
+  }
+
+  try {
+    if (['received', 'failed'].includes(order.status)) {
+      order = await reserveOrder(internalOrderId);
+    }
+  } catch (err) {
+    return classifyIncomingSaleFailure(internalOrderId, err, options);
+  }
+
+  if (order.status === 'sold') return incomingSaleOutcome('sold', order);
+  if (order.billz.reconciliationRequired) {
+    return incomingSaleOutcome('temporary_failure', order);
+  }
+  if (order.status !== 'reserved') return incomingSaleOutcome('upstream_failure', order);
+
+  try {
+    await completeOrder(internalOrderId);
+  } catch (err) {
+    return classifyIncomingSaleFailure(internalOrderId, err, options);
+  }
+
+  order = await ChannelOrder().findOne({ internalOrderId }).lean();
+  if (order.status === 'sold') return incomingSaleOutcome('sold', order);
+  if (order.billz.reconciliationRequired) {
+    return incomingSaleOutcome('temporary_failure', order);
+  }
+  return incomingSaleOutcome('upstream_failure', order);
+}
+
 /**
  * Cancels an order and returns any held stock.
  *
@@ -596,6 +696,7 @@ module.exports = {
   applyPendingQty,
   applyReservedQty,
   cancelOrder,
+  completeIncomingSale,
   completeOrder,
   ensurePublicOrderId,
   holdOrder,
