@@ -36,7 +36,6 @@ Fairhaven change below makes the handler correct and safe once that call arrives
 - Complete Billz reservation and payment synchronously before HTTP success.
 - Make duplicate and concurrent deliveries idempotent.
 - Stop blind retries of non-idempotent Billz writes.
-- Surface success and failure through the existing Telegram order card.
 - Use the existing `Sales -> Medicalka` ledger; it already reads `ChannelOrder`
   records and supports all channel statuses.
 - Keep the status endpoint for compatibility and future cancellation/return work.
@@ -66,8 +65,8 @@ Fairhaven change below makes the handler correct and safe once that call arrives
 6. Only after Billz payment succeeds does Fairhaven mark the order `sold` and
    return HTTP 200 with the same `wc_order_id` and Medicalka-compatible
    `accepted` status.
-7. Telegram is updated from stored final state. Existing `Sales -> Medicalka`
-   shows the sold row without a new page or approval control.
+7. Existing `Sales -> Medicalka` shows the sold row without a new page or
+   approval control. Creating the order does not send a Telegram notification.
 
 ## Idempotency and operation guard
 
@@ -112,24 +111,19 @@ raw provider responses, or stack traces.
 - Cancellation after sale remains rejected. It is a return/refund and will be
   implemented as a separate accounting flow.
 
-## Admin and Telegram
+## Admin visibility
 
 No new navigation or approval UI is needed. Existing `Sales -> Medicalka`
 already queries channel orders, lists `received`, `reserved`, `sold`,
 `cancelled`, and `failed`, and shows Billz state.
 
-Telegram posts or edits one card per Medicalka order after processing:
-
-- successful sale: `sold` with Medicalka and Billz identifiers;
-- safe failure: `failed` with sanitized reason;
-- uncertain Billz result: urgent reconciliation warning.
-
-Telegram remains informational. It cannot approve, retry, cancel, or move stock.
+Fairhaven has no approval or rejection UI. Medicalka order creation does not
+post or edit a Telegram card; Medicalka approval is not a Telegram action.
 
 ## Verification
 
-All verification uses an in-memory MongoDB plus fake Billz and fake Telegram.
-No production or third-party write credentials are present.
+All verification uses an in-memory MongoDB plus fake Billz. No production or
+third-party write credentials are present.
 
 Required tests:
 
@@ -147,7 +141,6 @@ Required tests:
 - payment rejection preserves one draft and never creates a second one;
 - successful order appears in Medicalka sales analytics;
 - failed order remains visible in the same ledger;
-- Telegram receives one final-state announcement;
 - existing bot, Uzum, Medicalka contract, analytics, and Billz safety suites
   remain green.
 

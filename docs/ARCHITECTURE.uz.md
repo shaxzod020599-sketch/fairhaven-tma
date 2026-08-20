@@ -106,9 +106,9 @@ received ──► reserved ──► sold
     └──► failed  (qayta urinish mumkin)
 ```
 
-| Kanal | `received` → `reserved` qachon |
+| Kanal | `received` dan keyingi ishlov qachon |
 |---|---|
-| Medicalka | zakaz kelgan zahoti, javobdan keyin |
+| Medicalka | `POST` ichida: `reserved` holatida kutmasdan Billz sotuv tugagachgina `200 accepted` qaytadi |
 | Uzum | zakaz kelgan zahoti, javobdan keyin |
 | Bot | **Telegram kanalida tasdiqlangandan keyin** |
 
@@ -118,8 +118,17 @@ received ──► reserved ──► sold
 indeks. Ikki nusxa bir vaqtda kelsa, indeks hal qiladi; yutqazgan g'olibni o'qib
 qaytaradi, xato bermaydi — aks holda marketpleys yana yuborardi.
 
-**Javob Billz'dan oldin beriladi.** Uzum 15 daqiqada tasdiq ko'rmasa zakazni
-bekor qiladi. Zakazni qabul qilish tashqi tizimning tezligiga bog'liq bo'lolmaydi.
+**Medicalka uchun muvaffaqiyat Billz'dan keyin beriladi.** Medicalka kabineti
+zakazni oldindan tasdiqlaydi yoki rad etadi; autentifikatsiyalangan `POST` —
+tayyor sotuv niyati. Channel-hub bitta Billz sotuvini sinxron tugatib, keyin
+`200 accepted` qaytaradi. `POST` kelmasa Fairhaven hech narsa qilmaydi.
+Takror so'rovlar o'sha barqaror butun `wc_order_id` ni qaytaradi va ikkinchi
+draft, to'lov yoki sotuv yaratmaydi. Keyingi `paid` yoki
+`payment_confirmed` faqat idempotent moslik tasdig'i; sotuvdan keyingi bekor
+qilish rad etiladi, qaytarish/kompensatsiya esa alohida kelajak jarayoni.
+
+Bu qoida Uzum uchun javobni Billz'dan oldin beradigan oqimga tatbiq etilmaydi:
+Uzum 15 daqiqada tasdiq ko'rmasa zakazni bekor qiladi.
 
 ---
 
@@ -191,6 +200,12 @@ Query string'da kalit: `?token=` o'qish uchun, `?secret=` zakaz uchun. `id` va
 Ostatoksiz tovar `404` qaytaradi — bu ularning kontraktida shunday, mijozi buni
 `None` ga aylantiradi.
 
+Mavjud o'qish tokeni va zakaz siri o'zgarishsiz amalda qoladi: bu ish ularni
+bermaydi, aylantirmaydi, bekor qilmaydi, qayta xeshlamaydi va format yoki query
+parametr nomlarini o'zgartirmaydi. Oldin bekor qilingan test kalitlari bekor
+qoladi. Mavjud `Sales → Medicalka` ko'rinishi natijalarni ko'rsatadi; Fairhaven
+tasdiqlash/rad etish interfeysini qo'shmaydi.
+
 ### Uzum Tezkor
 
 Yandex Eats oilasidan, ya'ni kelajakdagi Yandex shu shablondan chiqadi.
@@ -228,9 +243,9 @@ o'shanga keshlaydi va boshqa hech qachon qayta olmaydi.
 
 ## 6. Telegram xabarnomalari
 
-Marketpleys zakazlari botdan o'tmaydi, shuning uchun channel-hub kartochkani
-o'zi yuboradi va status o'zgarganda **o'sha xabarni tahrirlaydi** — bitta zakaz
-kanalda bitta xabar bo'lib qoladi.
+Medicalka zakazini yaratish endpointi Telegram xabari yubormaydi. Medicalka
+uchun tasdiqlash Telegram orqali emas: ularning kabinetida, `POST` Fairhaven'ga
+yetib kelishidan oldin bajariladi.
 
 Bot zakazlari uchun kartochkani backend yuboradi (tasdiqlash tugmalari bilan).
 Channel-hub ular haqida faqat **Billz xatosi** bo'lganda gapiradi — backend

@@ -19,6 +19,14 @@ Telegram card surface outcome.
 **Tech stack:** Node.js 20+, Express, Mongoose/MongoDB, native `node:test`, fake
 Billz client, in-memory MongoDB.
 
+> **Superseding scope note (2026-08-20):** The Telegram notification/card work
+> described below is not a Medicalka immediate-sale deliverable. Creating a
+> Medicalka order does not send Telegram, and approval remains solely in the
+> Medicalka cabinet before its outbound `POST`. The existing `Sales → Medicalka`
+> view remains the required Fairhaven visibility; no Fairhaven approve/reject UI
+> is introduced. This note supersedes only those outdated Telegram promises and
+> preserves the plan's task history.
+
 **Worktree:**
 `/Users/tm/.config/superpowers/worktrees/fairhaven-vitamin-delivery/medicalka-immediate-sale`
 
