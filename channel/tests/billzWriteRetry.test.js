@@ -4,12 +4,12 @@ const test = require('node:test');
 process.env.MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017';
 process.env.BILLZ_SECRET_TOKEN = process.env.BILLZ_SECRET_TOKEN || 'test-secret';
 process.env.BILLZ_SHOP_ID = process.env.BILLZ_SHOP_ID || 'shop-a';
-process.env.BILLZ_WRITE_ENABLED = 'true';
 
 const clientPath = require.resolve('../src/billz/client');
 const authPath = require.resolve('../src/billz/auth');
 const limiterPath = require.resolve('../src/billz/limiter');
 const queuePath = require.resolve('../src/billz/queue');
+const configPath = require.resolve('../src/config');
 
 function response(status, body = {}, headers = {}) {
   return {
@@ -22,13 +22,26 @@ function response(status, body = {}, headers = {}) {
   };
 }
 
+function rawResponse(status, text, headers = {}) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: {
+      get(name) { return headers[name.toLowerCase()] || null; },
+    },
+    text: async () => text,
+  };
+}
+
 async function withFreshClient(run) {
   const originalFetch = global.fetch;
+  const originalWriteEnabled = process.env.BILLZ_WRITE_ENABLED;
   const cached = new Map([
     [clientPath, require.cache[clientPath]],
     [authPath, require.cache[authPath]],
     [limiterPath, require.cache[limiterPath]],
     [queuePath, require.cache[queuePath]],
+    [configPath, require.cache[configPath]],
   ]);
   const auth = {
     tokens: ['token-1', 'token-2'],
@@ -39,6 +52,8 @@ async function withFreshClient(run) {
   const delays = [];
 
   delete require.cache[clientPath];
+  delete require.cache[configPath];
+  process.env.BILLZ_WRITE_ENABLED = 'true';
   require.cache[authPath] = { exports: auth };
   require.cache[limiterPath] = { exports: { sleep: async (delay) => { delays.push(delay); } } };
   require.cache[queuePath] = { exports: { limiter: { schedule: (work) => work() } } };
@@ -52,6 +67,8 @@ async function withFreshClient(run) {
       if (module) require.cache[path] = module;
       else delete require.cache[path];
     }
+    if (originalWriteEnabled === undefined) delete process.env.BILLZ_WRITE_ENABLED;
+    else process.env.BILLZ_WRITE_ENABLED = originalWriteEnabled;
     global.fetch = originalFetch;
   }
 }
@@ -86,16 +103,20 @@ test('GET retries a 5xx response through the bounded retry ladder', async () => 
 
 test('POST network failure is reported as an unknown outcome without retrying', async () => {
   await withFreshClient(async ({ client, delays }) => {
+    const networkSecret = 'network-secret-token';
     let calls = 0;
     global.fetch = async () => {
       calls += 1;
-      throw new Error('socket reset');
+      throw new Error(`socket reset: ${networkSecret}`);
     };
 
     await assert.rejects(client.request('POST', '/v2/order', { body: {} }), (err) => {
       assert.ok(err instanceof client.BillzError);
       assert.equal(err.outcomeUnknown, true);
       assert.equal(err.retrySafe, false);
+      assert.equal(err.message.includes(networkSecret), false);
+      assert.equal(err.body, undefined);
+      assert.equal(JSON.stringify({ name: err.name, message: err.message, body: err.body }).includes(networkSecret), false);
       return true;
     });
     assert.equal(calls, 1);
@@ -105,16 +126,20 @@ test('POST network failure is reported as an unknown outcome without retrying', 
 
 test('POST 5xx is reported as an unknown outcome without retrying', async () => {
   await withFreshClient(async ({ client, delays }) => {
+    const providerSecret = 'provider-secret-token';
     let calls = 0;
     global.fetch = async () => {
       calls += 1;
-      return response(503);
+      return rawResponse(503, `upstream rejected request: ${providerSecret}`);
     };
 
     await assert.rejects(client.request('POST', '/v2/order', { body: {} }), (err) => {
       assert.ok(err instanceof client.BillzError);
       assert.equal(err.outcomeUnknown, true);
       assert.equal(err.retrySafe, false);
+      assert.equal(err.message.includes(providerSecret), false);
+      assert.equal(JSON.stringify(err.body).includes(providerSecret), false);
+      assert.equal(JSON.stringify({ name: err.name, message: err.message, body: err.body }).includes(providerSecret), false);
       return true;
     });
     assert.equal(calls, 1);
@@ -152,13 +177,35 @@ test('POST explicit 4xx is rejected safely without exposing provider credentials
     await assert.rejects(client.request('POST', '/v2/order', { body: {} }), (err) => {
       assert.equal(err.outcomeUnknown, false);
       assert.equal(err.retrySafe, true);
+      assert.equal(err.message.includes(providerSecret), false);
       assert.equal(JSON.stringify(err).includes(providerSecret), false);
       assert.equal(JSON.stringify(err.body).includes(providerSecret), false);
+      assert.equal(JSON.stringify({ name: err.name, message: err.message, body: err.body }).includes(providerSecret), false);
       return true;
     });
     assert.equal(calls, 1);
     assert.deepEqual(delays, []);
   });
+});
+
+test('fresh client enables writes only while loading and restores an absent setting', async () => {
+  const originalWriteEnabled = process.env.BILLZ_WRITE_ENABLED;
+  const cachedConfig = require.cache[configPath];
+  delete process.env.BILLZ_WRITE_ENABLED;
+  delete require.cache[configPath];
+
+  try {
+    await withFreshClient(async ({ client }) => {
+      global.fetch = async () => response(422);
+      await assert.rejects(client.request('POST', '/v2/order', { body: {} }), (err) => err.status === 422);
+    });
+    assert.equal(process.env.BILLZ_WRITE_ENABLED, undefined);
+  } finally {
+    if (originalWriteEnabled === undefined) delete process.env.BILLZ_WRITE_ENABLED;
+    else process.env.BILLZ_WRITE_ENABLED = originalWriteEnabled;
+    if (cachedConfig) require.cache[configPath] = cachedConfig;
+    else delete require.cache[configPath];
+  }
 });
 
 test('POST 401 invalidates authentication and retries once', async () => {

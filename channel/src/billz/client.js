@@ -25,7 +25,7 @@ class BillzError extends Error {
     this.name = 'BillzError';
     this.status = status;
     this.path = path;
-    this.body = logger.redact(body);
+    this.body = body ? { error: 'provider_error' } : body;
     this.outcomeUnknown = outcomeUnknown;
     this.retrySafe = retrySafe;
   }
@@ -55,7 +55,7 @@ async function send(method, path, { query, body, token, headers }) {
 
   const text = await res.text();
   let parsed = null;
-  try { parsed = text ? JSON.parse(text) : null; } catch (_) { parsed = { raw: text.slice(0, 300) }; }
+  try { parsed = text ? JSON.parse(text) : null; } catch (_) { parsed = { error: 'unparseable_provider_response' }; }
   return { res, parsed };
 }
 
@@ -83,7 +83,7 @@ async function request(method, path, options = {}) {
       // matters most during the catalogue walk: without it a single blip on
       // page 7 abandoned the whole sync.
       if (isWrite) {
-        throw new BillzError(`billz ${method} ${path} failed: ${err.message}`, {
+        throw new BillzError(`billz ${method} ${path} failed`, {
           status: 0,
           path,
           outcomeUnknown: true,
@@ -91,11 +91,11 @@ async function request(method, path, options = {}) {
         });
       }
       if (attempt >= RETRY_DELAYS_MS.length) {
-        throw new BillzError(`billz ${method} ${path} failed: ${err.message}`, { status: 0, path });
+        throw new BillzError(`billz ${method} ${path} failed`, { status: 0, path });
       }
       const delay = RETRY_DELAYS_MS[attempt];
       attempt += 1;
-      logger.warn('billz request network error, retrying', { path, delay, err });
+      logger.warn('billz request network error, retrying', { path, delay, error: err.name });
       await sleep(delay);
       continue;
     }
