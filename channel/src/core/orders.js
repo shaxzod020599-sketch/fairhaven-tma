@@ -35,7 +35,7 @@ const DEFAULT_HOLD_TTL_MS = config.bot.holdTtlMs;
 // into reconciliation rather than allowing another worker to take over.
 const BILLZ_OPERATION_STALE_MS = 5 * 60 * 1000;
 const INCOMING_SALE_OBSERVE_MS = 30 * 1000;
-const INCOMING_SALE_POLL_MS = 50;
+const INCOMING_SALE_POLL_MS = 250;
 
 class BillzOperationError extends Error {
   constructor(message, code) {
@@ -215,15 +215,28 @@ async function claimBillzOperation(internalOrderId, action, allowedStatuses) {
   const Model = ChannelOrder();
   const token = crypto.randomUUID();
   const startedAt = new Date();
+  const nonFailedStatuses = allowedStatuses.filter((status) => status !== 'failed');
+  const claimableStatuses = [
+    ...(nonFailedStatuses.length ? [{ status: { $in: nonFailedStatuses } }] : []),
+    ...(allowedStatuses.includes('failed')
+      ? [{ status: 'failed', 'billz.failureDisposition': 'retry_safe' }]
+      : []),
+  ];
   const order = await Model.findOneAndUpdate(
     {
       internalOrderId,
-      status: { $in: allowedStatuses },
       'billz.reconciliationRequired': { $ne: true },
-      $or: [
-        { 'billz.operationToken': '' },
-        { 'billz.operationToken': null },
-        { 'billz.operationToken': { $exists: false } },
+      $and: [
+        {
+          $or: claimableStatuses,
+        },
+        {
+          $or: [
+            { 'billz.operationToken': '' },
+            { 'billz.operationToken': null },
+            { 'billz.operationToken': { $exists: false } },
+          ],
+        },
       ],
     },
     {
@@ -232,6 +245,7 @@ async function claimBillzOperation(internalOrderId, action, allowedStatuses) {
         'billz.operationToken': token,
         'billz.operationStartedAt': startedAt,
         'billz.reconciliationRequired': false,
+        'billz.failureDisposition': '',
         'billz.lastTriedAt': startedAt,
       },
       $inc: { 'billz.attempts': 1 },
@@ -242,7 +256,18 @@ async function claimBillzOperation(internalOrderId, action, allowedStatuses) {
 
   const current = await Model.findOne({ internalOrderId });
   if (!current) throw new Error(`unknown order ${internalOrderId}`);
+
   if (current.billz.reconciliationRequired) {
+    if (current.status === 'failed' && current.billz.failureDisposition !== 'retry_safe') {
+      await Model.updateOne(
+        {
+          _id: current._id,
+          status: 'failed',
+          'billz.failureDisposition': { $ne: 'retry_safe' },
+        },
+        { $set: { 'billz.failureDisposition': 'reconciliation_required' } }
+      );
+    }
     throw operationError(internalOrderId, 'BILLZ_RECONCILIATION_REQUIRED');
   }
 
@@ -261,6 +286,7 @@ async function claimBillzOperation(internalOrderId, action, allowedStatuses) {
           $set: {
             status: 'failed',
             'billz.reconciliationRequired': true,
+            'billz.failureDisposition': 'reconciliation_required',
             'billz.lastError': `stale ${current.billz.operationAction || 'Billz'} operation`,
           },
         },
@@ -281,6 +307,43 @@ async function claimBillzOperation(internalOrderId, action, allowedStatuses) {
     throw operationError(internalOrderId, 'BILLZ_OPERATION_IN_PROGRESS');
   }
 
+  // Before this disposition existed, `failed` said nothing about whether
+  // Billz rejected the request or might already have applied it. Only records
+  // with no active owner are legacy-classified here; an active safe retry has
+  // already cleared its old disposition and must remain merely in progress.
+  if (current.status === 'failed' && current.billz.failureDisposition !== 'retry_safe') {
+    const marked = await Model.findOneAndUpdate(
+      {
+        _id: current._id,
+        status: 'failed',
+        'billz.failureDisposition': { $ne: 'retry_safe' },
+        'billz.reconciliationRequired': { $ne: true },
+        $or: [
+          { 'billz.operationToken': '' },
+          { 'billz.operationToken': null },
+          { 'billz.operationToken': { $exists: false } },
+        ],
+      },
+      {
+        $set: {
+          'billz.reconciliationRequired': true,
+          'billz.failureDisposition': 'reconciliation_required',
+        },
+      },
+      { new: true }
+    );
+    if (marked) throw operationError(internalOrderId, 'BILLZ_RECONCILIATION_REQUIRED');
+
+    const fresh = await Model.findOne({ internalOrderId });
+    if (fresh?.billz.reconciliationRequired) {
+      throw operationError(internalOrderId, 'BILLZ_RECONCILIATION_REQUIRED');
+    }
+    if (fresh?.billz.operationToken) {
+      throw operationError(internalOrderId, 'BILLZ_OPERATION_IN_PROGRESS');
+    }
+    return { order: fresh, token: '' };
+  }
+
   return { order: current, token: '' };
 }
 
@@ -292,6 +355,26 @@ async function persistBillzOperation(order, token, fields) {
       'billz.reconciliationRequired': { $ne: true },
     },
     { $set: fields },
+    { new: true }
+  );
+  if (!updated) {
+    throw operationError(order.internalOrderId, 'BILLZ_OPERATION_OWNERSHIP_LOST');
+  }
+  return updated;
+}
+
+async function checkpointBillzDraft(order, token, { orderId, orderNumber }) {
+  const updated = await ChannelOrder().findOneAndUpdate(
+    {
+      _id: order._id,
+      'billz.operationToken': token,
+    },
+    {
+      $set: {
+        'billz.draftOrderId': orderId,
+        'billz.orderNumber': orderNumber || '',
+      },
+    },
     { new: true }
   );
   if (!updated) {
@@ -315,13 +398,8 @@ async function refreshBillzOperationLease(order, token) {
   }
 }
 
-function isLegacyUnclassifiedError(err) {
-  return err?.outcomeUnknown === undefined && err?.retrySafe === undefined;
-}
-
 function isSafePreEffectFailure(err) {
-  return err?.outcomeUnknown !== true
-    && (err?.retrySafe === true || isLegacyUnclassifiedError(err));
+  return err?.outcomeUnknown === false && err?.retrySafe === true;
 }
 
 /**
@@ -352,6 +430,7 @@ async function reserveOrder(internalOrderId) {
       await persistBillzOperation(order, token, {
         status: 'failed',
         'billz.reconciliationRequired': true,
+        'billz.failureDisposition': 'reconciliation_required',
         'billz.lastError': 'an existing Billz draft requires reconciliation',
       });
       throw operationError(internalOrderId, 'BILLZ_RECONCILIATION_REQUIRED');
@@ -364,6 +443,14 @@ async function reserveOrder(internalOrderId) {
         unitPrice: i.unitPrice,
       })),
       comment: `${order.channel} ${order.externalId}`,
+      onProgress: async (progress) => {
+        if (progress.stage === 'draft_created') {
+          draftOrderId = progress.orderId;
+          orderNumber = progress.orderNumber;
+          await checkpointBillzDraft(order, token, progress);
+        }
+        await refreshBillzOperationLease(order, token);
+      },
     });
     draftOrderId = result.orderId;
     orderNumber = result.orderNumber;
@@ -399,6 +486,7 @@ async function reserveOrder(internalOrderId) {
       'billz.reservationApplied': reservationApplied,
       'billz.pendingApplied': pendingApplied,
       'billz.lastError': '',
+      'billz.failureDisposition': '',
       ...clearedOperationFields(),
     });
 
@@ -422,6 +510,9 @@ async function reserveOrder(internalOrderId) {
       'billz.pendingApplied': pendingApplied,
       'billz.lastError': err.message,
       'billz.reconciliationRequired': reconciliationRequired,
+      'billz.failureDisposition': reconciliationRequired
+        ? 'reconciliation_required'
+        : 'retry_safe',
       ...(reconciliationRequired ? {} : clearedOperationFields()),
     });
     logger.error('channel order reservation failed', { internalOrderId, err });
@@ -478,6 +569,7 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
       'billz.reservationApplied': reservationApplied,
       'billz.pendingApplied': pendingApplied,
       'billz.lastError': '',
+      'billz.failureDisposition': '',
       ...clearedOperationFields(),
     });
 
@@ -493,6 +585,7 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
       'billz.pendingApplied': pendingApplied,
       'billz.lastError': err.message,
       'billz.reconciliationRequired': !retrySafe,
+      'billz.failureDisposition': retrySafe ? 'retry_safe' : 'reconciliation_required',
       ...(retrySafe ? clearedOperationFields() : {}),
     });
     logger.error('channel order sale failed', { internalOrderId, err });
@@ -664,6 +757,7 @@ async function cancelOrder(internalOrderId, { reason = '' } = {}) {
       'billz.reservationApplied': reservationApplied,
       'billz.pendingApplied': pendingApplied,
       'billz.lastError': lastError,
+      'billz.failureDisposition': '',
       ...clearedOperationFields(),
     });
 
@@ -681,6 +775,7 @@ async function cancelOrder(internalOrderId, { reason = '' } = {}) {
       'billz.pendingApplied': pendingApplied,
       'billz.lastError': err.message,
       'billz.reconciliationRequired': !retrySafe,
+      'billz.failureDisposition': retrySafe ? 'retry_safe' : 'reconciliation_required',
       ...(retrySafe ? clearedOperationFields() : {}),
     });
     logger.warn('channel order cancellation failed', { internalOrderId, err });

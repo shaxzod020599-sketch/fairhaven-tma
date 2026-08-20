@@ -223,7 +223,7 @@ async function orderTotal(orderId) {
  * manual discount is the documented way to force a price on such a product;
  * both are per unit, verified against the live company.
  */
-async function ensurePricing(orderId, items) {
+async function ensurePricing(orderId, items, { onProgress } = {}) {
   const priced = items.filter((item) => Number(item.unitPrice) > 0);
   if (!priced.length) return; // Billz's own pricing is what we want.
 
@@ -234,6 +234,9 @@ async function ensurePricing(orderId, items) {
 
   logger.warn('billz priced the draft differently — forcing the channel price', { orderId });
   for (const item of priced) {
+    if (onProgress) {
+      await onProgress({ stage: 'before_write', operation: 'set_line_price', orderId });
+    }
     await setLinePrice(orderId, { productId: item.billzProductId, price: item.unitPrice });
   }
 
@@ -260,13 +263,17 @@ async function ensurePricing(orderId, items) {
  * Returns the draft id even when a later step fails, so the caller can release
  * or retry rather than leaving a half-built draft holding stock invisibly.
  */
-async function reserveOrder({ items, comment, expiresAt, sellerIds }) {
+async function reserveOrder({ items, comment, expiresAt, sellerIds, onProgress }) {
   if (!Array.isArray(items) || !items.length) throw new Error('an order needs at least one line');
 
   const { orderId, orderNumber } = await createDraft({ comment });
 
   try {
+    if (onProgress) await onProgress({ stage: 'draft_created', orderId, orderNumber });
     for (const item of items) {
+      if (onProgress) {
+        await onProgress({ stage: 'before_write', operation: 'add_line', orderId });
+      }
       await addLine(orderId, {
         productId: item.billzProductId,
         quantity: item.quantity,
@@ -276,7 +283,8 @@ async function reserveOrder({ items, comment, expiresAt, sellerIds }) {
     }
     // Before the reservation, deliberately: a mispriced draft is cheap to
     // abandon and expensive to discover at payment.
-    await ensurePricing(orderId, items);
+    await ensurePricing(orderId, items, { onProgress });
+    if (onProgress) await onProgress({ stage: 'before_write', operation: 'reserve', orderId });
     await reserve(orderId, { expiresAt, comment });
     logger.info('billz reservation created', { orderId, orderNumber, lines: items.length });
     return { orderId, orderNumber };

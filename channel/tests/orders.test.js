@@ -238,12 +238,14 @@ test('two parallel reservations create one draft and hold the units once', async
   }
 });
 
-test('a failed reservation holds nothing and can be retried', async () => {
+test('an explicit safe reservation rejection holds nothing and can be retried', async () => {
   let attempts = 0;
   const stub = stubSale({
     reserveOrder: async () => {
       attempts += 1;
-      if (attempts === 1) throw new Error('billz refused');
+      if (attempts === 1) {
+        throw classifiedError('billz refused', { outcomeUnknown: false, retrySafe: true });
+      }
       return { orderId: 'draft-retry', orderNumber: '901' };
     },
   });
@@ -461,6 +463,34 @@ test('an unclassified release failure requires reconciliation without local clea
   }
 });
 
+test('an unknown draft deletion after release requires reconciliation without local cleanup', async () => {
+  const stub = stubSale({
+    deleteDraft: async () => {
+      throw classifiedError('delete connection lost', { outcomeUnknown: true, retrySafe: false });
+    },
+  });
+  const { order, productId } = await freshOrder();
+  try {
+    await orders.reserveOrder(order.internalOrderId);
+    await assert.rejects(orders.cancelOrder(order.internalOrderId), /delete connection lost/);
+    await assert.rejects(
+      orders.cancelOrder(order.internalOrderId),
+      (err) => err.code === 'BILLZ_RECONCILIATION_REQUIRED'
+    );
+
+    const stored = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId }).lean();
+    assert.equal(stored.status, 'failed');
+    assert.equal(stored.billz.reservationApplied, true);
+    assert.equal(stored.billz.reconciliationRequired, true);
+    assert.equal(stored.billz.failureDisposition, 'reconciliation_required');
+    assert.equal(stub.calls.filter((call) => call.fn === 'releaseReservation').length, 1);
+    assert.equal(stub.calls.filter((call) => call.fn === 'deleteDraft').length, 1);
+    assert.equal(await reservedFor(productId), 3);
+  } finally {
+    stub.restore();
+  }
+});
+
 /* ── Transitions that must not happen ────────────────────────────────────── */
 
 test('a sold order cannot be cancelled', async () => {
@@ -541,6 +571,29 @@ test('an unknown reservation result requires reconciliation and blocks every ret
   }
 });
 
+test('an unclassified reservation failure is never automatically retried', async () => {
+  const stub = stubSale({
+    reserveOrder: async () => { throw new Error('unclassified failure'); },
+  });
+  const { order, productId } = await freshOrder();
+  try {
+    await assert.rejects(orders.reserveOrder(order.internalOrderId), /unclassified failure/);
+    await assert.rejects(
+      orders.reserveOrder(order.internalOrderId),
+      (err) => err.code === 'BILLZ_RECONCILIATION_REQUIRED'
+    );
+
+    const stored = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId }).lean();
+    assert.equal(stored.status, 'failed');
+    assert.equal(stored.billz.reconciliationRequired, true);
+    assert.equal(stored.billz.failureDisposition, 'reconciliation_required');
+    assert.equal(stub.calls.filter((call) => call.fn === 'reserveOrder').length, 1);
+    assert.equal(await reservedFor(productId), 0);
+  } finally {
+    stub.restore();
+  }
+});
+
 test('a known draft from a partial reservation failure blocks automatic retry', async () => {
   const stub = stubSale({
     reserveOrder: async () => {
@@ -584,11 +637,53 @@ test('an explicit pre-effect rejection unlocks the order for a safe retry', asyn
     assert.equal(failed.status, 'failed');
     assert.equal(failed.billz.operationToken, '');
     assert.equal(failed.billz.reconciliationRequired, false);
+    assert.equal(failed.billz.failureDisposition, 'retry_safe');
 
     await orders.reserveOrder(order.internalOrderId);
     assert.equal(stub.calls.filter((c) => c.fn === 'reserveOrder').length, 2);
     assert.equal(await reservedFor(productId), 3);
   } finally {
+    stub.restore();
+  }
+});
+
+test('a concurrent observer cannot reclassify an active safe retry as legacy', async () => {
+  const retryEntered = deferred();
+  const finishRetry = deferred();
+  let attempts = 0;
+  const stub = stubSale({
+    reserveOrder: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw classifiedError('request rejected', { outcomeUnknown: false, retrySafe: true });
+      }
+      retryEntered.resolve();
+      await finishRetry.promise;
+      return { orderId: 'draft-safe-race', orderNumber: '907' };
+    },
+  });
+  const { order, productId } = await freshOrder();
+  let retry;
+
+  try {
+    await assert.rejects(orders.reserveOrder(order.internalOrderId), /request rejected/);
+    retry = orders.reserveOrder(order.internalOrderId);
+    await retryEntered.promise;
+    await assert.rejects(
+      orders.reserveOrder(order.internalOrderId),
+      (err) => err.code === 'BILLZ_OPERATION_IN_PROGRESS'
+    );
+
+    finishRetry.resolve();
+    const stored = await retry;
+    assert.equal(stored.status, 'reserved');
+    assert.equal(stored.billz.reconciliationRequired, false);
+    assert.equal(stored.billz.failureDisposition, '');
+    assert.equal(stub.calls.filter((call) => call.fn === 'reserveOrder').length, 2);
+    assert.equal(await reservedFor(productId), 3);
+  } finally {
+    finishRetry.resolve();
+    await Promise.allSettled([retry].filter(Boolean));
     stub.restore();
   }
 });
@@ -750,6 +845,53 @@ test('a worker that finishes after its lease goes stale cannot clear reconciliat
   }
 });
 
+test('a stale fence after draft creation retains the draft and blocks every later write', async () => {
+  let internalOrderId;
+  let laterBillzWrites = 0;
+  const stub = stubSale({
+    reserveOrder: async (args) => {
+      // The fake draft now exists in Billz. Fence this owner before its draft
+      // checkpoint lands, then let the checkpoint report the known id.
+      await ChannelOrder().updateOne(
+        { internalOrderId },
+        { $set: { 'billz.operationStartedAt': new Date(Date.now() - 60 * 60 * 1000) } }
+      );
+      await assert.rejects(
+        orders.reserveOrder(internalOrderId),
+        (err) => err.code === 'BILLZ_RECONCILIATION_REQUIRED'
+      );
+      await args.onProgress({
+        stage: 'draft_created', orderId: 'draft-checkpointed', orderNumber: '906',
+      });
+      laterBillzWrites += 1;
+      return { orderId: 'draft-checkpointed', orderNumber: '906' };
+    },
+  });
+  const { order, productId } = await freshOrder();
+  internalOrderId = order.internalOrderId;
+
+  try {
+    await assert.rejects(
+      orders.reserveOrder(internalOrderId),
+      (err) => err.code === 'BILLZ_OPERATION_OWNERSHIP_LOST'
+    );
+
+    const stored = await ChannelOrder().findOne({ internalOrderId }).lean();
+    assert.equal(stored.status, 'failed');
+    assert.equal(stored.billz.draftOrderId, 'draft-checkpointed');
+    assert.equal(stored.billz.orderNumber, '906');
+    assert.equal(stored.billz.reconciliationRequired, true);
+    assert.equal(stored.billz.failureDisposition, 'reconciliation_required');
+    assert.notEqual(stored.billz.operationToken, '', 'the stale fence must remain owned');
+    assert.equal(stored.billz.attempts, 1, 'the stale observer must not claim another attempt');
+    assert.equal(stored.billz.reservationApplied, false);
+    assert.equal(laterBillzWrites, 0, 'the fenced owner must stop before its next Billz write');
+    assert.equal(await reservedFor(productId), 0, 'the fenced owner must not touch counters');
+  } finally {
+    stub.restore();
+  }
+});
+
 test('a stale marker cannot cross the owner fence into the counter phase', async () => {
   const externalEntered = deferred();
   const finishExternal = deferred();
@@ -831,6 +973,7 @@ test('an old order with no operation metadata can still be reserved safely', asy
         'billz.operationToken': '',
         'billz.operationStartedAt': '',
         'billz.reconciliationRequired': '',
+        'billz.failureDisposition': '',
       },
     }
   );
@@ -841,6 +984,44 @@ test('an old order with no operation metadata can still be reserved safely', asy
     assert.equal(stored.billz.operationToken, '');
     assert.equal(stored.billz.reconciliationRequired, false);
     assert.equal(await reservedFor(productId), 3);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('a raw legacy failed order without safety metadata is fenced without Billz calls', async () => {
+  const stub = stubSale();
+  const internalOrderId = `legacy-failed-${++seq}`;
+  const now = new Date();
+  await ChannelOrder().collection.insertOne({
+    channel: 'medicalka',
+    externalId: `legacy-ext-${seq}`,
+    internalOrderId,
+    items: [{ billzProductId: `legacy-p-${seq}`, name: 'Legacy', quantity: 1, unitPrice: 1 }],
+    totalAmount: 1,
+    customer: { name: '', phone: '', address: '' },
+    status: 'failed',
+    billz: { attempts: 1, lastError: 'legacy failure with unknown outcome' },
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  try {
+    await assert.rejects(
+      orders.reserveOrder(internalOrderId),
+      (err) => err.code === 'BILLZ_RECONCILIATION_REQUIRED'
+    );
+    await assert.rejects(
+      orders.cancelOrder(internalOrderId),
+      (err) => err.code === 'BILLZ_RECONCILIATION_REQUIRED'
+    );
+
+    const stored = await ChannelOrder().collection.findOne({ internalOrderId });
+    assert.equal(stored.status, 'failed');
+    assert.equal(stored.billz.draftOrderId, undefined);
+    assert.equal(stored.billz.reconciliationRequired, true);
+    assert.equal(stored.billz.failureDisposition, 'reconciliation_required');
+    assert.equal(stub.calls.length, 0);
   } finally {
     stub.restore();
   }

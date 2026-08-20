@@ -76,6 +76,10 @@ function stubSale(overrides = {}) {
   };
 }
 
+function classifiedError(message, metadata) {
+  return Object.assign(new Error(message), metadata);
+}
+
 let seq = 0;
 async function product({ stock = 20 } = {}) {
   seq += 1;
@@ -318,9 +322,11 @@ test('a mixed order reserves only the lines Billz knows about', async () => {
 
 /* ── Failure handling ────────────────────────────────────────────────────── */
 
-test('a reservation Billz refuses leaves the order retryable and holds nothing', async () => {
+test('an explicit reservation rejection leaves the order retryable and holds nothing', async () => {
   const stub = stubSale({
-    reserveOrder: async () => { throw new Error('billz said no'); },
+    reserveOrder: async () => {
+      throw classifiedError('billz said no', { outcomeUnknown: false, retrySafe: true });
+    },
   });
   const bp = await product();
 
@@ -329,6 +335,7 @@ test('a reservation Billz refuses leaves the order retryable and holds nothing',
   const stored = await ChannelOrder().findOne({ externalId: 'BOT-15' }).lean();
   assert.equal(stored.status, 'failed');
   assert.match(stored.billz.lastError, /billz said no/);
+  assert.equal(stored.billz.failureDisposition, 'retry_safe');
   assert.deepEqual(await counters(bp), { reserved: 0, pending: 0 });
   stub.restore();
 });
@@ -338,7 +345,9 @@ test('a failed order can be retried and reserves exactly once', async () => {
   const stub = stubSale({
     reserveOrder: async () => {
       calls += 1;
-      if (calls === 1) throw new Error('transient');
+      if (calls === 1) {
+        throw classifiedError('transient', { outcomeUnknown: false, retrySafe: true });
+      }
       return { orderId: 'draft-retry', orderNumber: '901' };
     },
   });
@@ -353,8 +362,8 @@ test('a failed order can be retried and reserves exactly once', async () => {
 });
 
 test('a hold taken before a failed reservation is not lost', async () => {
-  // The units must stay protected: the order is still live and an operator will
-  // retry it.
+  // The units must stay protected while an operator reconciles the uncertain
+  // result; bare failures are never permission for an automatic replay.
   const stub = stubSale({
     reserveOrder: async () => { throw new Error('billz down'); },
   });
@@ -364,5 +373,8 @@ test('a hold taken before a failed reservation is not lost', async () => {
   await assert.rejects(() => botOrders.ensureState(goal('BOT-17', 'reserve', bp)));
 
   assert.deepEqual(await counters(bp), { reserved: 0, pending: 2 });
+  const stored = await ChannelOrder().findOne({ externalId: 'BOT-17' }).lean();
+  assert.equal(stored.billz.reconciliationRequired, true);
+  assert.equal(stored.billz.failureDisposition, 'reconciliation_required');
   stub.restore();
 });

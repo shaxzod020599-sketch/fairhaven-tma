@@ -128,7 +128,11 @@ test('Medicalka ledger shows sale and reconciliation failure with safe Billz sta
       status: 'failed',
       soldAt: null,
       totalAmount: 900_000,
-      billz: { orderNumber: '', lastError: 'provider response body must remain private' },
+      billz: {
+        orderNumber: '',
+        lastError: 'provider response body must remain private',
+        reconciliationRequired: true,
+      },
     }),
   ]);
   await placeInWindow(['MED-RECONCILE-LEDGER']);

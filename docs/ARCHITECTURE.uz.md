@@ -107,8 +107,14 @@ received ──► reserved ──► sold
     │           │
     └───────────┴──────► cancelled
     │
-    └──► failed  (qayta urinish mumkin)
+    └──► failed  (retry_safe yoki reconciliation_required)
 ```
+
+`failed` umumiy qayta urinish ruxsati emas. Faqat yangi kod Billz hech qanday
+ta'sir ko'rsatmasdan so'rovni aniq rad etganini `retry_safe` deb yozgan holat
+avtomatik qayta urinishi mumkin. Tarmoq uzilishi, `5xx`, tasniflanmagan yoki
+eski metadata-siz xato `reconciliation_required`: operator tekshirmaguncha
+Billz'ga yana yozilmaydi.
 
 | Kanal | `received` dan keyingi ishlov qachon |
 |---|---|

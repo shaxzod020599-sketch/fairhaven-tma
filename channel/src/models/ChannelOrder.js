@@ -49,7 +49,8 @@ const channelOrderSchema = new mongoose.Schema({
    * reserved  — stock held in Billz by a postponed draft
    * sold      — payment posted; Billz has decremented stock
    * cancelled — reservation released, or cancelled before one existed
-   * failed    — a Billz step failed; safe failures may retry, uncertain ones reconcile
+   * failed    — a Billz step failed; only explicitly retry-safe failures may retry
+   *             while uncertain failures require reconciliation
    */
   status: {
     type: String,
@@ -83,6 +84,14 @@ const channelOrderSchema = new mongoose.Schema({
     operationToken: { type: String, default: '' },
     operationStartedAt: { type: Date, default: null },
     reconciliationRequired: { type: Boolean, default: false },
+    // A failed record may be claimed again only when the code that observed
+    // the failure durably proved it was rejected before any Billz effect.
+    // Missing values on legacy failed records are deliberately not retry-safe.
+    failureDisposition: {
+      type: String,
+      enum: ['', 'retry_safe', 'reconciliation_required'],
+      default: '',
+    },
   },
 
   // When an unconfirmed local hold stops protecting stock. An order nobody ever

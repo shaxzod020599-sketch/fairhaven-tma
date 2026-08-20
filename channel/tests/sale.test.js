@@ -90,6 +90,29 @@ test('a reservation opens a draft, adds every line, then postpones', async () =>
   }
 });
 
+test('reservation progress checkpoints every mutating stage after draft creation', async () => {
+  const rec = recordClient({}, { refusesFreePrice: true });
+  const progress = [];
+  try {
+    await sale.reserveOrder({
+      items: ITEMS,
+      comment: 'Medicalka MK-PROGRESS',
+      onProgress: async (event) => { progress.push(event); },
+    });
+
+    assert.deepEqual(progress, [
+      { stage: 'draft_created', orderId: 'draft-1', orderNumber: '5632631379' },
+      { stage: 'before_write', operation: 'add_line', orderId: 'draft-1' },
+      { stage: 'before_write', operation: 'add_line', orderId: 'draft-1' },
+      { stage: 'before_write', operation: 'set_line_price', orderId: 'draft-1' },
+      { stage: 'before_write', operation: 'set_line_price', orderId: 'draft-1' },
+      { stage: 'before_write', operation: 'reserve', orderId: 'draft-1' },
+    ]);
+  } finally {
+    rec.restore();
+  }
+});
+
 test('the draft is opened against the configured shop and till', async () => {
   const rec = recordClient();
   try {
