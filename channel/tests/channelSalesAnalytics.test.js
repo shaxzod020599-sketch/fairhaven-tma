@@ -115,6 +115,60 @@ test('history normalizes lines, masks phone and never exposes address', async ()
   assert.equal(result.rows[0].legacyTimeFallback, false);
 });
 
+test('Medicalka ledger shows sale and reconciliation failure with safe Billz state', async () => {
+  await ChannelOrder().create([
+    order({
+      externalId: 'MED-SOLD-LEDGER',
+      internalOrderId: 'INT-SOLD-LEDGER',
+      billz: { orderNumber: 'BILLZ-SOLD-42', lastError: '' },
+    }),
+    order({
+      externalId: 'MED-RECONCILE-LEDGER',
+      internalOrderId: 'INT-RECONCILE-LEDGER',
+      status: 'failed',
+      soldAt: null,
+      totalAmount: 900_000,
+      billz: { orderNumber: '', lastError: 'provider response body must remain private' },
+    }),
+  ]);
+  await placeInWindow(['MED-RECONCILE-LEDGER']);
+
+  const history = await listChannelSales({
+    channel: 'medicalka', from: FROM, to: TO, page: 1, limit: 25, Model: ChannelOrder(),
+  });
+  const sold = history.rows.find((row) => row.externalId === 'MED-SOLD-LEDGER');
+  const reconciliation = history.rows.find((row) => row.externalId === 'MED-RECONCILE-LEDGER');
+
+  assert.equal(history.total, 2);
+  assert.equal(sold.status, 'sold');
+  assert.equal(sold.billzOrderNumber, 'BILLZ-SOLD-42');
+  assert.equal(sold.billzState, 'posted');
+  assert.equal(reconciliation.status, 'failed');
+  assert.equal(reconciliation.billzState, 'error');
+  assert.equal('lastError' in reconciliation, false);
+
+  for (const row of [sold, reconciliation]) {
+    assert.equal(row.customer.phoneMasked, '+998 ** *** ** 67');
+    assert.equal('address' in row.customer, false);
+    assert.equal(JSON.stringify(row).includes('+998901234567'), false);
+    assert.equal(JSON.stringify(row).includes('private'), false);
+  }
+
+  const summary = await summarizeChannelSales({
+    channel: 'medicalka', from: FROM, to: TO, Model: ChannelOrder(),
+  });
+  assert.deepEqual(summary, {
+    grossRevenue: 100_000,
+    completedCount: 1,
+    averageCheck: 100_000,
+    unitsSold: 2,
+    returnedAmount: 0,
+    cancelledCount: 0,
+    failedCount: 1,
+    legacyFallbackCount: 0,
+  });
+});
+
 test('backfilled soldAt stays visibly marked as an estimated legacy timestamp', async () => {
   await ChannelOrder().create(order({ externalId: 'MED-LEGACY-TIME', soldAtEstimated: true }));
   const result = await listChannelSales({

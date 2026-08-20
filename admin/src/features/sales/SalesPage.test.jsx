@@ -53,6 +53,42 @@ describe('SalesPage', () => {
     expect(screen.getByRole('button', { name: 'Скачать Excel' })).toBeInTheDocument();
   });
 
+  it('renders Medicalka sale and reconciliation rows through the existing ledger', async () => {
+    window.history.replaceState({}, '', '/sales?source=medicalka&period=7d');
+    const medicalkaMetrics = {
+      ...metrics, grossRevenue: 100_000, completedCount: 1, averageCheck: 100_000,
+      unitsSold: 2, failedCount: 1,
+    };
+    const medicalkaHistory = {
+      ...history,
+      source: 'medicalka',
+      total: 2,
+      rows: [
+        {
+          ...history.rows[0], source: 'medicalka', externalId: 'MED-SOLD-000042',
+          billzOrderNumber: 'BILLZ-SOLD-42', status: 'sold', billzState: 'posted',
+        },
+        {
+          ...history.rows[0], id: 'order-2', source: 'medicalka', externalId: 'MED-RECONCILE-000043',
+          billzOrderNumber: '', status: 'failed', billzState: 'error', totalAmount: 900_000,
+        },
+      ],
+    };
+    const client = api({
+      summary: vi.fn().mockResolvedValue({ data: { source: 'medicalka', state: 'fresh', freshness: 'fresh', metrics: medicalkaMetrics } }),
+      history: vi.fn().mockResolvedValue({ data: medicalkaHistory }),
+    });
+    render(<SalesPage api={client} />);
+
+    expect(await screen.findByText('#000042')).toBeInTheDocument();
+    expect(screen.getByText('BILLZ-SOLD-42', { exact: false })).toBeInTheDocument();
+    const table = within(screen.getByRole('table'));
+    expect(table.getByText('Продан')).toBeInTheDocument();
+    expect(table.getAllByText('Ошибка')).toHaveLength(2);
+    expect(screen.queryByText('+998901234567')).not.toBeInTheDocument();
+    expect(screen.queryByText('private')).not.toBeInTheDocument();
+  });
+
   it('keeps URL filters, changes source safely and paginates', async () => {
     const client = api();
     const user = userEvent.setup();
