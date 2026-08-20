@@ -234,11 +234,6 @@ const STATUS_OUT = {
   failed: 'received',
 };
 
-// Serialises the create/update decision per order. The promise resolves to the
-// state signature it announced, so a duplicate queued behind it can skip the
-// same card without a second Telegram read/send race.
-const incomingAnnouncementQueues = new Map();
-
 function announcementSignature(order) {
   return JSON.stringify([
     order.status,
@@ -259,33 +254,23 @@ function isAnnounceableIncomingOutcome(outcome) {
     && ['failed', 'reserved'].includes(order.status);
 }
 
-async function announceIncomingOutcome(before, outcome) {
+async function announceIncomingOutcome(before, outcome, created) {
   if (!isAnnounceableIncomingOutcome(outcome)) return null;
 
-  const key = before.internalOrderId;
-  const previous = incomingAnnouncementQueues.get(key) || Promise.resolve(null);
-  const queued = previous.catch(() => null).then(async (previousSignature) => {
-    const fresh = await ChannelOrder().findOne({ internalOrderId: key }).lean();
-    if (!fresh) return previousSignature;
+  // Mongo's unique order insert elects the sole initial-card sender across
+  // every worker. A duplicate can only edit a card whose id was already
+  // durable when that request began; it must never race to create one.
+  if (!created && !before.telegramMessageId) return null;
 
-    const signature = announcementSignature(fresh);
-    if (signature === previousSignature) return signature;
-    if (fresh.telegramMessageId && signature === announcementSignature(before)) {
-      return signature;
-    }
-
-    const messageId = await notify.announceOrder(CHANNEL, fresh.externalId);
-    return messageId ? signature : null;
-  });
-  incomingAnnouncementQueues.set(key, queued);
-
-  try {
-    return await queued;
-  } finally {
-    if (incomingAnnouncementQueues.get(key) === queued) {
-      incomingAnnouncementQueues.delete(key);
-    }
+  const fresh = await ChannelOrder()
+    .findOne({ internalOrderId: before.internalOrderId })
+    .lean();
+  if (!fresh) return null;
+  if (!created && announcementSignature(fresh) === announcementSignature(before)) {
+    return null;
   }
+
+  return notify.announceOrder(CHANNEL, fresh.externalId);
 }
 
 /**
@@ -369,7 +354,7 @@ router.post('/orders', write, async (req, res, next) => {
         : unprocessable(res, parsed.error);
     }
 
-    const { order } = await orders.acceptOrder(CHANNEL, {
+    const { order, created } = await orders.acceptOrder(CHANNEL, {
       externalId: parsed.externalId,
       items: parsed.items,
       customer: parsed.customer,
@@ -384,7 +369,7 @@ router.post('/orders', write, async (req, res, next) => {
     // Informational only, after the orchestrator has stored an announceable
     // outcome. Telegram is not allowed to approve, retry or cancel an order.
     try {
-      await announceIncomingOutcome(order, outcome);
+      await announceIncomingOutcome(order, outcome, created);
     } catch (err) {
       logger.warn('order announcement failed', { err });
     }

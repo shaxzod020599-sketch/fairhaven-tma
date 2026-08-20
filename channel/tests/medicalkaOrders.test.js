@@ -156,13 +156,31 @@ test.after(async () => {
   await mongod?.stop();
 });
 
-const post = async (path, body, key = secret) => {
-  const res = await fetch(`${base}${path}?secret=${key}`, {
+const postAt = async (origin, path, body, key = secret) => {
+  const res = await fetch(`${origin}${path}?secret=${key}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   return { status: res.status, body: await res.json().catch(() => null) };
+};
+
+const post = (path, body, key = secret) => postAt(base, path, body, key);
+
+const startIndependentMedicalkaServer = async () => {
+  const express = require('express');
+  const routePath = require.resolve('../src/adapters/medicalka/routes');
+  delete require.cache[routePath];
+  const router = require(routePath);
+  const app = express();
+  app.use(express.json());
+  app.use('/medicalka/v1', router);
+  const independent = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => independent.once('listening', resolve));
+  return {
+    server: independent,
+    base: `http://127.0.0.1:${independent.address().port}/medicalka/v1`,
+  };
 };
 
 const get = async (path, key = token) => {
@@ -258,11 +276,12 @@ test('sequential duplicate creation returns the same accepted id with one Billz 
   assert.deepEqual(cards.map((entry) => entry.action), ['send']);
 });
 
-test('parallel duplicate observes the winner and never performs a second Billz write', async () => {
+test('parallel duplicate in an independent route instance cannot create a second card', async () => {
   const reserveEntered = deferred();
   const finishReserve = deferred();
   const announceEntered = deferred();
   const finishAnnouncement = deferred();
+  const independent = await startIndependentMedicalkaServer();
   reserveImpl = async () => {
     reserveEntered.resolve();
     await finishReserve.promise;
@@ -275,12 +294,13 @@ test('parallel duplicate observes the winner and never performs a second Billz w
 
   let firstSettled = false;
   let secondSettled = false;
+  let second;
   const first = post('/orders', newOrder('MK-DUPE-PAR'));
   first.finally(() => { firstSettled = true; });
 
   try {
     await reserveEntered.promise;
-    const second = post('/orders', newOrder('MK-DUPE-PAR'));
+    second = postAt(independent.base, '/orders', newOrder('MK-DUPE-PAR'));
     second.finally(() => { secondSettled = true; });
     await new Promise((resolve) => setTimeout(resolve, 30));
     assert.equal(firstSettled, false);
@@ -306,7 +326,8 @@ test('parallel duplicate observes the winner and never performs a second Billz w
   } finally {
     finishReserve.resolve();
     finishAnnouncement.resolve();
-    await Promise.allSettled([first]);
+    await Promise.allSettled([first, second].filter(Boolean));
+    await new Promise((resolve) => independent.server.close(resolve));
   }
 });
 
@@ -496,6 +517,20 @@ test('BILLZ_WRITE_ENABLED false fails closed without reporting a sale', async ()
     announcements.filter((entry) => entry.externalId === 'MK-WRITES-OFF').length,
     0
   );
+});
+
+test('a Telegram failure does not change the stored sale or accepted response', async () => {
+  announceImpl = async () => {
+    throw new Error('fake Telegram unavailable');
+  };
+
+  const response = await post('/orders', newOrder('MK-TELEGRAM-FAILURE'));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.status, 'accepted');
+  const stored = await ChannelOrder().findOne({ externalId: 'MK-TELEGRAM-FAILURE' }).lean();
+  assert.equal(stored.status, 'sold');
+  assert.equal(stored.telegramMessageId, null);
 });
 
 test('the active pre-existing order secret still authenticates creation', async () => {
