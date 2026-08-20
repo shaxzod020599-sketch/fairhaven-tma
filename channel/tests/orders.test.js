@@ -414,11 +414,13 @@ test('cancelling before a reservation exists touches neither Billz nor the count
   }
 });
 
-test('the units come back even when Billz refuses to release the draft', async () => {
+test('an explicit safe release rejection permits cancellation cleanup', async () => {
   // Billz keeps its own expiry on a postpone, so a stuck draft frees itself;
   // holding our counter hostage to their error would strand the stock here.
   const stub = stubSale({
-    releaseReservation: async () => { throw new Error('billz unavailable'); },
+    releaseReservation: async () => {
+      throw classifiedError('billz rejected release', { outcomeUnknown: false, retrySafe: true });
+    },
   });
   const { order, productId } = await freshOrder();
   try {
@@ -429,6 +431,31 @@ test('the units come back even when Billz refuses to release the draft', async (
     const stored = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId });
     assert.equal(stored.status, 'cancelled');
     assert.match(stored.billz.lastError, /release failed/);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('an unclassified release failure requires reconciliation without local cleanup', async () => {
+  const stub = stubSale({
+    releaseReservation: async () => { throw new Error('unexpected release failure'); },
+  });
+  const { order, productId } = await freshOrder();
+  try {
+    await orders.reserveOrder(order.internalOrderId);
+    await assert.rejects(orders.cancelOrder(order.internalOrderId), /unexpected release failure/);
+    await assert.rejects(
+      orders.cancelOrder(order.internalOrderId),
+      (err) => err.code === 'BILLZ_RECONCILIATION_REQUIRED'
+    );
+
+    const stored = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId }).lean();
+    assert.equal(stored.status, 'failed');
+    assert.equal(stored.billz.reservationApplied, true);
+    assert.equal(stored.billz.reconciliationRequired, true);
+    assert.equal(stub.calls.filter((call) => call.fn === 'releaseReservation').length, 1);
+    assert.equal(stub.calls.filter((call) => call.fn === 'deleteDraft').length, 0);
+    assert.equal(await reservedFor(productId), 3);
   } finally {
     stub.restore();
   }
@@ -719,6 +746,76 @@ test('a worker that finishes after its lease goes stale cannot clear reconciliat
     assert.equal(await reservedFor(productId), 0, 'a fenced owner cannot apply local transition state');
   } finally {
     finish.resolve();
+    stub.restore();
+  }
+});
+
+test('a stale marker cannot cross the owner fence into the counter phase', async () => {
+  const externalEntered = deferred();
+  const finishExternal = deferred();
+  const staleCasEntered = deferred();
+  const resumeStaleCas = deferred();
+  const counterEntered = deferred();
+  const resumeCounter = deferred();
+  const stub = stubSale({
+    reserveOrder: async () => {
+      externalEntered.resolve();
+      await finishExternal.promise;
+      return { orderId: 'draft-fence-race', orderNumber: '905' };
+    },
+  });
+  const Model = ChannelOrder();
+  const Mirror = BillzProduct();
+  const realFindOneAndUpdate = Model.findOneAndUpdate;
+  const realBulkWrite = Mirror.bulkWrite;
+  const { order, productId } = await freshOrder();
+  let first;
+  let second;
+
+  Model.findOneAndUpdate = async function pausedReconciliationCas(...args) {
+    if (args[1]?.$set?.['billz.reconciliationRequired'] === true) {
+      staleCasEntered.resolve();
+      await resumeStaleCas.promise;
+    }
+    return realFindOneAndUpdate.apply(this, args);
+  };
+  Mirror.bulkWrite = async function pausedBulkWrite(...args) {
+    counterEntered.resolve();
+    await resumeCounter.promise;
+    return realBulkWrite.apply(this, args);
+  };
+
+  try {
+    first = orders.reserveOrder(order.internalOrderId);
+    await externalEntered.promise;
+    await Model.updateOne(
+      { internalOrderId: order.internalOrderId },
+      { $set: { 'billz.operationStartedAt': new Date(Date.now() - 60 * 60 * 1000) } }
+    );
+    second = orders.reserveOrder(order.internalOrderId);
+    await staleCasEntered.promise;
+
+    finishExternal.resolve();
+    await counterEntered.promise;
+    resumeStaleCas.resolve();
+    await assert.rejects(
+      second,
+      (err) => err.code === 'BILLZ_OPERATION_IN_PROGRESS'
+    );
+
+    resumeCounter.resolve();
+    await first;
+    const stored = await Model.findOne({ internalOrderId: order.internalOrderId }).lean();
+    assert.equal(stored.status, 'reserved');
+    assert.equal(stored.billz.reconciliationRequired, false);
+    assert.equal(await reservedFor(productId), 3);
+  } finally {
+    finishExternal.resolve();
+    resumeStaleCas.resolve();
+    resumeCounter.resolve();
+    await Promise.allSettled([first, second].filter(Boolean));
+    Model.findOneAndUpdate = realFindOneAndUpdate;
+    Mirror.bulkWrite = realBulkWrite;
     stub.restore();
   }
 });

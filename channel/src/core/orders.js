@@ -252,6 +252,7 @@ async function claimBillzOperation(internalOrderId, action, allowedStatuses) {
         {
           _id: current._id,
           'billz.operationToken': current.billz.operationToken,
+          'billz.operationStartedAt': current.billz.operationStartedAt,
           'billz.reconciliationRequired': { $ne: true },
         },
         {
@@ -297,13 +298,17 @@ async function persistBillzOperation(order, token, fields) {
   return updated;
 }
 
-async function assertBillzOperationOwner(order, token) {
-  const ownsLease = await ChannelOrder().exists({
-    _id: order._id,
-    'billz.operationToken': token,
-    'billz.reconciliationRequired': { $ne: true },
-  });
-  if (!ownsLease) {
+async function refreshBillzOperationLease(order, token) {
+  const refreshed = await ChannelOrder().findOneAndUpdate(
+    {
+      _id: order._id,
+      'billz.operationToken': token,
+      'billz.reconciliationRequired': { $ne: true },
+    },
+    { $set: { 'billz.operationStartedAt': new Date() } },
+    { new: true }
+  );
+  if (!refreshed) {
     throw operationError(order.internalOrderId, 'BILLZ_OPERATION_OWNERSHIP_LOST');
   }
 }
@@ -360,7 +365,7 @@ async function reserveOrder(internalOrderId) {
     });
     draftOrderId = result.orderId;
     orderNumber = result.orderNumber;
-    await assertBillzOperationOwner(order, token);
+    await refreshBillzOperationLease(order, token);
 
     // Counter first, then status: a crash between the two leaves units
     // reserved with the order still marked for retry, which an operator can
@@ -450,7 +455,7 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
       comment: `${order.channel} ${order.externalId}`,
     });
     paymentCompleted = true;
-    await assertBillzOperationOwner(order, token);
+    await refreshBillzOperationLease(order, token);
 
     if (reservationApplied) {
       await applyReservedQty(order.items, -1);
@@ -525,7 +530,7 @@ async function cancelOrder(internalOrderId, { reason = '' } = {}) {
         await sale.releaseReservation(order.billz.draftOrderId);
         reservationReleased = true;
       } catch (err) {
-        if (!isLegacyUnclassifiedError(err)) throw err;
+        if (err.outcomeUnknown !== false || err.retrySafe !== true) throw err;
         logger.warn('could not release billz reservation', { internalOrderId, err });
         lastError = `release failed: ${err.message}`;
       }
@@ -542,7 +547,7 @@ async function cancelOrder(internalOrderId, { reason = '' } = {}) {
       }
     }
 
-    await assertBillzOperationOwner(order, token);
+    await refreshBillzOperationLease(order, token);
     if (reservationApplied) {
       await applyReservedQty(order.items, -1);
       reservationApplied = false;

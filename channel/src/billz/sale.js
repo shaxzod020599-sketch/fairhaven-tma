@@ -47,7 +47,10 @@ async function createDraft({ comment } = {}) {
   const data = response?.data || response;
   const orderId = data?.id;
   if (!orderId) {
-    throw new Error(`billz did not return a draft id: ${JSON.stringify(response).slice(0, 200)}`);
+    const err = new Error('billz created a draft but did not return a draft id');
+    err.outcomeUnknown = true;
+    err.retrySafe = false;
+    throw err;
   }
   return { orderId, orderNumber: data.order_number || '' };
 }

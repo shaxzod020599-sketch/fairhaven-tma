@@ -102,6 +102,26 @@ test('the draft is opened against the configured shop and till', async () => {
   }
 });
 
+test('a successful draft response without an id is unknown and redacts the provider body', async () => {
+  const rec = recordClient({
+    '/v2/order': { ok: true, diagnostic: 'provider-secret-response' },
+  });
+  try {
+    await assert.rejects(
+      sale.createDraft({ comment: 'malformed response' }),
+      (err) => {
+        assert.equal(err.outcomeUnknown, true);
+        assert.equal(err.retrySafe, false);
+        assert.doesNotMatch(err.message, /provider-secret-response|diagnostic/);
+        return true;
+      }
+    );
+    assert.equal(rec.calls.filter((call) => call.path === '/v2/order').length, 1);
+  } finally {
+    rec.restore();
+  }
+});
+
 test('a sale cannot be opened without a till', async () => {
   // Billz ties a sale to a cash register; guessing one would file revenue
   // against the wrong till.
