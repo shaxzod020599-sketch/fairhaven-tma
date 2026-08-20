@@ -234,6 +234,60 @@ const STATUS_OUT = {
   failed: 'received',
 };
 
+// Serialises the create/update decision per order. The promise resolves to the
+// state signature it announced, so a duplicate queued behind it can skip the
+// same card without a second Telegram read/send race.
+const incomingAnnouncementQueues = new Map();
+
+function announcementSignature(order) {
+  return JSON.stringify([
+    order.status,
+    order.billz?.lastError || '',
+    Boolean(order.billz?.reconciliationRequired),
+  ]);
+}
+
+function isAnnounceableIncomingOutcome(outcome) {
+  const order = outcome.order;
+  if (outcome.kind === 'sold') return order.status === 'sold';
+  if (outcome.kind === 'temporary_failure') {
+    return order.billz?.reconciliationRequired === true;
+  }
+  return outcome.kind === 'upstream_failure'
+    && !order.billz?.operationToken
+    && Boolean(order.billz?.lastError)
+    && ['failed', 'reserved'].includes(order.status);
+}
+
+async function announceIncomingOutcome(before, outcome) {
+  if (!isAnnounceableIncomingOutcome(outcome)) return null;
+
+  const key = before.internalOrderId;
+  const previous = incomingAnnouncementQueues.get(key) || Promise.resolve(null);
+  const queued = previous.catch(() => null).then(async (previousSignature) => {
+    const fresh = await ChannelOrder().findOne({ internalOrderId: key }).lean();
+    if (!fresh) return previousSignature;
+
+    const signature = announcementSignature(fresh);
+    if (signature === previousSignature) return signature;
+    if (fresh.telegramMessageId && signature === announcementSignature(before)) {
+      return signature;
+    }
+
+    const messageId = await notify.announceOrder(CHANNEL, fresh.externalId);
+    return messageId ? signature : null;
+  });
+  incomingAnnouncementQueues.set(key, queued);
+
+  try {
+    return await queued;
+  } finally {
+    if (incomingAnnouncementQueues.get(key) === queued) {
+      incomingAnnouncementQueues.delete(key);
+    }
+  }
+}
+
 /**
  * Finds an order the way their client addresses it.
  *
@@ -327,10 +381,13 @@ router.post('/orders', write, async (req, res, next) => {
     const publicId = await orders.ensurePublicOrderId(order.internalOrderId);
     const outcome = await orders.completeIncomingSale(order.internalOrderId);
 
-    // Informational only, after the orchestrator has stored its final outcome.
-    // Telegram is not allowed to approve, retry or cancel an order.
-    notify.announceOrder(CHANNEL, parsed.externalId)
-      .catch((err) => logger.warn('order announcement failed', { err }));
+    // Informational only, after the orchestrator has stored an announceable
+    // outcome. Telegram is not allowed to approve, retry or cancel an order.
+    try {
+      await announceIncomingOutcome(order, outcome);
+    } catch (err) {
+      logger.warn('order announcement failed', { err });
+    }
 
     if (outcome.kind === 'sold') {
       return res.json({ wc_order_id: publicId, status: 'accepted' });

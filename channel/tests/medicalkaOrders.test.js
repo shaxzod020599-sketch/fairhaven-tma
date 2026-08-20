@@ -25,8 +25,10 @@ let secret;
 let token;
 let reserveImpl;
 let completeImpl;
+let announceImpl;
 let billzCalls;
 let announcements;
+let nextTelegramMessageId;
 let originalReserveOrder;
 let originalCompleteSale;
 let originalAnnounceOrder;
@@ -85,13 +87,26 @@ test.before(async () => {
   sale.deleteDraft = async () => ({});
   notify.announceOrder = async (channel, externalId) => {
     const stored = await ChannelOrder().findOne({ channel, externalId }).lean();
-    announcements.push({
+    const observation = {
       channel,
       externalId,
       status: stored?.status,
       reconciliationRequired: stored?.billz?.reconciliationRequired,
-    });
-    return null;
+      operationToken: stored?.billz?.operationToken,
+      lastError: stored?.billz?.lastError,
+      action: stored?.telegramMessageId ? 'edit' : 'send',
+    };
+    announcements.push(observation);
+    await announceImpl(observation);
+
+    if (stored?.telegramMessageId) return stored.telegramMessageId;
+    const messageId = nextTelegramMessageId;
+    nextTelegramMessageId += 1;
+    await ChannelOrder().updateOne(
+      { _id: stored._id },
+      { $set: { telegramMessageId: messageId } }
+    );
+    return messageId;
   };
 
   for (const kind of ['token', 'secret']) {
@@ -125,6 +140,8 @@ test.beforeEach(() => {
   announcements = [];
   reserveImpl = async () => ({ orderId: 'draft-mk', orderNumber: '77' });
   completeImpl = async () => ({});
+  announceImpl = async () => {};
+  nextTelegramMessageId = 1000;
   config.billzWriteEnabled = true;
 });
 
@@ -168,6 +185,8 @@ test('creation waits for reservation and payment, then answers from the stored s
   const finishReserve = deferred();
   const completeEntered = deferred();
   const finishComplete = deferred();
+  const announceEntered = deferred();
+  const finishAnnouncement = deferred();
   reserveImpl = async () => {
     reserveEntered.resolve();
     await finishReserve.promise;
@@ -177,6 +196,10 @@ test('creation waits for reservation and payment, then answers from the stored s
     completeEntered.resolve();
     await finishComplete.promise;
     return {};
+  };
+  announceImpl = async () => {
+    announceEntered.resolve();
+    await finishAnnouncement.promise;
   };
 
   let settled = false;
@@ -194,6 +217,11 @@ test('creation waits for reservation and payment, then answers from the stored s
     assert.equal(settled, false, 'HTTP response escaped before payment finished');
 
     finishComplete.resolve();
+    await announceEntered.promise;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(settled, false, 'HTTP response escaped before Telegram finished');
+
+    finishAnnouncement.resolve();
     const response = await request;
     assert.equal(response.status, 200);
     assert.equal(response.body.status, 'accepted');
@@ -205,9 +233,11 @@ test('creation waits for reservation and payment, then answers from the stored s
     await waitFor(() => announcements.some((entry) => entry.externalId === 'MK-WAIT-1'));
     const announcement = announcements.find((entry) => entry.externalId === 'MK-WAIT-1');
     assert.equal(announcement.status, 'sold', 'Telegram saw a non-final state');
+    assert.equal(announcement.operationToken, '', 'Telegram ran before the operation finished');
   } finally {
     finishReserve.resolve();
     finishComplete.resolve();
+    finishAnnouncement.resolve();
     await Promise.allSettled([request]);
   }
 });
@@ -222,15 +252,25 @@ test('sequential duplicate creation returns the same accepted id with one Billz 
   assert.equal(await ChannelOrder().countDocuments({ externalId: 'MK-DUPE-SEQ' }), 1);
   assert.equal(billzCalls.filter((call) => call.fn === 'reserveOrder').length, 1);
   assert.equal(billzCalls.filter((call) => call.fn === 'completeSale').length, 1);
+  await waitFor(() => announcements.some((entry) => entry.externalId === 'MK-DUPE-SEQ'));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const cards = announcements.filter((entry) => entry.externalId === 'MK-DUPE-SEQ');
+  assert.deepEqual(cards.map((entry) => entry.action), ['send']);
 });
 
 test('parallel duplicate observes the winner and never performs a second Billz write', async () => {
   const reserveEntered = deferred();
   const finishReserve = deferred();
+  const announceEntered = deferred();
+  const finishAnnouncement = deferred();
   reserveImpl = async () => {
     reserveEntered.resolve();
     await finishReserve.promise;
     return { orderId: 'draft-parallel', orderNumber: '79' };
+  };
+  announceImpl = async () => {
+    announceEntered.resolve();
+    await finishAnnouncement.promise;
   };
 
   let firstSettled = false;
@@ -247,14 +287,25 @@ test('parallel duplicate observes the winner and never performs a second Billz w
     assert.equal(secondSettled, false, 'the duplicate responded instead of observing the sale');
 
     finishReserve.resolve();
+    await announceEntered.promise;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(
+      announcements.filter((entry) => entry.externalId === 'MK-DUPE-PAR').length,
+      1,
+      'parallel duplicates attempted more than one Telegram card'
+    );
+    finishAnnouncement.resolve();
     const [firstResponse, secondResponse] = await Promise.all([first, second]);
     assert.deepEqual(secondResponse, firstResponse);
     assert.equal(firstResponse.body.status, 'accepted');
     assert.equal(await ChannelOrder().countDocuments({ externalId: 'MK-DUPE-PAR' }), 1);
     assert.equal(billzCalls.filter((call) => call.fn === 'reserveOrder').length, 1);
     assert.equal(billzCalls.filter((call) => call.fn === 'completeSale').length, 1);
+    const cards = announcements.filter((entry) => entry.externalId === 'MK-DUPE-PAR');
+    assert.deepEqual(cards.map((entry) => entry.action), ['send']);
   } finally {
     finishReserve.resolve();
+    finishAnnouncement.resolve();
     await Promise.allSettled([first]);
   }
 });
@@ -287,6 +338,36 @@ test('an in-progress observer times out boundedly without touching Billz', async
   assert.equal(billzCalls.length, 0);
 });
 
+test('an active observation timeout returns 503 without announcing an intermediate card', async () => {
+  const realCompleteIncomingSale = orders.completeIncomingSale;
+  orders.completeIncomingSale = async (internalOrderId) => {
+    await ChannelOrder().updateOne(
+      { internalOrderId },
+      {
+        $set: {
+          'billz.operationAction': 'reserve',
+          'billz.operationToken': 'active-worker',
+          'billz.operationStartedAt': new Date(),
+        },
+      }
+    );
+    const active = await ChannelOrder().findOne({ internalOrderId }).lean();
+    return { kind: 'temporary_failure', order: active };
+  };
+
+  try {
+    const response = await post('/orders', newOrder('MK-ACTIVE-TIMEOUT'));
+    assert.equal(response.status, 503);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(
+      announcements.filter((entry) => entry.externalId === 'MK-ACTIVE-TIMEOUT').length,
+      0
+    );
+  } finally {
+    orders.completeIncomingSale = realCompleteIncomingSale;
+  }
+});
+
 test('a retry-safe upstream failure is sanitized and a later POST can retry it', async () => {
   reserveImpl = async () => {
     throw classifiedError('private upstream failure: warehouse-17', {
@@ -313,6 +394,63 @@ test('a retry-safe upstream failure is sanitized and a later POST can retry it',
   assert.equal(retried.body.status, 'accepted');
   assert.equal(billzCalls.filter((call) => call.fn === 'reserveOrder').length, 2);
   assert.equal(billzCalls.filter((call) => call.fn === 'completeSale').length, 1);
+  await waitFor(() => (
+    announcements.filter((entry) => entry.externalId === 'MK-RETRY-SAFE').length === 2
+  ));
+  const cards = announcements.filter((entry) => entry.externalId === 'MK-RETRY-SAFE');
+  assert.deepEqual(cards.map((entry) => entry.status), ['failed', 'sold']);
+  assert.deepEqual(cards.map((entry) => entry.action), ['send', 'edit']);
+});
+
+test('a retry-safe payment failure updates one card and retries the recorded draft', async () => {
+  let attempts = 0;
+  completeImpl = async () => {
+    attempts += 1;
+    if (attempts === 1) {
+      throw classifiedError('private payment rejection: till-9', {
+        outcomeUnknown: false,
+        retrySafe: true,
+      });
+    }
+    return {};
+  };
+
+  const failed = await post('/orders', newOrder('MK-PAYMENT-RETRY'));
+  assert.equal(failed.status, 502);
+  assert.doesNotMatch(JSON.stringify(failed.body), /payment rejection|till-9/i);
+
+  const reserved = await ChannelOrder().findOne({ externalId: 'MK-PAYMENT-RETRY' }).lean();
+  assert.equal(reserved.status, 'reserved');
+  assert.equal(reserved.billz.draftOrderId, 'draft-mk');
+  assert.equal(reserved.billz.operationToken, '');
+  assert.match(reserved.billz.lastError, /payment rejection/);
+  assert.equal(reserved.billz.reconciliationRequired, false);
+
+  await waitFor(() => announcements.some((entry) => entry.externalId === 'MK-PAYMENT-RETRY'));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const failedCard = announcements.find(
+    (entry) => entry.externalId === 'MK-PAYMENT-RETRY'
+  );
+  assert.equal(failedCard.status, 'reserved');
+  assert.equal(failedCard.operationToken, '');
+  assert.match(failedCard.lastError, /payment rejection/);
+  assert.equal(failedCard.action, 'send');
+
+  const retried = await post('/orders', newOrder('MK-PAYMENT-RETRY'));
+  assert.equal(retried.status, 200);
+  assert.equal(retried.body.status, 'accepted');
+  assert.equal(retried.body.wc_order_id, reserved.publicOrderId);
+  assert.equal(billzCalls.filter((call) => call.fn === 'reserveOrder').length, 1);
+  const payments = billzCalls.filter((call) => call.fn === 'completeSale');
+  assert.equal(payments.length, 2);
+  assert.deepEqual(payments.map((call) => call.id), ['draft-mk', 'draft-mk']);
+
+  await waitFor(() => (
+    announcements.filter((entry) => entry.externalId === 'MK-PAYMENT-RETRY').length === 2
+  ));
+  const cards = announcements.filter((entry) => entry.externalId === 'MK-PAYMENT-RETRY');
+  assert.deepEqual(cards.map((entry) => entry.status), ['reserved', 'sold']);
+  assert.deepEqual(cards.map((entry) => entry.action), ['send', 'edit']);
 });
 
 test('a reconciliation-required outcome stays temporary and is never retried', async () => {
@@ -334,14 +472,13 @@ test('a reconciliation-required outcome stays temporary and is never retried', a
   const stored = await ChannelOrder().findOne({ externalId: 'MK-RECONCILE' }).lean();
   assert.equal(stored.status, 'failed');
   assert.equal(stored.billz.reconciliationRequired, true);
-  await waitFor(() => (
-    announcements.filter((entry) => entry.externalId === 'MK-RECONCILE').length === 2
-  ));
-  assert.ok(
-    announcements
-      .filter((entry) => entry.externalId === 'MK-RECONCILE')
-      .every((entry) => entry.status === 'failed')
-  );
+  await waitFor(() => announcements.some((entry) => entry.externalId === 'MK-RECONCILE'));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const cards = announcements.filter((entry) => entry.externalId === 'MK-RECONCILE');
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].status, 'failed');
+  assert.equal(cards[0].reconciliationRequired, true);
+  assert.equal(cards[0].action, 'send');
 });
 
 test('BILLZ_WRITE_ENABLED false fails closed without reporting a sale', async () => {
@@ -354,6 +491,11 @@ test('BILLZ_WRITE_ENABLED false fails closed without reporting a sale', async ()
   assert.equal(billzCalls.length, 0);
   const stored = await ChannelOrder().findOne({ externalId: 'MK-WRITES-OFF' }).lean();
   assert.notEqual(stored.status, 'sold');
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(
+    announcements.filter((entry) => entry.externalId === 'MK-WRITES-OFF').length,
+    0
+  );
 });
 
 test('the active pre-existing order secret still authenticates creation', async () => {
