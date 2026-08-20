@@ -19,19 +19,14 @@ let ChannelOrder;
 let BillzProduct;
 let orders;
 let sale;
-let notify;
 let config;
 let secret;
 let token;
 let reserveImpl;
 let completeImpl;
-let announceImpl;
 let billzCalls;
-let announcements;
-let nextTelegramMessageId;
 let originalReserveOrder;
 let originalCompleteSale;
-let originalAnnounceOrder;
 
 const deferred = () => {
   let resolve;
@@ -41,14 +36,6 @@ const deferred = () => {
     reject = no;
   });
   return { promise, resolve, reject };
-};
-
-const waitFor = async (condition, timeoutMs = 1000) => {
-  const deadline = Date.now() + timeoutMs;
-  while (!condition()) {
-    if (Date.now() >= deadline) throw new Error('condition was not met before timeout');
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
 };
 
 const classifiedError = (message, fields) => Object.assign(new Error(message), fields);
@@ -68,13 +55,11 @@ test.before(async () => {
   const ChannelKey = require('../src/models/ChannelKey');
   orders = require('../src/core/orders');
   sale = require('../src/billz/sale');
-  notify = require('../src/notify/telegram');
   config = require('../src/config');
   await ChannelOrder().init();
 
   originalReserveOrder = sale.reserveOrder;
   originalCompleteSale = sale.completeSale;
-  originalAnnounceOrder = notify.announceOrder;
   sale.reserveOrder = async (args) => {
     billzCalls.push({ fn: 'reserveOrder', args });
     return reserveImpl(args);
@@ -85,29 +70,6 @@ test.before(async () => {
   };
   sale.releaseReservation = async () => ({});
   sale.deleteDraft = async () => ({});
-  notify.announceOrder = async (channel, externalId) => {
-    const stored = await ChannelOrder().findOne({ channel, externalId }).lean();
-    const observation = {
-      channel,
-      externalId,
-      status: stored?.status,
-      reconciliationRequired: stored?.billz?.reconciliationRequired,
-      operationToken: stored?.billz?.operationToken,
-      lastError: stored?.billz?.lastError,
-      action: stored?.telegramMessageId ? 'edit' : 'send',
-    };
-    announcements.push(observation);
-    await announceImpl(observation);
-
-    if (stored?.telegramMessageId) return stored.telegramMessageId;
-    const messageId = nextTelegramMessageId;
-    nextTelegramMessageId += 1;
-    await ChannelOrder().updateOne(
-      { _id: stored._id },
-      { $set: { telegramMessageId: messageId } }
-    );
-    return messageId;
-  };
 
   for (const kind of ['token', 'secret']) {
     const key = ChannelKey.generateKey('medicalka', kind);
@@ -137,11 +99,8 @@ test.before(async () => {
 
 test.beforeEach(() => {
   billzCalls = [];
-  announcements = [];
   reserveImpl = async () => ({ orderId: 'draft-mk', orderNumber: '77' });
   completeImpl = async () => ({});
-  announceImpl = async () => {};
-  nextTelegramMessageId = 1000;
   config.billzWriteEnabled = true;
 });
 
@@ -150,37 +109,18 @@ test.after(async () => {
     sale.reserveOrder = originalReserveOrder;
     sale.completeSale = originalCompleteSale;
   }
-  if (notify) notify.announceOrder = originalAnnounceOrder;
   server?.close();
   await db?.disconnect();
   await mongod?.stop();
 });
 
-const postAt = async (origin, path, body, key = secret) => {
-  const res = await fetch(`${origin}${path}?secret=${key}`, {
+const post = async (path, body, key = secret) => {
+  const res = await fetch(`${base}${path}?secret=${key}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   return { status: res.status, body: await res.json().catch(() => null) };
-};
-
-const post = (path, body, key = secret) => postAt(base, path, body, key);
-
-const startIndependentMedicalkaServer = async () => {
-  const express = require('express');
-  const routePath = require.resolve('../src/adapters/medicalka/routes');
-  delete require.cache[routePath];
-  const router = require(routePath);
-  const app = express();
-  app.use(express.json());
-  app.use('/medicalka/v1', router);
-  const independent = app.listen(0, '127.0.0.1');
-  await new Promise((resolve) => independent.once('listening', resolve));
-  return {
-    server: independent,
-    base: `http://127.0.0.1:${independent.address().port}/medicalka/v1`,
-  };
 };
 
 const get = async (path, key = token) => {
@@ -203,8 +143,6 @@ test('creation waits for reservation and payment, then answers from the stored s
   const finishReserve = deferred();
   const completeEntered = deferred();
   const finishComplete = deferred();
-  const announceEntered = deferred();
-  const finishAnnouncement = deferred();
   reserveImpl = async () => {
     reserveEntered.resolve();
     await finishReserve.promise;
@@ -215,11 +153,6 @@ test('creation waits for reservation and payment, then answers from the stored s
     await finishComplete.promise;
     return {};
   };
-  announceImpl = async () => {
-    announceEntered.resolve();
-    await finishAnnouncement.promise;
-  };
-
   let settled = false;
   const request = post('/orders', newOrder('MK-WAIT-1'));
   request.finally(() => { settled = true; });
@@ -235,11 +168,6 @@ test('creation waits for reservation and payment, then answers from the stored s
     assert.equal(settled, false, 'HTTP response escaped before payment finished');
 
     finishComplete.resolve();
-    await announceEntered.promise;
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    assert.equal(settled, false, 'HTTP response escaped before Telegram finished');
-
-    finishAnnouncement.resolve();
     const response = await request;
     assert.equal(response.status, 200);
     assert.equal(response.body.status, 'accepted');
@@ -248,14 +176,9 @@ test('creation waits for reservation and payment, then answers from the stored s
 
     const stored = await ChannelOrder().findOne({ externalId: 'MK-WAIT-1' }).lean();
     assert.equal(stored.status, 'sold', 'the canonical order must be sold before HTTP 200');
-    await waitFor(() => announcements.some((entry) => entry.externalId === 'MK-WAIT-1'));
-    const announcement = announcements.find((entry) => entry.externalId === 'MK-WAIT-1');
-    assert.equal(announcement.status, 'sold', 'Telegram saw a non-final state');
-    assert.equal(announcement.operationToken, '', 'Telegram ran before the operation finished');
   } finally {
     finishReserve.resolve();
     finishComplete.resolve();
-    finishAnnouncement.resolve();
     await Promise.allSettled([request]);
   }
 });
@@ -270,26 +193,15 @@ test('sequential duplicate creation returns the same accepted id with one Billz 
   assert.equal(await ChannelOrder().countDocuments({ externalId: 'MK-DUPE-SEQ' }), 1);
   assert.equal(billzCalls.filter((call) => call.fn === 'reserveOrder').length, 1);
   assert.equal(billzCalls.filter((call) => call.fn === 'completeSale').length, 1);
-  await waitFor(() => announcements.some((entry) => entry.externalId === 'MK-DUPE-SEQ'));
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  const cards = announcements.filter((entry) => entry.externalId === 'MK-DUPE-SEQ');
-  assert.deepEqual(cards.map((entry) => entry.action), ['send']);
 });
 
-test('parallel duplicate in an independent route instance cannot create a second card', async () => {
+test('parallel duplicate observes the winner and never performs a second Billz write', async () => {
   const reserveEntered = deferred();
   const finishReserve = deferred();
-  const announceEntered = deferred();
-  const finishAnnouncement = deferred();
-  const independent = await startIndependentMedicalkaServer();
   reserveImpl = async () => {
     reserveEntered.resolve();
     await finishReserve.promise;
     return { orderId: 'draft-parallel', orderNumber: '79' };
-  };
-  announceImpl = async () => {
-    announceEntered.resolve();
-    await finishAnnouncement.promise;
   };
 
   let firstSettled = false;
@@ -300,34 +212,22 @@ test('parallel duplicate in an independent route instance cannot create a second
 
   try {
     await reserveEntered.promise;
-    second = postAt(independent.base, '/orders', newOrder('MK-DUPE-PAR'));
+    second = post('/orders', newOrder('MK-DUPE-PAR'));
     second.finally(() => { secondSettled = true; });
     await new Promise((resolve) => setTimeout(resolve, 30));
     assert.equal(firstSettled, false);
     assert.equal(secondSettled, false, 'the duplicate responded instead of observing the sale');
 
     finishReserve.resolve();
-    await announceEntered.promise;
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    assert.equal(
-      announcements.filter((entry) => entry.externalId === 'MK-DUPE-PAR').length,
-      1,
-      'parallel duplicates attempted more than one Telegram card'
-    );
-    finishAnnouncement.resolve();
     const [firstResponse, secondResponse] = await Promise.all([first, second]);
     assert.deepEqual(secondResponse, firstResponse);
     assert.equal(firstResponse.body.status, 'accepted');
     assert.equal(await ChannelOrder().countDocuments({ externalId: 'MK-DUPE-PAR' }), 1);
     assert.equal(billzCalls.filter((call) => call.fn === 'reserveOrder').length, 1);
     assert.equal(billzCalls.filter((call) => call.fn === 'completeSale').length, 1);
-    const cards = announcements.filter((entry) => entry.externalId === 'MK-DUPE-PAR');
-    assert.deepEqual(cards.map((entry) => entry.action), ['send']);
   } finally {
     finishReserve.resolve();
-    finishAnnouncement.resolve();
     await Promise.allSettled([first, second].filter(Boolean));
-    await new Promise((resolve) => independent.server.close(resolve));
   }
 });
 
@@ -359,7 +259,7 @@ test('an in-progress observer times out boundedly without touching Billz', async
   assert.equal(billzCalls.length, 0);
 });
 
-test('an active observation timeout returns 503 without announcing an intermediate card', async () => {
+test('an active observation timeout returns a sanitized 503', async () => {
   const realCompleteIncomingSale = orders.completeIncomingSale;
   orders.completeIncomingSale = async (internalOrderId) => {
     await ChannelOrder().updateOne(
@@ -379,11 +279,7 @@ test('an active observation timeout returns 503 without announcing an intermedia
   try {
     const response = await post('/orders', newOrder('MK-ACTIVE-TIMEOUT'));
     assert.equal(response.status, 503);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    assert.equal(
-      announcements.filter((entry) => entry.externalId === 'MK-ACTIVE-TIMEOUT').length,
-      0
-    );
+    assert.equal(response.body.code, 'mk_unavailable');
   } finally {
     orders.completeIncomingSale = realCompleteIncomingSale;
   }
@@ -403,11 +299,6 @@ test('a retry-safe upstream failure is sanitized and a later POST can retry it',
   const failedOrder = await ChannelOrder().findOne({ externalId: 'MK-RETRY-SAFE' }).lean();
   assert.equal(failedOrder.status, 'failed');
   assert.equal(failedOrder.billz.reconciliationRequired, false);
-  await waitFor(() => announcements.some((entry) => entry.externalId === 'MK-RETRY-SAFE'));
-  const failedAnnouncement = announcements.find(
-    (entry) => entry.externalId === 'MK-RETRY-SAFE'
-  );
-  assert.equal(failedAnnouncement.status, 'failed');
 
   reserveImpl = async () => ({ orderId: 'draft-retry-safe', orderNumber: '80' });
   const retried = await post('/orders', newOrder('MK-RETRY-SAFE'));
@@ -415,15 +306,9 @@ test('a retry-safe upstream failure is sanitized and a later POST can retry it',
   assert.equal(retried.body.status, 'accepted');
   assert.equal(billzCalls.filter((call) => call.fn === 'reserveOrder').length, 2);
   assert.equal(billzCalls.filter((call) => call.fn === 'completeSale').length, 1);
-  await waitFor(() => (
-    announcements.filter((entry) => entry.externalId === 'MK-RETRY-SAFE').length === 2
-  ));
-  const cards = announcements.filter((entry) => entry.externalId === 'MK-RETRY-SAFE');
-  assert.deepEqual(cards.map((entry) => entry.status), ['failed', 'sold']);
-  assert.deepEqual(cards.map((entry) => entry.action), ['send', 'edit']);
 });
 
-test('a retry-safe payment failure updates one card and retries the recorded draft', async () => {
+test('a retry-safe payment failure retries the recorded draft without reserving twice', async () => {
   let attempts = 0;
   completeImpl = async () => {
     attempts += 1;
@@ -447,16 +332,6 @@ test('a retry-safe payment failure updates one card and retries the recorded dra
   assert.match(reserved.billz.lastError, /payment rejection/);
   assert.equal(reserved.billz.reconciliationRequired, false);
 
-  await waitFor(() => announcements.some((entry) => entry.externalId === 'MK-PAYMENT-RETRY'));
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  const failedCard = announcements.find(
-    (entry) => entry.externalId === 'MK-PAYMENT-RETRY'
-  );
-  assert.equal(failedCard.status, 'reserved');
-  assert.equal(failedCard.operationToken, '');
-  assert.match(failedCard.lastError, /payment rejection/);
-  assert.equal(failedCard.action, 'send');
-
   const retried = await post('/orders', newOrder('MK-PAYMENT-RETRY'));
   assert.equal(retried.status, 200);
   assert.equal(retried.body.status, 'accepted');
@@ -465,13 +340,6 @@ test('a retry-safe payment failure updates one card and retries the recorded dra
   const payments = billzCalls.filter((call) => call.fn === 'completeSale');
   assert.equal(payments.length, 2);
   assert.deepEqual(payments.map((call) => call.id), ['draft-mk', 'draft-mk']);
-
-  await waitFor(() => (
-    announcements.filter((entry) => entry.externalId === 'MK-PAYMENT-RETRY').length === 2
-  ));
-  const cards = announcements.filter((entry) => entry.externalId === 'MK-PAYMENT-RETRY');
-  assert.deepEqual(cards.map((entry) => entry.status), ['reserved', 'sold']);
-  assert.deepEqual(cards.map((entry) => entry.action), ['send', 'edit']);
 });
 
 test('a reconciliation-required outcome stays temporary and is never retried', async () => {
@@ -493,13 +361,6 @@ test('a reconciliation-required outcome stays temporary and is never retried', a
   const stored = await ChannelOrder().findOne({ externalId: 'MK-RECONCILE' }).lean();
   assert.equal(stored.status, 'failed');
   assert.equal(stored.billz.reconciliationRequired, true);
-  await waitFor(() => announcements.some((entry) => entry.externalId === 'MK-RECONCILE'));
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  const cards = announcements.filter((entry) => entry.externalId === 'MK-RECONCILE');
-  assert.equal(cards.length, 1);
-  assert.equal(cards[0].status, 'failed');
-  assert.equal(cards[0].reconciliationRequired, true);
-  assert.equal(cards[0].action, 'send');
 });
 
 test('BILLZ_WRITE_ENABLED false fails closed without reporting a sale', async () => {
@@ -512,25 +373,6 @@ test('BILLZ_WRITE_ENABLED false fails closed without reporting a sale', async ()
   assert.equal(billzCalls.length, 0);
   const stored = await ChannelOrder().findOne({ externalId: 'MK-WRITES-OFF' }).lean();
   assert.notEqual(stored.status, 'sold');
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(
-    announcements.filter((entry) => entry.externalId === 'MK-WRITES-OFF').length,
-    0
-  );
-});
-
-test('a Telegram failure does not change the stored sale or accepted response', async () => {
-  announceImpl = async () => {
-    throw new Error('fake Telegram unavailable');
-  };
-
-  const response = await post('/orders', newOrder('MK-TELEGRAM-FAILURE'));
-
-  assert.equal(response.status, 200);
-  assert.equal(response.body.status, 'accepted');
-  const stored = await ChannelOrder().findOne({ externalId: 'MK-TELEGRAM-FAILURE' }).lean();
-  assert.equal(stored.status, 'sold');
-  assert.equal(stored.telegramMessageId, null);
 });
 
 test('the active pre-existing order secret still authenticates creation', async () => {

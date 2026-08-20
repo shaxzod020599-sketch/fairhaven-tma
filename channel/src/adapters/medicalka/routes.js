@@ -234,45 +234,6 @@ const STATUS_OUT = {
   failed: 'received',
 };
 
-function announcementSignature(order) {
-  return JSON.stringify([
-    order.status,
-    order.billz?.lastError || '',
-    Boolean(order.billz?.reconciliationRequired),
-  ]);
-}
-
-function isAnnounceableIncomingOutcome(outcome) {
-  const order = outcome.order;
-  if (outcome.kind === 'sold') return order.status === 'sold';
-  if (outcome.kind === 'temporary_failure') {
-    return order.billz?.reconciliationRequired === true;
-  }
-  return outcome.kind === 'upstream_failure'
-    && !order.billz?.operationToken
-    && Boolean(order.billz?.lastError)
-    && ['failed', 'reserved'].includes(order.status);
-}
-
-async function announceIncomingOutcome(before, outcome, created) {
-  if (!isAnnounceableIncomingOutcome(outcome)) return null;
-
-  // Mongo's unique order insert elects the sole initial-card sender across
-  // every worker. A duplicate can only edit a card whose id was already
-  // durable when that request began; it must never race to create one.
-  if (!created && !before.telegramMessageId) return null;
-
-  const fresh = await ChannelOrder()
-    .findOne({ internalOrderId: before.internalOrderId })
-    .lean();
-  if (!fresh) return null;
-  if (!created && announcementSignature(fresh) === announcementSignature(before)) {
-    return null;
-  }
-
-  return notify.announceOrder(CHANNEL, fresh.externalId);
-}
-
 /**
  * Finds an order the way their client addresses it.
  *
@@ -354,7 +315,7 @@ router.post('/orders', write, async (req, res, next) => {
         : unprocessable(res, parsed.error);
     }
 
-    const { order, created } = await orders.acceptOrder(CHANNEL, {
+    const { order } = await orders.acceptOrder(CHANNEL, {
       externalId: parsed.externalId,
       items: parsed.items,
       customer: parsed.customer,
@@ -365,14 +326,6 @@ router.post('/orders', write, async (req, res, next) => {
     // rather than burning a fresh one each time.
     const publicId = await orders.ensurePublicOrderId(order.internalOrderId);
     const outcome = await orders.completeIncomingSale(order.internalOrderId);
-
-    // Informational only, after the orchestrator has stored an announceable
-    // outcome. Telegram is not allowed to approve, retry or cancel an order.
-    try {
-      await announceIncomingOutcome(order, outcome, created);
-    } catch (err) {
-      logger.warn('order announcement failed', { err });
-    }
 
     if (outcome.kind === 'sold') {
       return res.json({ wc_order_id: publicId, status: 'accepted' });
