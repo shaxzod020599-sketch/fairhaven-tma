@@ -12,6 +12,9 @@ nothing.
 
 ## Production evidence
 
+This is read-only pre-implementation evidence, not deployment, a live order, or
+live Billz-write verification.
+
 Read-only checks on 2026-08-20 established:
 
 - `api.fairhaven.uz` routes `/medicalka/v1/` to the running channel hub.

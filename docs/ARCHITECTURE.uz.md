@@ -98,6 +98,10 @@ operatorning qarori, lekin ishlaydigan kartochka bo'lishi — qaror emas, shart.
 
 Barcha kanallar uchun bitta yozuv turi: `channelorders`.
 
+> **Medicalka istisnosi:** quyidagi umumiy diagramdagi `reserved` holatida
+> kutmaydi; uning autentifikatsiyalangan `POST` so'rovi bitta Billz sotuvini
+> sinxron tugatib, keyin `200 accepted` qaytaradi.
+
 ```
 received ──► reserved ──► sold
     │           │

@@ -13,8 +13,8 @@ currently active Medicalka token and secret.
 deduplicates marketplace deliveries. Durable Mongo operation metadata prevents
 concurrent Billz writes and converts stale/unknown operations into manual
 reconciliation instead of replay. Medicalka route waits for reservation and
-payment, then returns its stable integer order id. Existing sales analytics and
-Telegram card surface outcome.
+payment, then returns its stable integer order id. The existing `Sales →
+Medicalka` ledger surfaces the outcome.
 
 **Tech stack:** Node.js 20+, Express, Mongoose/MongoDB, native `node:test`, fake
 Billz client, in-memory MongoDB.
@@ -167,7 +167,7 @@ Commit message: `fix(channel): serialize Billz order operations`
 
 ### Step 1: Rewrite contract tests first
 
-Instrument fake `reserveOrder`, `completeSale`, and Telegram notification.
+Instrument fake `reserveOrder` and `completeSale`.
 
 Cover:
 
@@ -186,8 +186,8 @@ Cover:
 
 ### Step 2: Verify RED
 
-Run `tests/medicalkaOrders.test.js`. Expected current `received` response and
-background-only reservation failures.
+Run `tests/medicalkaOrders.test.js`. Expected failures against the prior
+non-immediate-sale response behavior.
 
 ### Step 3: Add incoming-sale orchestrator
 
@@ -209,7 +209,6 @@ After validation, idempotent accept, and public-id allocation:
 - return HTTP 200 only for stored `sold` outcome;
 - return stable sanitized 502/503 integration errors otherwise;
 - return `accepted` with stable `wc_order_id` on success;
-- announce Telegram card after final stored outcome, including failures;
 - keep token/secret middleware and key storage untouched.
 
 ### Step 5: Verify GREEN
@@ -222,14 +221,12 @@ Run `tests/medicalkaOrders.test.js`, then `tests/medicalkaContract.test.js`,
 
 Commit message: `feat(medicalka): complete sale before accepting order`
 
-## Task 4: Surface reconciliation safely in existing admin and Telegram views
+## Task 4: Surface reconciliation safely in the existing admin ledger
 
 **Files:**
 
-- Modify: `channel/src/notify/telegram.js`
 - Modify: `channel/src/analytics/channelSales.js` only if normalization needs
   reconciliation state
-- Create: `channel/tests/telegramOrder.test.js`
 - Modify: `channel/tests/channelSalesAnalytics.test.js`
 - Modify: `admin/src/features/sales/salesModel.js` only if a new public status is
   unavoidable; prefer existing `failed` status.
@@ -238,26 +235,25 @@ Commit message: `feat(medicalka): complete sale before accepting order`
 
 Prove:
 
-- sold card shows Medicalka id, Billz number, and sold state;
-- reconciliation-required failure shows urgent warning but no raw Billz body;
-- failed/reconciliation record appears in existing Medicalka ledger;
+- failed/reconciliation record appears in existing Medicalka ledger without raw
+  Billz response data;
 - sold record contributes revenue; failed record does not;
 - customer address and unmasked phone remain absent from analytics response.
 
 ### Step 2: Verify RED
 
-Run Telegram and channel-sales analytics tests.
+Run channel-sales analytics tests.
 
 ### Step 3: Implement minimum presentation change
 
-Keep existing page and navigation. Render reconciliation warning from durable
-flag in Telegram. Reuse existing `failed` status and Billz error badge in admin
-unless test proves a missing mapping. No approve/reject/retry buttons.
+Keep existing page and navigation. Reuse existing `failed` status and Billz
+error badge in the Sales → Medicalka ledger unless test proves a missing mapping.
+No approve/reject/retry buttons and no Medicalka creation Telegram work.
 
 ### Step 4: Verify GREEN
 
-Run Telegram, channel analytics, backend sales analytics, and admin SalesPage
-tests sequentially. Run admin build only if admin source changed.
+Run channel analytics, backend sales analytics, and admin SalesPage tests
+sequentially. Run admin build only if admin source changed.
 
 ### Step 5: Commit
 
@@ -286,8 +282,8 @@ Do not include any real key, password, token fingerprint, or production payload.
 
 ### Step 2: Verify docs
 
-Search changed docs for obsolete “background reservation then wait for paid”
-claims and for credential-like strings. Run `git diff --check`.
+Search changed docs for stale pre-immediate-sale lifecycle claims and for
+credential-like strings. Run `git diff --check`.
 
 ### Step 3: Commit
 
@@ -324,7 +320,7 @@ using `superpowers:receiving-code-review` before applying review changes.
 ### Step 4: Final verification
 
 Use `superpowers:verification-before-completion`. Re-run focused race,
-Medicalka, safety, analytics, and Telegram suites after review.
+Medicalka, safety, analytics, and admin Sales suites after review.
 
 ### Step 5: Guardrail audit
 
