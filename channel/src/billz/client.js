@@ -20,12 +20,14 @@ const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000];
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 class BillzError extends Error {
-  constructor(message, { status, path, body }) {
+  constructor(message, { status, path, body, outcomeUnknown = false, retrySafe = false }) {
     super(message);
     this.name = 'BillzError';
     this.status = status;
     this.path = path;
-    this.body = body;
+    this.body = logger.redact(body);
+    this.outcomeUnknown = outcomeUnknown;
+    this.retrySafe = retrySafe;
   }
 }
 
@@ -58,7 +60,8 @@ async function send(method, path, { query, body, token, headers }) {
 }
 
 async function request(method, path, options = {}) {
-  if (WRITE_METHODS.has(method) && !config.billzWriteEnabled) {
+  const isWrite = WRITE_METHODS.has(method);
+  if (isWrite && !config.billzWriteEnabled) {
     throw new BillzError(
       `refusing ${method} ${path}: BILLZ_WRITE_ENABLED is off`,
       { status: 0, path }
@@ -79,6 +82,14 @@ async function request(method, path, options = {}) {
       // A dropped connection or a timeout, not an HTTP response. Retrying
       // matters most during the catalogue walk: without it a single blip on
       // page 7 abandoned the whole sync.
+      if (isWrite) {
+        throw new BillzError(`billz ${method} ${path} failed: ${err.message}`, {
+          status: 0,
+          path,
+          outcomeUnknown: true,
+          retrySafe: false,
+        });
+      }
       if (attempt >= RETRY_DELAYS_MS.length) {
         throw new BillzError(`billz ${method} ${path} failed: ${err.message}`, { status: 0, path });
       }
@@ -98,6 +109,17 @@ async function request(method, path, options = {}) {
       // Re-authenticating is not a failed attempt; counting it here used to
       // eat one retry and shorten the backoff ladder for whatever came next.
       continue;
+    }
+
+    if (isWrite) {
+      const outcomeUnknown = res.status >= 500;
+      throw new BillzError(`billz ${method} ${path} failed`, {
+        status: res.status,
+        path,
+        body: parsed,
+        outcomeUnknown,
+        retrySafe: !outcomeUnknown,
+      });
     }
 
     const retriable = res.status === 429 || res.status >= 500;
