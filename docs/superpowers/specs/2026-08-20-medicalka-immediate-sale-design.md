@@ -29,6 +29,9 @@ Fairhaven change below makes the handler correct and safe once that call arrives
 ## In scope
 
 - Keep Medicalka token/secret authentication and current payload validation.
+- Preserve every currently active Medicalka token and secret. The change does
+  not issue, rotate, revoke, re-hash, or change the format or query-parameter
+  names of existing credentials. Previously revoked test keys stay revoked.
 - Treat incoming Medicalka orders as already-approved sales.
 - Complete Billz reservation and payment synchronously before HTTP success.
 - Make duplicate and concurrent deliveries idempotent.
@@ -137,6 +140,8 @@ Required tests:
 - successful duplicate returns the original response;
 - Billz failure prevents HTTP success;
 - write-disabled mode prevents HTTP success;
+- an existing active read token still reads catalogue endpoints and an existing
+  active order secret still authenticates the changed order endpoint;
 - network/5xx write failure is not automatically retried and requires
   reconciliation;
 - payment rejection preserves one draft and never creates a second one;
