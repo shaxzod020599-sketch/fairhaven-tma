@@ -49,7 +49,7 @@ const channelOrderSchema = new mongoose.Schema({
    * reserved  — stock held in Billz by a postponed draft
    * sold      — payment posted; Billz has decremented stock
    * cancelled — reservation released, or cancelled before one existed
-   * failed    — a Billz step failed; an operator can retry
+   * failed    — a Billz step failed; safe failures may retry, uncertain ones reconcile
    */
   status: {
     type: String,
@@ -79,6 +79,10 @@ const channelOrderSchema = new mongoose.Schema({
     attempts: { type: Number, default: 0 },
     lastError: { type: String, default: '' },
     lastTriedAt: { type: Date, default: null },
+    operationAction: { type: String, default: '' },
+    operationToken: { type: String, default: '' },
+    operationStartedAt: { type: Date, default: null },
+    reconciliationRequired: { type: Boolean, default: false },
   },
 
   // When an unconfirmed local hold stops protecting stock. An order nobody ever

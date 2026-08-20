@@ -45,6 +45,7 @@ test.before(async () => {
   sale.reserveOrder = async () => ({ orderId: 'draft-1', orderNumber: '900' });
   sale.completeSale = async () => ({});
   sale.releaseReservation = async () => ({});
+  sale.deleteDraft = async () => ({});
 });
 
 test.after(async () => {
@@ -274,6 +275,7 @@ test('a reservation whose hold release failed still counts as reserved', async (
 
   const stored = await ChannelOrder().findOne({ externalId: 'C-9' }).lean();
   assert.equal(stored.billz.reservationApplied, true, 'the units are held and the order says so');
+  assert.equal(stored.billz.reconciliationRequired, true, 'the partial transition needs review');
 
   // And the repair settles the hold that never got released.
   await makeQuiet();

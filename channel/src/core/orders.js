@@ -31,6 +31,17 @@ const { nextValue } = require('../models/Counter');
 // enough to cover a normal working shift, short enough that a forgotten order
 // does not quietly strand inventory.
 const DEFAULT_HOLD_TTL_MS = config.bot.holdTtlMs;
+// Long enough for the normal queued write sequence; expiry fences the owner
+// into reconciliation rather than allowing another worker to take over.
+const BILLZ_OPERATION_STALE_MS = 5 * 60 * 1000;
+
+class BillzOperationError extends Error {
+  constructor(message, code) {
+    super(message);
+    this.name = 'BillzOperationError';
+    this.code = code;
+  }
+}
 
 function newInternalOrderId() {
   return crypto.randomUUID();
@@ -180,26 +191,166 @@ async function releaseHold(order) {
   return true;
 }
 
+function operationError(internalOrderId, code) {
+  const detail = {
+    BILLZ_OPERATION_IN_PROGRESS: 'already has a Billz operation in progress',
+    BILLZ_OPERATION_OWNERSHIP_LOST: 'lost ownership of its Billz operation',
+    BILLZ_RECONCILIATION_REQUIRED: 'requires Billz reconciliation before another operation',
+  }[code];
+  return new BillzOperationError(`order ${internalOrderId} ${detail}`, code);
+}
+
+function clearedOperationFields() {
+  return {
+    'billz.operationAction': '',
+    'billz.operationToken': '',
+    'billz.operationStartedAt': null,
+    'billz.reconciliationRequired': false,
+  };
+}
+
+async function claimBillzOperation(internalOrderId, action, allowedStatuses) {
+  const Model = ChannelOrder();
+  const token = crypto.randomUUID();
+  const startedAt = new Date();
+  const order = await Model.findOneAndUpdate(
+    {
+      internalOrderId,
+      status: { $in: allowedStatuses },
+      'billz.reconciliationRequired': { $ne: true },
+      $or: [
+        { 'billz.operationToken': '' },
+        { 'billz.operationToken': null },
+        { 'billz.operationToken': { $exists: false } },
+      ],
+    },
+    {
+      $set: {
+        'billz.operationAction': action,
+        'billz.operationToken': token,
+        'billz.operationStartedAt': startedAt,
+        'billz.reconciliationRequired': false,
+        'billz.lastTriedAt': startedAt,
+      },
+      $inc: { 'billz.attempts': 1 },
+    },
+    { new: true }
+  );
+  if (order) return { order, token };
+
+  const current = await Model.findOne({ internalOrderId });
+  if (!current) throw new Error(`unknown order ${internalOrderId}`);
+  if (current.billz.reconciliationRequired) {
+    throw operationError(internalOrderId, 'BILLZ_RECONCILIATION_REQUIRED');
+  }
+
+  if (current.billz.operationToken) {
+    const started = current.billz.operationStartedAt?.getTime();
+    const stale = !started || Date.now() - started >= BILLZ_OPERATION_STALE_MS;
+    if (stale) {
+      const marked = await Model.findOneAndUpdate(
+        {
+          _id: current._id,
+          'billz.operationToken': current.billz.operationToken,
+          'billz.reconciliationRequired': { $ne: true },
+        },
+        {
+          $set: {
+            status: 'failed',
+            'billz.reconciliationRequired': true,
+            'billz.lastError': `stale ${current.billz.operationAction || 'Billz'} operation`,
+          },
+        },
+        { new: true }
+      );
+      if (marked) {
+        throw operationError(internalOrderId, 'BILLZ_RECONCILIATION_REQUIRED');
+      }
+      const fresh = await Model.findOne({ internalOrderId });
+      if (fresh?.billz.reconciliationRequired) {
+        throw operationError(internalOrderId, 'BILLZ_RECONCILIATION_REQUIRED');
+      }
+      if (fresh?.billz.operationToken) {
+        throw operationError(internalOrderId, 'BILLZ_OPERATION_IN_PROGRESS');
+      }
+      return { order: fresh, token: '' };
+    }
+    throw operationError(internalOrderId, 'BILLZ_OPERATION_IN_PROGRESS');
+  }
+
+  return { order: current, token: '' };
+}
+
+async function persistBillzOperation(order, token, fields) {
+  const updated = await ChannelOrder().findOneAndUpdate(
+    {
+      _id: order._id,
+      'billz.operationToken': token,
+      'billz.reconciliationRequired': { $ne: true },
+    },
+    { $set: fields },
+    { new: true }
+  );
+  if (!updated) {
+    throw operationError(order.internalOrderId, 'BILLZ_OPERATION_OWNERSHIP_LOST');
+  }
+  return updated;
+}
+
+async function assertBillzOperationOwner(order, token) {
+  const ownsLease = await ChannelOrder().exists({
+    _id: order._id,
+    'billz.operationToken': token,
+    'billz.reconciliationRequired': { $ne: true },
+  });
+  if (!ownsLease) {
+    throw operationError(order.internalOrderId, 'BILLZ_OPERATION_OWNERSHIP_LOST');
+  }
+}
+
+function isLegacyUnclassifiedError(err) {
+  return err?.outcomeUnknown === undefined && err?.retrySafe === undefined;
+}
+
+function isSafePreEffectFailure(err) {
+  return err?.outcomeUnknown !== true
+    && (err?.retrySafe === true || isLegacyUnclassifiedError(err));
+}
+
 /**
  * Holds stock in Billz for an accepted order.
  *
- * Safe to call again after a failure: an order that already reserved returns
- * unchanged, and the counter is only moved on the transition itself.
+ * Safe to call again after an explicit pre-effect failure. Unknown or partial
+ * Billz outcomes remain fenced for reconciliation.
  */
 async function reserveOrder(internalOrderId) {
-  const Model = ChannelOrder();
-  const order = await Model.findOne({ internalOrderId });
-  if (!order) throw new Error(`unknown order ${internalOrderId}`);
-  if (order.status === 'reserved') return order.toObject();
-  if (['sold', 'cancelled'].includes(order.status)) {
-    throw new Error(`order ${internalOrderId} is already ${order.status}`);
+  const lease = await claimBillzOperation(internalOrderId, 'reserve', ['received', 'failed']);
+  if (!lease.token) {
+    if (lease.order.status === 'reserved') return lease.order.toObject();
+    if (['sold', 'cancelled'].includes(lease.order.status)) {
+      throw new Error(`order ${internalOrderId} is already ${lease.order.status}`);
+    }
+    throw new Error(`order ${internalOrderId} cannot be reserved from ${lease.order.status}`);
   }
 
-  order.billz.attempts += 1;
-  order.billz.lastTriedAt = new Date();
+  const { order, token } = lease;
+  let draftOrderId = order.billz.draftOrderId;
+  let orderNumber = order.billz.orderNumber;
+  let reservationApplied = order.billz.reservationApplied;
+  let pendingApplied = order.billz.pendingApplied;
+  let holdExpiresAt = order.holdExpiresAt;
 
   try {
-    const { orderId, orderNumber } = await sale.reserveOrder({
+    if (draftOrderId) {
+      await persistBillzOperation(order, token, {
+        status: 'failed',
+        'billz.reconciliationRequired': true,
+        'billz.lastError': 'an existing Billz draft requires reconciliation',
+      });
+      throw operationError(internalOrderId, 'BILLZ_RECONCILIATION_REQUIRED');
+    }
+
+    const result = await sale.reserveOrder({
       items: order.items.map((i) => ({
         billzProductId: i.billzProductId,
         quantity: i.quantity,
@@ -207,41 +358,65 @@ async function reserveOrder(internalOrderId) {
       })),
       comment: `${order.channel} ${order.externalId}`,
     });
+    draftOrderId = result.orderId;
+    orderNumber = result.orderNumber;
+    await assertBillzOperationOwner(order, token);
 
     // Counter first, then status: a crash between the two leaves units
     // reserved with the order still marked for retry, which an operator can
     // see and correct. The reverse order would silently under-reserve.
-    await applyReservedQty(order.items, +1);
+    if (!reservationApplied) {
+      await applyReservedQty(order.items, +1);
+      reservationApplied = true;
+    }
     // Set with no `await` between it and the counter it describes. Anything in
     // between — including the hold release below — could throw, and the failure
     // path saves the order: a saved order whose flag says it holds nothing
     // while the counter says otherwise leaks those units permanently, because
     // the cancellation path trusts the flag.
-    order.billz.reservationApplied = true;
-
     // Billz is now holding the same units, so the local hold has to go — the
     // two counters are both subtracted from sellable stock, and keeping both
     // would take twice the inventory off sale. Released after the reservation
     // rather than before, so no window exists where nothing is holding.
-    await releaseHold(order);
+    if (pendingApplied) {
+      await applyPendingQty(order.items, -1);
+      pendingApplied = false;
+      holdExpiresAt = null;
+    }
 
-    order.billz.draftOrderId = orderId;
-    order.billz.orderNumber = orderNumber;
-    order.billz.lastError = '';
-    order.status = 'reserved';
-    await order.save();
+    const stored = await persistBillzOperation(order, token, {
+      status: 'reserved',
+      holdExpiresAt,
+      'billz.draftOrderId': draftOrderId,
+      'billz.orderNumber': orderNumber,
+      'billz.reservationApplied': reservationApplied,
+      'billz.pendingApplied': pendingApplied,
+      'billz.lastError': '',
+      ...clearedOperationFields(),
+    });
 
     logger.info('channel order reserved', {
-      internalOrderId, channel: order.channel, billzOrderId: orderId,
+      internalOrderId, channel: order.channel, billzOrderId: draftOrderId,
     });
-    return order.toObject();
+    return stored.toObject();
   } catch (err) {
-    order.status = 'failed';
-    order.billz.lastError = err.message;
-    // Kept even on failure: a draft may exist in Billz holding stock, and this
-    // is the only handle to it.
-    if (err.billzOrderId) order.billz.draftOrderId = err.billzOrderId;
-    await order.save();
+    if (err.code === 'BILLZ_OPERATION_OWNERSHIP_LOST'
+      || err.code === 'BILLZ_RECONCILIATION_REQUIRED') throw err;
+    if (err.billzOrderId) draftOrderId = err.billzOrderId;
+    const reconciliationRequired = err.outcomeUnknown === true
+      || Boolean(draftOrderId)
+      || !isSafePreEffectFailure(err);
+    await persistBillzOperation(order, token, {
+      status: 'failed',
+      holdExpiresAt,
+      'billz.draftOrderId': draftOrderId || '',
+      'billz.orderNumber': orderNumber || '',
+      'billz.reservationApplied': reservationApplied,
+      'billz.pendingApplied': pendingApplied,
+      'billz.lastError': err.message,
+      'billz.reconciliationRequired': reconciliationRequired,
+      ...(reconciliationRequired ? {} : clearedOperationFields()),
+    });
     logger.error('channel order reservation failed', { internalOrderId, err });
     throw err;
   }
@@ -252,17 +427,18 @@ async function reserveOrder(internalOrderId) {
  * is handed back at the same time — leaving it would double-count the units.
  */
 async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
-  const Model = ChannelOrder();
-  const order = await Model.findOne({ internalOrderId });
-  if (!order) throw new Error(`unknown order ${internalOrderId}`);
-  if (order.status === 'sold') return order.toObject();
-  if (order.status !== 'reserved') {
+  const lease = await claimBillzOperation(internalOrderId, 'complete', ['reserved']);
+  if (!lease.token) {
+    if (lease.order.status === 'sold') return lease.order.toObject();
     throw new Error(`order ${internalOrderId} must be reserved before it can be sold`);
   }
 
+  const { order, token } = lease;
   const typeId = paymentTypeId || config.billz.paymentTypeId;
-  order.billz.attempts += 1;
-  order.billz.lastTriedAt = new Date();
+  let reservationApplied = order.billz.reservationApplied;
+  let pendingApplied = order.billz.pendingApplied;
+  let holdExpiresAt = order.holdExpiresAt;
+  let paymentCompleted = false;
 
   try {
     await sale.completeSale(order.billz.draftOrderId, {
@@ -273,28 +449,45 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
       // what tells them apart in Billz — which order, from which marketplace.
       comment: `${order.channel} ${order.externalId}`,
     });
+    paymentCompleted = true;
+    await assertBillzOperationOwner(order, token);
 
-    if (order.billz.reservationApplied) {
+    if (reservationApplied) {
       await applyReservedQty(order.items, -1);
-      order.billz.reservationApplied = false;
+      reservationApplied = false;
     }
     // Normally already gone — reserving releases it. Kept as a belt-and-braces
     // release so a hold can never outlive the order that took it.
-    await releaseHold(order);
-    order.status = 'sold';
-    if (!order.soldAt) {
-      order.soldAt = new Date();
-      order.soldAtEstimated = false;
+    if (pendingApplied) {
+      await applyPendingQty(order.items, -1);
+      pendingApplied = false;
+      holdExpiresAt = null;
     }
-    order.billz.lastError = '';
-    await order.save();
+    const stored = await persistBillzOperation(order, token, {
+      status: 'sold',
+      soldAt: order.soldAt || new Date(),
+      soldAtEstimated: false,
+      holdExpiresAt,
+      'billz.reservationApplied': reservationApplied,
+      'billz.pendingApplied': pendingApplied,
+      'billz.lastError': '',
+      ...clearedOperationFields(),
+    });
 
     logger.info('channel order sold', { internalOrderId, channel: order.channel });
-    return order.toObject();
+    return stored.toObject();
   } catch (err) {
-    order.status = 'failed';
-    order.billz.lastError = err.message;
-    await order.save();
+    if (err.code === 'BILLZ_OPERATION_OWNERSHIP_LOST') throw err;
+    const retrySafe = !paymentCompleted && isSafePreEffectFailure(err);
+    await persistBillzOperation(order, token, {
+      status: retrySafe ? 'reserved' : 'failed',
+      holdExpiresAt,
+      'billz.reservationApplied': reservationApplied,
+      'billz.pendingApplied': pendingApplied,
+      'billz.lastError': err.message,
+      'billz.reconciliationRequired': !retrySafe,
+      ...(retrySafe ? clearedOperationFields() : {}),
+    });
     logger.error('channel order sale failed', { internalOrderId, err });
     throw err;
   }
@@ -308,52 +501,91 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
  * different operation with different accounting.
  */
 async function cancelOrder(internalOrderId, { reason = '' } = {}) {
-  const Model = ChannelOrder();
-  const order = await Model.findOne({ internalOrderId });
-  if (!order) throw new Error(`unknown order ${internalOrderId}`);
-  if (order.status === 'cancelled') return order.toObject();
-  if (order.status === 'sold') {
-    throw new Error(`order ${internalOrderId} is already sold — a return is not a cancellation`);
-  }
-
-  if (order.billz.draftOrderId) {
-    try {
-      await sale.releaseReservation(order.billz.draftOrderId);
-      // Releasing turns the reservation back into a draft rather than removing
-      // it. Without this second step every cancelled marketplace order would
-      // leave an empty draft in the operator's sales list, permanently.
-      // Non-fatal on its own: the stock is already back, and a stray draft is
-      // clutter rather than a stock error.
-      try {
-        await sale.deleteDraft(order.billz.draftOrderId);
-      } catch (err) {
-        logger.warn('released the reservation but could not remove the draft', {
-          internalOrderId, billzOrderId: order.billz.draftOrderId, err,
-        });
-      }
-    } catch (err) {
-      // The stock still has to come back on our side. Billz keeps its own
-      // expiry on the postpone, so a stuck draft releases itself eventually,
-      // and the error is recorded for an operator.
-      logger.warn('could not release billz reservation', { internalOrderId, err });
-      order.billz.lastError = `release failed: ${err.message}`;
+  const lease = await claimBillzOperation(
+    internalOrderId, 'cancel', ['received', 'reserved', 'failed']
+  );
+  if (!lease.token) {
+    if (lease.order.status === 'cancelled') return lease.order.toObject();
+    if (lease.order.status === 'sold') {
+      throw new Error(`order ${internalOrderId} is already sold — a return is not a cancellation`);
     }
+    throw new Error(`order ${internalOrderId} cannot be cancelled from ${lease.order.status}`);
   }
 
-  if (order.billz.reservationApplied) {
-    await applyReservedQty(order.items, -1);
-    order.billz.reservationApplied = false;
-  }
-  await releaseHold(order);
-  order.status = 'cancelled';
-  if (reason) order.billz.lastError = order.billz.lastError || `cancelled: ${reason}`;
-  await order.save();
+  const { order, token } = lease;
+  let reservationApplied = order.billz.reservationApplied;
+  let pendingApplied = order.billz.pendingApplied;
+  let holdExpiresAt = order.holdExpiresAt;
+  let reservationReleased = false;
+  let lastError = order.billz.lastError;
 
-  logger.info('channel order cancelled', { internalOrderId, channel: order.channel, reason });
-  return order.toObject();
+  try {
+    if (order.billz.draftOrderId) {
+      try {
+        await sale.releaseReservation(order.billz.draftOrderId);
+        reservationReleased = true;
+      } catch (err) {
+        if (!isLegacyUnclassifiedError(err)) throw err;
+        logger.warn('could not release billz reservation', { internalOrderId, err });
+        lastError = `release failed: ${err.message}`;
+      }
+
+      if (reservationReleased) {
+        try {
+          await sale.deleteDraft(order.billz.draftOrderId);
+        } catch (err) {
+          if (err.outcomeUnknown === true) throw err;
+          logger.warn('released the reservation but could not remove the draft', {
+            internalOrderId, billzOrderId: order.billz.draftOrderId, err,
+          });
+        }
+      }
+    }
+
+    await assertBillzOperationOwner(order, token);
+    if (reservationApplied) {
+      await applyReservedQty(order.items, -1);
+      reservationApplied = false;
+    }
+    if (pendingApplied) {
+      await applyPendingQty(order.items, -1);
+      pendingApplied = false;
+      holdExpiresAt = null;
+    }
+    if (reason) lastError = lastError || `cancelled: ${reason}`;
+    const stored = await persistBillzOperation(order, token, {
+      status: 'cancelled',
+      holdExpiresAt,
+      'billz.reservationApplied': reservationApplied,
+      'billz.pendingApplied': pendingApplied,
+      'billz.lastError': lastError,
+      ...clearedOperationFields(),
+    });
+
+    logger.info('channel order cancelled', { internalOrderId, channel: order.channel, reason });
+    return stored.toObject();
+  } catch (err) {
+    if (err.code === 'BILLZ_OPERATION_OWNERSHIP_LOST') throw err;
+    const retrySafe = !reservationReleased
+      && err.outcomeUnknown === false
+      && err.retrySafe === true;
+    await persistBillzOperation(order, token, {
+      status: 'failed',
+      holdExpiresAt,
+      'billz.reservationApplied': reservationApplied,
+      'billz.pendingApplied': pendingApplied,
+      'billz.lastError': err.message,
+      'billz.reconciliationRequired': !retrySafe,
+      ...(retrySafe ? clearedOperationFields() : {}),
+    });
+    logger.warn('channel order cancellation failed', { internalOrderId, err });
+    throw err;
+  }
 }
 
 module.exports = {
+  BILLZ_OPERATION_STALE_MS,
+  BillzOperationError,
   DEFAULT_HOLD_TTL_MS,
   acceptOrder,
   applyPendingQty,

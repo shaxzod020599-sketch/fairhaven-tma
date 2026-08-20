@@ -62,14 +62,34 @@ function stubSale(overrides = {}) {
     if (overrides.releaseReservation) return overrides.releaseReservation(id);
     return {};
   };
+  sale.deleteDraft = async (id) => {
+    calls.push({ fn: 'deleteDraft', id });
+    if (overrides.deleteDraft) return overrides.deleteDraft(id);
+    return {};
+  };
   return {
     calls,
     restore: () => {
       sale.reserveOrder = original.reserveOrder;
       sale.completeSale = original.completeSale;
       sale.releaseReservation = original.releaseReservation;
+      sale.deleteDraft = original.deleteDraft;
     },
   };
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, reject, resolve };
+}
+
+function classifiedError(message, metadata) {
+  return Object.assign(new Error(message), metadata);
 }
 
 let seq = 0;
@@ -187,6 +207,37 @@ test('reserving twice does not hold the units twice', async () => {
   }
 });
 
+test('two parallel reservations create one draft and hold the units once', async () => {
+  const entered = deferred();
+  const finish = deferred();
+  let reserveCalls = 0;
+  const stub = stubSale({
+    reserveOrder: async () => {
+      reserveCalls += 1;
+      entered.resolve();
+      if (reserveCalls === 1) await finish.promise;
+      return { orderId: 'draft-parallel', orderNumber: '902' };
+    },
+  });
+  const { order, productId } = await freshOrder();
+  try {
+    const first = orders.reserveOrder(order.internalOrderId);
+    await entered.promise;
+    await assert.rejects(
+      orders.reserveOrder(order.internalOrderId),
+      (err) => err.code === 'BILLZ_OPERATION_IN_PROGRESS'
+    );
+    finish.resolve();
+    await first;
+
+    assert.equal(stub.calls.filter((c) => c.fn === 'reserveOrder').length, 1);
+    assert.equal(await reservedFor(productId), 3);
+  } finally {
+    finish.resolve();
+    stub.restore();
+  }
+});
+
 test('a failed reservation holds nothing and can be retried', async () => {
   let attempts = 0;
   const stub = stubSale({
@@ -239,6 +290,38 @@ test('selling twice releases the reservation only once', async () => {
   }
 });
 
+test('two parallel completions post one payment and release the counter once', async () => {
+  const entered = deferred();
+  const finish = deferred();
+  let completionCalls = 0;
+  const stub = stubSale({
+    completeSale: async () => {
+      completionCalls += 1;
+      entered.resolve();
+      if (completionCalls === 1) await finish.promise;
+      return {};
+    },
+  });
+  const { order, productId } = await freshOrder();
+  try {
+    await orders.reserveOrder(order.internalOrderId);
+    const first = orders.completeOrder(order.internalOrderId);
+    await entered.promise;
+    await assert.rejects(
+      orders.completeOrder(order.internalOrderId),
+      (err) => err.code === 'BILLZ_OPERATION_IN_PROGRESS'
+    );
+    finish.resolve();
+    await first;
+
+    assert.equal(stub.calls.filter((c) => c.fn === 'completeSale').length, 1);
+    assert.equal(await reservedFor(productId), 0);
+  } finally {
+    finish.resolve();
+    stub.restore();
+  }
+});
+
 test('selling records one immutable completion timestamp', async () => {
   const stub = stubSale();
   const { order } = await freshOrder();
@@ -281,6 +364,39 @@ test('cancelling twice does not give the units back twice', async () => {
     assert.equal(await reservedFor(productId), 0);
     assert.equal(stub.calls.filter((c) => c.fn === 'releaseReservation').length, 1);
   } finally {
+    stub.restore();
+  }
+});
+
+test('two parallel cancellations release and delete one draft once', async () => {
+  const entered = deferred();
+  const finish = deferred();
+  let releaseCalls = 0;
+  const stub = stubSale({
+    releaseReservation: async () => {
+      releaseCalls += 1;
+      entered.resolve();
+      if (releaseCalls === 1) await finish.promise;
+      return {};
+    },
+  });
+  const { order, productId } = await freshOrder();
+  try {
+    await orders.reserveOrder(order.internalOrderId);
+    const first = orders.cancelOrder(order.internalOrderId);
+    await entered.promise;
+    await assert.rejects(
+      orders.cancelOrder(order.internalOrderId),
+      (err) => err.code === 'BILLZ_OPERATION_IN_PROGRESS'
+    );
+    finish.resolve();
+    await first;
+
+    assert.equal(stub.calls.filter((c) => c.fn === 'releaseReservation').length, 1);
+    assert.equal(stub.calls.filter((c) => c.fn === 'deleteDraft').length, 1);
+    assert.equal(await reservedFor(productId), 0);
+  } finally {
+    finish.resolve();
     stub.restore();
   }
 });
@@ -368,6 +484,266 @@ test('a draft id from a part-way failure is kept for cleanup', async () => {
     await assert.rejects(orders.reserveOrder(order.internalOrderId));
     const stored = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId });
     assert.equal(stored.billz.draftOrderId, 'orphan-draft');
+    assert.equal(stored.billz.reconciliationRequired, true);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('an unknown reservation result requires reconciliation and blocks every retry', async () => {
+  const stub = stubSale({
+    reserveOrder: async () => {
+      throw classifiedError('connection lost', { outcomeUnknown: true, retrySafe: false });
+    },
+  });
+  const { order, productId } = await freshOrder();
+  try {
+    await assert.rejects(orders.reserveOrder(order.internalOrderId), /connection lost/);
+    await assert.rejects(
+      orders.reserveOrder(order.internalOrderId),
+      (err) => err.code === 'BILLZ_RECONCILIATION_REQUIRED'
+    );
+
+    const stored = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId }).lean();
+    assert.equal(stored.status, 'failed');
+    assert.equal(stored.billz.reconciliationRequired, true);
+    assert.equal(stub.calls.filter((c) => c.fn === 'reserveOrder').length, 1);
+    assert.equal(await reservedFor(productId), 0);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('a known draft from a partial reservation failure blocks automatic retry', async () => {
+  const stub = stubSale({
+    reserveOrder: async () => {
+      throw classifiedError('line rejected', {
+        billzOrderId: 'draft-partial', outcomeUnknown: false, retrySafe: true,
+      });
+    },
+  });
+  const { order } = await freshOrder();
+  try {
+    await assert.rejects(orders.reserveOrder(order.internalOrderId), /line rejected/);
+    await assert.rejects(
+      orders.reserveOrder(order.internalOrderId),
+      (err) => err.code === 'BILLZ_RECONCILIATION_REQUIRED'
+    );
+
+    const stored = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId }).lean();
+    assert.equal(stored.billz.draftOrderId, 'draft-partial');
+    assert.equal(stored.billz.reconciliationRequired, true);
+    assert.equal(stub.calls.filter((c) => c.fn === 'reserveOrder').length, 1);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('an explicit pre-effect rejection unlocks the order for a safe retry', async () => {
+  let attempts = 0;
+  const stub = stubSale({
+    reserveOrder: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw classifiedError('request rejected', { outcomeUnknown: false, retrySafe: true });
+      }
+      return { orderId: 'draft-safe-retry', orderNumber: '903' };
+    },
+  });
+  const { order, productId } = await freshOrder();
+  try {
+    await assert.rejects(orders.reserveOrder(order.internalOrderId), /request rejected/);
+    const failed = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId }).lean();
+    assert.equal(failed.status, 'failed');
+    assert.equal(failed.billz.operationToken, '');
+    assert.equal(failed.billz.reconciliationRequired, false);
+
+    await orders.reserveOrder(order.internalOrderId);
+    assert.equal(stub.calls.filter((c) => c.fn === 'reserveOrder').length, 2);
+    assert.equal(await reservedFor(productId), 3);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('an explicit payment rejection retries against the same reserved draft', async () => {
+  let attempts = 0;
+  const stub = stubSale({
+    completeSale: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw classifiedError('payment rejected', { outcomeUnknown: false, retrySafe: true });
+      }
+      return {};
+    },
+  });
+  const { order, productId } = await freshOrder();
+  try {
+    const reserved = await orders.reserveOrder(order.internalOrderId);
+    await assert.rejects(orders.completeOrder(order.internalOrderId), /payment rejected/);
+
+    const rejected = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId }).lean();
+    assert.equal(rejected.status, 'reserved');
+    assert.equal(rejected.billz.draftOrderId, reserved.billz.draftOrderId);
+    assert.equal(rejected.billz.operationToken, '');
+    assert.equal(rejected.billz.reconciliationRequired, false);
+    assert.equal(await reservedFor(productId), 3);
+
+    await orders.completeOrder(order.internalOrderId);
+    assert.equal(stub.calls.filter((c) => c.fn === 'reserveOrder').length, 1);
+    assert.deepEqual(
+      stub.calls.filter((c) => c.fn === 'completeSale').map((c) => c.id),
+      [reserved.billz.draftOrderId, reserved.billz.draftOrderId]
+    );
+    assert.equal(await reservedFor(productId), 0);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('an unknown payment result keeps the reservation and blocks every retry', async () => {
+  const stub = stubSale({
+    completeSale: async () => {
+      throw classifiedError('payment connection lost', { outcomeUnknown: true, retrySafe: false });
+    },
+  });
+  const { order, productId } = await freshOrder();
+  try {
+    const reserved = await orders.reserveOrder(order.internalOrderId);
+    await assert.rejects(orders.completeOrder(order.internalOrderId), /payment connection lost/);
+    await assert.rejects(
+      orders.completeOrder(order.internalOrderId),
+      (err) => err.code === 'BILLZ_RECONCILIATION_REQUIRED'
+    );
+
+    const stored = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId }).lean();
+    assert.equal(stored.status, 'failed');
+    assert.equal(stored.billz.draftOrderId, reserved.billz.draftOrderId);
+    assert.equal(stored.billz.reservationApplied, true);
+    assert.equal(stored.billz.reconciliationRequired, true);
+    assert.equal(stub.calls.filter((c) => c.fn === 'completeSale').length, 1);
+    assert.equal(await reservedFor(productId), 3);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('an unknown cancellation result performs no uncertain cleanup', async () => {
+  const stub = stubSale({
+    releaseReservation: async () => {
+      throw classifiedError('release connection lost', { outcomeUnknown: true, retrySafe: false });
+    },
+  });
+  const { order, productId } = await freshOrder();
+  try {
+    await orders.reserveOrder(order.internalOrderId);
+    await assert.rejects(orders.cancelOrder(order.internalOrderId), /release connection lost/);
+    await assert.rejects(
+      orders.cancelOrder(order.internalOrderId),
+      (err) => err.code === 'BILLZ_RECONCILIATION_REQUIRED'
+    );
+
+    const stored = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId }).lean();
+    assert.equal(stored.status, 'failed');
+    assert.equal(stored.billz.reservationApplied, true);
+    assert.equal(stored.billz.reconciliationRequired, true);
+    assert.equal(stub.calls.filter((c) => c.fn === 'releaseReservation').length, 1);
+    assert.equal(stub.calls.filter((c) => c.fn === 'deleteDraft').length, 0);
+    assert.equal(await reservedFor(productId), 3);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('a stale operation requires reconciliation and is never taken over', async () => {
+  const stub = stubSale();
+  const { order } = await freshOrder();
+  await ChannelOrder().updateOne(
+    { internalOrderId: order.internalOrderId },
+    {
+      $set: {
+        'billz.operationAction': 'reserve',
+        'billz.operationToken': 'dead-worker-token',
+        'billz.operationStartedAt': new Date(Date.now() - 60 * 60 * 1000),
+      },
+    }
+  );
+
+  try {
+    await assert.rejects(
+      orders.reserveOrder(order.internalOrderId),
+      (err) => err.code === 'BILLZ_RECONCILIATION_REQUIRED'
+    );
+    const stored = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId }).lean();
+    assert.equal(stored.status, 'failed');
+    assert.equal(stored.billz.reconciliationRequired, true);
+    assert.equal(stored.billz.operationToken, 'dead-worker-token');
+    assert.equal(stub.calls.length, 0);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('a worker that finishes after its lease goes stale cannot clear reconciliation', async () => {
+  const entered = deferred();
+  const finish = deferred();
+  const stub = stubSale({
+    reserveOrder: async () => {
+      entered.resolve();
+      await finish.promise;
+      return { orderId: 'draft-stale-owner', orderNumber: '904' };
+    },
+  });
+  const { order, productId } = await freshOrder();
+  try {
+    const first = orders.reserveOrder(order.internalOrderId);
+    await entered.promise;
+    await ChannelOrder().updateOne(
+      { internalOrderId: order.internalOrderId },
+      { $set: { 'billz.operationStartedAt': new Date(Date.now() - 60 * 60 * 1000) } }
+    );
+    await assert.rejects(
+      orders.reserveOrder(order.internalOrderId),
+      (err) => err.code === 'BILLZ_RECONCILIATION_REQUIRED'
+    );
+    finish.resolve();
+    await assert.rejects(
+      first,
+      (err) => err.code === 'BILLZ_OPERATION_OWNERSHIP_LOST'
+    );
+
+    const stored = await ChannelOrder().findOne({ internalOrderId: order.internalOrderId }).lean();
+    assert.equal(stored.status, 'failed');
+    assert.equal(stored.billz.reconciliationRequired, true);
+    assert.equal(stored.billz.operationToken.length > 0, true);
+    assert.equal(await reservedFor(productId), 0, 'a fenced owner cannot apply local transition state');
+  } finally {
+    finish.resolve();
+    stub.restore();
+  }
+});
+
+test('an old order with no operation metadata can still be reserved safely', async () => {
+  const stub = stubSale();
+  const { order, productId } = await freshOrder();
+  await ChannelOrder().collection.updateOne(
+    { internalOrderId: order.internalOrderId },
+    {
+      $unset: {
+        'billz.operationAction': '',
+        'billz.operationToken': '',
+        'billz.operationStartedAt': '',
+        'billz.reconciliationRequired': '',
+      },
+    }
+  );
+
+  try {
+    const stored = await orders.reserveOrder(order.internalOrderId);
+    assert.equal(stored.status, 'reserved');
+    assert.equal(stored.billz.operationToken, '');
+    assert.equal(stored.billz.reconciliationRequired, false);
+    assert.equal(await reservedFor(productId), 3);
   } finally {
     stub.restore();
   }
