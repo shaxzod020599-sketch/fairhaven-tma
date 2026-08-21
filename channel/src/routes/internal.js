@@ -16,6 +16,7 @@ const { checkReportCapability } = require('../billz/reportCapability');
 const { runCatalogSync } = require('../sync/catalog');
 const { requireInternalToken } = require('../middleware/internalAuth');
 const notify = require('../notify/telegram');
+const medicalka = require('../medicalka/runtime');
 
 /**
  * Service-to-service surface, called only by the bot backend over loopback.
@@ -139,6 +140,80 @@ router.get('/analytics/billz/capability', async (req, res) => {
     res.json(result);
   } catch (err) {
     analyticsError(res, err);
+  }
+});
+
+// ── Medicalka pharmacy approvals ───────────────────────────────────────────
+
+const MEDICALKA_BUCKETS = new Set(['active', 'history', 'all']);
+const MEDICALKA_ACTORS = new Set(['admin-panel', 'telegram']);
+
+function medicalkaError(res, err) {
+  const code = String(err?.code || 'medicalka_internal_error');
+  const safeCode = code.startsWith('medicalka_') ? code : 'medicalka_internal_error';
+  const status = Number(err?.status);
+  if (Number.isInteger(status) && status >= 400 && status <= 599) {
+    return res.status(status).json({ error: safeCode });
+  }
+  logger.error('internal medicalka request failed', { code: safeCode });
+  return res.status(502).json({ error: safeCode });
+}
+
+function readMedicalkaQuery(query) {
+  const bucket = String(query?.bucket || 'active');
+  const page = Number(query?.page || 1);
+  const limit = Math.min(100, Number(query?.limit || 30));
+  const search = String(query?.search || '').trim().slice(0, 120);
+  if (
+    !MEDICALKA_BUCKETS.has(bucket)
+    || !Number.isSafeInteger(page) || page < 1
+    || !Number.isSafeInteger(limit) || limit < 1
+  ) return null;
+  return { bucket, page, limit, search };
+}
+
+function readMedicalkaDecision(body) {
+  const action = String(body?.action || '');
+  const comment = String(body?.comment || '').trim();
+  const type = String(body?.actor?.type || '');
+  const telegramId = Number(body?.actor?.telegramId);
+  const name = String(body?.actor?.name || '').trim().slice(0, 120);
+  if (
+    !['accepted', 'rejected'].includes(action)
+    || !MEDICALKA_ACTORS.has(type)
+    || !Number.isSafeInteger(telegramId) || telegramId <= 0
+    || comment.length > 500
+  ) return null;
+  return { action, comment, actor: { type, telegramId, name } };
+}
+
+router.get('/medicalka/approvals', async (req, res) => {
+  const query = readMedicalkaQuery(req.query);
+  if (!query) return res.status(422).json({ error: 'medicalka_invalid_query' });
+  try {
+    return res.json(await medicalka.listApprovals(query));
+  } catch (err) {
+    return medicalkaError(res, err);
+  }
+});
+
+router.get('/medicalka/approvals/:id', async (req, res) => {
+  try {
+    const approval = await medicalka.getApproval(req.params.id);
+    if (!approval) return res.status(404).json({ error: 'medicalka_approval_not_found' });
+    return res.json({ data: approval });
+  } catch (err) {
+    return medicalkaError(res, err);
+  }
+});
+
+router.post('/medicalka/approvals/:id/respond', async (req, res) => {
+  const decision = readMedicalkaDecision(req.body);
+  if (!decision) return res.status(422).json({ error: 'medicalka_invalid_decision' });
+  try {
+    return res.json(await medicalka.respondToApproval(req.params.id, decision));
+  } catch (err) {
+    return medicalkaError(res, err);
   }
 });
 

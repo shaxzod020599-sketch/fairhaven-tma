@@ -27,6 +27,7 @@ const OWNED_COLLECTIONS = new Set([
   'channelkeys',
   'channelcounters',
   'channelorders',
+  'medicalkaapprovals',
 ]);
 
 /**

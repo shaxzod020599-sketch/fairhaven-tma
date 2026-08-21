@@ -8,6 +8,7 @@ const notify = require('./notify/telegram');
 const BillzProduct = require('./models/BillzProduct');
 const SyncLog = require('./models/SyncLog');
 const { runCatalogSync, startScheduler } = require('./sync/catalog');
+const medicalka = require('./medicalka/runtime');
 
 /**
  * Channel hub.
@@ -105,6 +106,19 @@ function checkUzumConfig() {
   }
 }
 
+function checkMedicalkaPartnerConfig() {
+  if (!config.medicalkaPartner.enabled) return;
+  const missing = [];
+  if (!config.medicalkaPartner.username) missing.push('MEDICALKA_PARTNER_USERNAME');
+  if (!config.medicalkaPartner.password) missing.push('MEDICALKA_PARTNER_PASSWORD');
+  if (!/^https:\/\//i.test(config.medicalkaPartner.baseUrl) && config.env === 'production') {
+    missing.push('MEDICALKA_PARTNER_BASE_URL (HTTPS)');
+  }
+  if (missing.length) {
+    throw new Error(`MEDICALKA_INBOUND_ENABLED is on but ${missing.join(', ')} is not set`);
+  }
+}
+
 /**
  * The /internal surface moves stock, and it is protected by three things: the
  * service binds to loopback, nginx never proxies /internal, and every request
@@ -128,6 +142,7 @@ function checkInternalExposure() {
 
 async function start() {
   checkUzumConfig();
+  checkMedicalkaPartnerConfig();
   // Medicalka reads pictures too, and it is on by default. Without a base URL
   // every product ships `images: []` — a partner-visible gap with no error
   // anywhere, so it is said once at boot rather than never.
@@ -168,6 +183,7 @@ async function start() {
   // Releases local holds on bot orders nobody acted on, so a forgotten order
   // stops keeping stock out of the marketplaces.
   const holdTimer = botOrders.startHoldSweeper();
+  medicalka.start();
 
   if (!notify.isConfigured()) {
     logger.warn('telegram announcements are off — marketplace orders will not appear in the channel');
@@ -177,6 +193,7 @@ async function start() {
     logger.info('shutting down', { signal });
     clearInterval(timer);
     clearInterval(holdTimer);
+    medicalka.stop();
     server.close();
     await db.disconnect();
     process.exit(0);
@@ -192,4 +209,10 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, checkInternalExposure, checkUzumConfig, start };
+module.exports = {
+  app,
+  checkInternalExposure,
+  checkMedicalkaPartnerConfig,
+  checkUzumConfig,
+  start,
+};
