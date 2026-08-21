@@ -94,6 +94,11 @@ function cleanSubOrder(row) {
     items: row.items,
     mapping: row.mapping,
     sale: row.sale,
+    operation: {
+      inProgress: Boolean(row.operation?.token),
+      reconciliationRequired: Boolean(row.operation?.reconciliationRequired),
+      lastError: row.operation?.lastError || '',
+    },
     lastAction: row.lastAction,
     lastSeenAt: row.lastSeenAt,
     updatedAt: row.updatedAt,
@@ -158,6 +163,7 @@ async function listSubOrders({ bucket = 'active', search = '', page = 1, limit =
     query.$or = [
       { 'mapping.state': 'reconciliation_required' },
       { 'sale.reconciliationRequired': true },
+      { 'operation.reconciliationRequired': true },
     ];
   }
   if (search) {

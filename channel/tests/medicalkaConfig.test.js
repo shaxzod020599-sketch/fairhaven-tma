@@ -14,3 +14,21 @@ test('partner login accepts existing Medicalka credential variable names', () =>
   assert.equal(config.medicalkaPartner.username, 'legacy-user');
   assert.equal(config.medicalkaPartner.password, 'legacy-password');
 });
+
+test('partner sub-orders cannot start while legacy order writes are enabled', () => {
+  const config = require('../src/config');
+  const { checkMedicalkaPartnerConfig } = require('../src/medicalka/configGuard');
+  Object.assign(config.medicalkaPartner, {
+    enabled: true,
+    subOrdersEnabled: true,
+    legacyOrdersEnabled: true,
+    username: 'user',
+    password: 'password',
+  });
+  config.billzWriteEnabled = true;
+
+  assert.throws(
+    () => checkMedicalkaPartnerConfig(config),
+    /MEDICALKA_SUBORDERS_ENABLED requires MEDICALKA_LEGACY_ORDERS_ENABLED=false/
+  );
+});

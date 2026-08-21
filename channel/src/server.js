@@ -1,5 +1,6 @@
 const express = require('express');
 const config = require('./config');
+const { checkMedicalkaPartnerConfig } = require('./medicalka/configGuard');
 const logger = require('./logger');
 const db = require('./db');
 const billz = require('./billz/client');
@@ -106,25 +107,6 @@ function checkUzumConfig() {
   }
 }
 
-function checkMedicalkaPartnerConfig() {
-  if (config.medicalkaPartner.subOrdersEnabled && !config.medicalkaPartner.enabled) {
-    throw new Error('MEDICALKA_SUBORDERS_ENABLED requires MEDICALKA_INBOUND_ENABLED');
-  }
-  if (config.medicalkaPartner.subOrdersEnabled && !config.billzWriteEnabled) {
-    throw new Error('MEDICALKA_SUBORDERS_ENABLED requires BILLZ_WRITE_ENABLED');
-  }
-  if (!config.medicalkaPartner.enabled) return;
-  const missing = [];
-  if (!config.medicalkaPartner.username) missing.push('MEDICALKA_PARTNER_USERNAME');
-  if (!config.medicalkaPartner.password) missing.push('MEDICALKA_PARTNER_PASSWORD');
-  if (!/^https:\/\//i.test(config.medicalkaPartner.baseUrl) && config.env === 'production') {
-    missing.push('MEDICALKA_PARTNER_BASE_URL (HTTPS)');
-  }
-  if (missing.length) {
-    throw new Error(`MEDICALKA_INBOUND_ENABLED is on but ${missing.join(', ')} is not set`);
-  }
-}
-
 /**
  * The /internal surface moves stock, and it is protected by three things: the
  * service binds to loopback, nginx never proxies /internal, and every request
@@ -148,7 +130,7 @@ function checkInternalExposure() {
 
 async function start() {
   checkUzumConfig();
-  checkMedicalkaPartnerConfig();
+  checkMedicalkaPartnerConfig(config);
   // Medicalka reads pictures too, and it is on by default. Without a base URL
   // every product ships `images: []` — a partner-visible gap with no error
   // anywhere, so it is said once at boot rather than never.
@@ -218,7 +200,7 @@ if (require.main === module) {
 module.exports = {
   app,
   checkInternalExposure,
-  checkMedicalkaPartnerConfig,
+  checkMedicalkaPartnerConfig: () => checkMedicalkaPartnerConfig(config),
   checkUzumConfig,
   start,
 };

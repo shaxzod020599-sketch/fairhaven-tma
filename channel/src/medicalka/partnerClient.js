@@ -15,6 +15,8 @@ class MedicalkaPartnerClient {
     password,
     timeoutMs = 8000,
     maxResponseBytes = 1024 * 1024,
+    authBackoffMs = 30000,
+    now = () => Date.now(),
     fetchImpl = fetch,
   }) {
     this.baseUrl = String(baseUrl || '').replace(/\/+$/, '');
@@ -22,21 +24,33 @@ class MedicalkaPartnerClient {
     this.password = String(password || '');
     this.timeoutMs = timeoutMs;
     this.maxResponseBytes = maxResponseBytes;
+    this.authBackoffMs = authBackoffMs;
+    this.now = now;
     this.fetchImpl = fetchImpl;
     this.accessToken = '';
     this.refreshToken = '';
     this.authPromise = null;
     this.refreshPromise = null;
+    this.authRetryAt = 0;
   }
 
   async signIn() {
-    if (!this.authPromise) {
-      this.authPromise = this.rawRequest('/signin', {
-        method: 'POST',
-        body: { username: this.username, password: this.password },
-      }).then((tokens) => this.storeTokens(tokens))
-        .finally(() => { this.authPromise = null; });
+    if (this.authPromise) return this.authPromise;
+    if (this.now() < this.authRetryAt) {
+      throw new MedicalkaPartnerError('medicalka_auth_backoff', { retrySafe: true });
     }
+    this.authPromise = this.rawRequest('/signin', {
+      method: 'POST',
+      body: { username: this.username, password: this.password },
+    }).then((tokens) => {
+      const access = this.storeTokens(tokens);
+      this.authRetryAt = 0;
+      return access;
+    }).catch((err) => {
+      this.authRetryAt = this.now() + this.authBackoffMs;
+      throw err;
+    })
+      .finally(() => { this.authPromise = null; });
     return this.authPromise;
   }
 
@@ -50,9 +64,13 @@ class MedicalkaPartnerClient {
       this.refreshPromise = (this.refreshToken
         ? this.rawRequest('/refresh', {
           method: 'POST', body: { refresh_token: this.refreshToken },
+        }).then((tokens) => this.storeTokens(tokens)).catch((err) => {
+          if (![401, 422].includes(err?.status)) throw err;
+          this.accessToken = '';
+          this.refreshToken = '';
+          return this.signIn();
         })
         : this.signIn())
-        .then((tokens) => this.storeTokens(tokens))
         .finally(() => { this.refreshPromise = null; });
     }
     return this.refreshPromise;
@@ -91,6 +109,7 @@ class MedicalkaPartnerClient {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     let response;
+    let bytes;
     try {
       response = await this.fetchImpl(url, {
         method,
@@ -101,26 +120,21 @@ class MedicalkaPartnerClient {
         ...(body !== null ? { body: JSON.stringify(body) } : {}),
         signal: controller.signal,
       });
+      const announced = Number(response.headers.get('content-length'));
+      if (Number.isFinite(announced) && announced > this.maxResponseBytes) {
+        throw new MedicalkaPartnerError('medicalka_response_too_large', {
+          status: response.status, retrySafe: method === 'GET',
+        });
+      }
+      bytes = await this.readBoundedBody(response, controller);
     } catch (err) {
+      if (err instanceof MedicalkaPartnerError) throw err;
       if (err?.name === 'AbortError' || controller.signal.aborted) {
         throw new MedicalkaPartnerError('medicalka_timeout', { retrySafe: method === 'GET' });
       }
       throw new MedicalkaPartnerError('medicalka_network_error', { retrySafe: method === 'GET' });
     } finally {
       clearTimeout(timer);
-    }
-
-    const announced = Number(response.headers.get('content-length'));
-    if (Number.isFinite(announced) && announced > this.maxResponseBytes) {
-      throw new MedicalkaPartnerError('medicalka_response_too_large', {
-        status: response.status, retrySafe: method === 'GET',
-      });
-    }
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length > this.maxResponseBytes) {
-      throw new MedicalkaPartnerError('medicalka_response_too_large', {
-        status: response.status, retrySafe: method === 'GET',
-      });
     }
 
     let parsed = null;
@@ -138,6 +152,40 @@ class MedicalkaPartnerClient {
       });
     }
     return parsed;
+  }
+
+  async readBoundedBody(response, controller) {
+    if (!response.body) return Buffer.alloc(0);
+    if (typeof response.body.getReader !== 'function') {
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.length > this.maxResponseBytes) {
+        throw new MedicalkaPartnerError('medicalka_response_too_large', {
+          status: response.status, retrySafe: false,
+        });
+      }
+      return bytes;
+    }
+
+    const reader = response.body.getReader();
+    const chunks = [];
+    let total = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > this.maxResponseBytes) {
+          controller.abort();
+          throw new MedicalkaPartnerError('medicalka_response_too_large', {
+            status: response.status, retrySafe: false,
+          });
+        }
+        chunks.push(Buffer.from(value));
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    return Buffer.concat(chunks, total);
   }
 
   getPharmacies() {

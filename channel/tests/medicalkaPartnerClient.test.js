@@ -109,6 +109,49 @@ test('rotates refresh token once when concurrent requests receive 401', async ()
   assert.equal(calls.filter((call) => call.authorization === 'Bearer access-2').length, 3);
 });
 
+test('falls back to one sign-in when the rotated refresh token is invalid', async () => {
+  let signins = 0;
+  let refreshes = 0;
+  handler = (request, res) => {
+    if (request.url === '/api/v1/signin') {
+      signins += 1;
+      return json(res, 200, signins === 1
+        ? { access_token: 'expired', refresh_token: 'invalid-refresh' }
+        : { access_token: 'access-2', refresh_token: 'refresh-2' });
+    }
+    if (request.url === '/api/v1/refresh') {
+      refreshes += 1;
+      return json(res, 401, { detail: 'refresh expired' });
+    }
+    if (request.authorization === 'Bearer expired') return json(res, 401, { detail: 'expired' });
+    assert.equal(request.authorization, 'Bearer access-2');
+    return json(res, 200, []);
+  };
+
+  const result = await client().getPharmacies();
+
+  assert.deepEqual(result, []);
+  assert.equal(signins, 2);
+  assert.equal(refreshes, 1);
+});
+
+test('failed sign-in is rate-bounded instead of hammering authentication', async () => {
+  let signins = 0;
+  handler = (request, res) => {
+    if (request.url === '/api/v1/signin') signins += 1;
+    return json(res, 401, { detail: 'invalid login' });
+  };
+  const api = client({ authBackoffMs: 30000 });
+
+  await assert.rejects(() => api.getPharmacies(), (err) => err.status === 401);
+  await assert.rejects(
+    () => api.getPharmacies(),
+    (err) => err.code === 'medicalka_auth_backoff'
+  );
+
+  assert.equal(signins, 1);
+});
+
 test('sends official accept response without retrying a write', async () => {
   handler = (request, res) => {
     if (request.url === '/api/v1/signin') {
@@ -154,5 +197,22 @@ test('bounds slow and oversized responses without leaking credentials', async ()
     (err) => err.code === 'medicalka_timeout'
       && !err.message.includes('private-password')
       && !err.message.includes('access-1')
+  );
+});
+
+test('timeout remains active after headers while the response body stalls', async () => {
+  handler = (request, res) => {
+    if (request.url === '/api/v1/signin') {
+      return json(res, 200, { access_token: 'access-1', refresh_token: 'refresh-1' });
+    }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.write('{"items":');
+    return setTimeout(() => res.end('[]}'), 120);
+  };
+
+  const api = client({ timeoutMs: 30 });
+  await assert.rejects(
+    () => api.getPharmacies(),
+    (err) => err.code === 'medicalka_timeout'
   );
 });

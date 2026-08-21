@@ -212,6 +212,14 @@ router.get('/stock', read, async (req, res, next) => {
 // ── Orders ──────────────────────────────────────────────────────────────────
 const write = [requireKey('secret'), channelLimiter];
 
+function requireLegacyOrders(_req, res, next) {
+  if (config.medicalkaPartner.legacyOrdersEnabled) return next();
+  return res.status(503).json({
+    code: 'mk_legacy_orders_disabled',
+    detail: 'legacy order processing is disabled while partner sub-orders own sales',
+  });
+}
+
 /**
  * Their status vocabulary, mapped to what it means for stock.
  *
@@ -312,7 +320,7 @@ async function readOrderBody(body) {
   };
 }
 
-router.post('/orders', write, async (req, res, next) => {
+router.post('/orders', write, requireLegacyOrders, async (req, res, next) => {
   try {
     const parsed = await readOrderBody(req.body);
     if (parsed.error) {
@@ -349,7 +357,7 @@ router.post('/orders', write, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/orders/:orderId/status', write, async (req, res, next) => {
+router.post('/orders/:orderId/status', write, requireLegacyOrders, async (req, res, next) => {
   try {
     const status = String(req.body?.status || '').trim();
     const action = STATUS_ACTIONS[status];

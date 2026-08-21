@@ -102,6 +102,7 @@ test.beforeEach(() => {
   reserveImpl = async () => ({ orderId: 'draft-mk', orderNumber: '77' });
   completeImpl = async () => ({});
   config.billzWriteEnabled = true;
+  config.medicalkaPartner.legacyOrdersEnabled = true;
 });
 
 test.after(async () => {
@@ -373,6 +374,17 @@ test('BILLZ_WRITE_ENABLED false fails closed without reporting a sale', async ()
   assert.equal(billzCalls.length, 0);
   const stored = await ChannelOrder().findOne({ externalId: 'MK-WRITES-OFF' }).lean();
   assert.notEqual(stored.status, 'sold');
+});
+
+test('legacy order writes fail closed while partner sub-orders own the sale boundary', async () => {
+  config.medicalkaPartner.legacyOrdersEnabled = false;
+
+  const response = await post('/orders', newOrder('MK-LEGACY-OFF'));
+
+  assert.equal(response.status, 503);
+  assert.equal(response.body?.code, 'mk_legacy_orders_disabled');
+  assert.equal(billzCalls.length, 0);
+  assert.equal(await ChannelOrder().countDocuments({ externalId: 'MK-LEGACY-OFF' }), 0);
 });
 
 test('the active pre-existing order secret still authenticates creation', async () => {

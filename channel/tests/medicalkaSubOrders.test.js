@@ -27,6 +27,12 @@ const paid = (over = {}) => ({
   ...over,
 });
 
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((yes) => { resolve = yes; });
+  return { promise, resolve };
+};
+
 function products(rows = [{ medicalkaId: 501, billzProductId: 'billz-a', name: 'OvaBoost' }]) {
   return {
     find() { return { lean: async () => rows }; },
@@ -151,10 +157,17 @@ test('uncertain Billz result is never retried blindly on next poll', async () =>
 
 test('status actions enforce pickup and delivery rules before Medicalka write', async () => {
   const calls = [];
+  let remote = paid({
+    delivery_type: 'delivery',
+    items: [{
+      id: 'line-a', product_external_id: 501, quantity: 1,
+      is_marking_required: true, labels: [],
+    }],
+  });
   const client = {
     updateSubOrderStatus: async (id, status) => { calls.push(['status', id, status]); return {}; },
     addFiscalLabel: async (id, body) => { calls.push(['label', id, body]); return {}; },
-    getSubOrder: async () => paid(),
+    getSubOrder: async () => remote,
   };
   const service = createSubOrderService({ client, ProductModel: products(), orderService: {} });
   await MedicalkaSubOrder().create(normalizeSubOrder(paid({
@@ -179,6 +192,7 @@ test('status actions enforce pickup and delivery rules before Medicalka write', 
   await MedicalkaSubOrder().updateOne({ externalId: 'sub-a' }, {
     $set: { deliveryType: 'pickup', items: normalizeSubOrder(paid()).items },
   });
+  remote = paid();
   await service.transition('sub-a', 'delivered');
   assert.deepEqual(calls.at(-1), ['status', 'sub-a', 'delivered']);
 });
@@ -218,4 +232,152 @@ test('pharmacy cancellation records paid Billz reconciliation instead of blind r
   assert.equal(cancelled.status, 'cancelled');
   assert.equal(cancelled.sale.reconciliationRequired, true);
   assert.equal(cancelled.sale.lastError, 'medicalka_billz_refund_required');
+});
+
+test('poll loads full detail and never trusts partial marking data from list rows', async () => {
+  const receivedStatuses = [];
+  const detail = paid({
+    delivery_type: 'delivery',
+    items: [{
+      id: 'line-a', product_external_id: 501, product_name: 'OvaBoost',
+      quantity: 1, unit_price: '15000.00', line_total: '15000.00',
+      is_marking_required: true, labels: [],
+    }],
+  });
+  const client = {
+    getPharmacies: async () => [{ id: 'pharmacy-a' }],
+    listSubOrders: async (query) => {
+      receivedStatuses.push(query.status);
+      return { items: query.status === 'processing' ? [paid({
+        delivery_type: 'delivery',
+        items: [{ id: 'line-a', product_external_id: 501, quantity: 1 }],
+      })] : [], total: query.status === 'processing' ? 1 : 0 };
+    },
+    getSubOrder: async () => detail,
+  };
+  const service = createSubOrderService({
+    client, ProductModel: products(),
+    orderService: {
+      acceptOrder: async () => ({ order: { internalOrderId: 'internal-a' } }),
+      completeIncomingSale: async () => ({ kind: 'sold' }),
+    },
+  });
+
+  await service.pollOnce();
+
+  assert.deepEqual(receivedStatuses, ['processing', 'shipped']);
+  const stored = await MedicalkaSubOrder().findOne({ externalId: 'sub-a' }).lean();
+  assert.equal(stored.items[0].markingRequired, true);
+  await assert.rejects(
+    () => service.transition('sub-a', 'shipped'),
+    (err) => err.code === 'medicalka_labels_incomplete'
+  );
+});
+
+test('external cancellation of a sold sub-order is reconciled from polling', async () => {
+  const row = normalizeSubOrder(paid(), new Date());
+  await MedicalkaSubOrder().create({
+    ...row, sale: { state: 'sold', channelOrderId: 'internal-a' },
+  });
+  const cancelled = paid({ status: 'cancelled' });
+  const service = createSubOrderService({
+    client: {
+      getPharmacies: async () => [{ id: 'pharmacy-a' }],
+      listSubOrders: async () => ({ items: [], total: 0 }),
+      getSubOrder: async () => cancelled,
+    },
+    ProductModel: products(), orderService: {},
+  });
+
+  await service.pollOnce();
+
+  const stored = await MedicalkaSubOrder().findOne({ externalId: 'sub-a' }).lean();
+  assert.equal(stored.status, 'cancelled');
+  assert.equal(stored.sale.reconciliationRequired, true);
+  assert.equal(stored.sale.lastError, 'medicalka_billz_refund_required');
+});
+
+test('ambiguous fiscal label write reconciles detail and never sends twice', async () => {
+  let applied = false;
+  let writes = 0;
+  const label = '0104780012960092217Jh';
+  const remote = () => paid({
+    delivery_type: 'delivery',
+    items: [{
+      id: 'line-a', product_external_id: 501, quantity: 1,
+      is_marking_required: true, labels: applied ? [label] : [],
+    }],
+  });
+  await MedicalkaSubOrder().create(normalizeSubOrder(remote(), new Date()));
+  const ambiguous = Object.assign(new Error('lost response'), {
+    code: 'medicalka_network_error', retrySafe: false,
+  });
+  const service = createSubOrderService({
+    client: {
+      getSubOrder: async () => remote(),
+      addFiscalLabel: async () => { writes += 1; applied = true; throw ambiguous; },
+    },
+    ProductModel: products(), orderService: {},
+  });
+
+  const first = await service.addLabel('sub-a', { itemId: 'line-a', label });
+  const second = await service.addLabel('sub-a', { itemId: 'line-a', label });
+
+  assert.equal(writes, 1);
+  assert.equal(first.items[0].labels.length, 1);
+  assert.equal(second.items[0].labels.length, 1);
+  assert.equal(second.operation.reconciliationRequired, false);
+});
+
+test('one lifecycle operation blocks a concurrent conflicting action', async () => {
+  const entered = deferred();
+  const release = deferred();
+  const client = {
+    getSubOrder: async () => paid(),
+    updateSubOrderStatus: async () => {
+      entered.resolve();
+      await release.promise;
+      return {};
+    },
+    cancelSubOrder: async () => ({}),
+  };
+  await MedicalkaSubOrder().create(normalizeSubOrder(paid(), new Date()));
+  const service = createSubOrderService({ client, ProductModel: products(), orderService: {} });
+
+  const first = service.transition('sub-a', 'delivered');
+  await entered.promise;
+  await assert.rejects(
+    () => service.cancel('sub-a', 'Out of stock'),
+    (err) => err.code === 'medicalka_suborder_action_in_progress'
+  );
+  release.resolve();
+  await first;
+});
+
+test('unresolved ambiguous lifecycle write is fenced from a blind retry', async () => {
+  let writes = 0;
+  const ambiguous = Object.assign(new Error('lost response'), {
+    code: 'medicalka_network_error', retrySafe: false,
+  });
+  const service = createSubOrderService({
+    client: {
+      getSubOrder: async () => paid(),
+      updateSubOrderStatus: async () => { writes += 1; throw ambiguous; },
+    },
+    ProductModel: products(), orderService: {},
+  });
+  await MedicalkaSubOrder().create(normalizeSubOrder(paid(), new Date()));
+
+  await assert.rejects(
+    () => service.transition('sub-a', 'delivered'),
+    (err) => err.code === 'medicalka_suborder_reconciliation_required'
+  );
+  await assert.rejects(
+    () => service.transition('sub-a', 'delivered'),
+    (err) => err.code === 'medicalka_suborder_reconciliation_required'
+  );
+
+  assert.equal(writes, 1);
+  const stored = await MedicalkaSubOrder().findOne({ externalId: 'sub-a' }).lean();
+  assert.equal(stored.operation.reconciliationRequired, true);
 });

@@ -1,6 +1,11 @@
+const { createHash, randomUUID } = require('node:crypto');
 const BillzProduct = require('../models/BillzProduct');
 const MedicalkaSubOrder = require('../models/MedicalkaSubOrder');
 const orders = require('../core/orders');
+
+const OPERATION_LEASE_MS = 60 * 1000;
+const REFUND_STATUSES = new Set(['cancelled', 'rejected', 'refunded', 'returned', 'failed']);
+const ACTIVE_STATUSES = ['processing', 'shipped'];
 
 function text(value) {
   return value === null || value === undefined ? '' : String(value);
@@ -50,7 +55,7 @@ function normalizeSubOrder(raw, seenAt = new Date()) {
     items: (Array.isArray(raw?.items) ? raw.items : [])
       .filter((item) => item && typeof item === 'object')
       .map((item) => ({
-        itemId: text(item?.id || item?.item_id),
+        itemId: text(item?.id || item?.item_id || item?.product?.id),
         productExternalId: sourceProductId(item),
         productId: text(item?.product_id),
         name: text(item?.product_name || item?.name || item?.product?.name),
@@ -84,8 +89,53 @@ function actionFields(kind, value, actor, at) {
   };
 }
 
+function clearOperationFields() {
+  return {
+    'operation.token': '',
+    'operation.kind': '',
+    'operation.value': '',
+    'operation.itemId': '',
+    'operation.valueHash': '',
+    'operation.startedAt': null,
+    'operation.actorType': '',
+    'operation.actorTelegramId': null,
+    'operation.actorName': '',
+    'operation.reconciliationRequired': false,
+    'operation.lastError': '',
+  };
+}
+
 function pharmacyRows(payload) {
   return Array.isArray(payload) ? payload : (Array.isArray(payload?.items) ? payload.items : []);
+}
+
+function labelValue(label) {
+  if (typeof label === 'string') return label;
+  if (!label || typeof label !== 'object') return '';
+  return text(label.label ?? label.value ?? label.code ?? label.raw);
+}
+
+function labelHash(value) {
+  return createHash('sha256').update(text(value)).digest('hex');
+}
+
+function operationApplied(row, operation) {
+  if (!row || !operation?.kind) return false;
+  if (operation.kind === 'status') return row.status === operation.value;
+  if (operation.kind === 'cancel') return REFUND_STATUSES.has(row.status);
+  if (operation.kind !== 'label' || !operation.valueHash) return false;
+  return (row.items || []).some((item) => (
+    (!operation.itemId || item.itemId === operation.itemId)
+    && (item.labels || []).some((label) => labelHash(labelValue(label)) === operation.valueHash)
+  ));
+}
+
+function operationActor(operation) {
+  return {
+    type: operation?.actorType,
+    telegramId: operation?.actorTelegramId,
+    name: operation?.actorName,
+  };
 }
 
 function createSubOrderService({
@@ -97,27 +147,99 @@ function createSubOrderService({
 } = {}) {
   let polling = false;
 
+  async function settleAppliedOperation(row, operation) {
+    const actedAt = now();
+    const auditValue = operation.kind === 'label' ? operation.itemId : operation.value;
+    const filter = { _id: row._id };
+    if (operation.token) filter['operation.token'] = operation.token;
+    const updated = await Model.findOneAndUpdate(filter, {
+      $set: {
+        ...clearOperationFields(),
+        ...actionFields(operation.kind, auditValue, operationActor(operation), actedAt),
+      },
+    }, { new: true }).lean();
+    return updated || Model.findById(row._id).lean();
+  }
+
+  async function markOperationUncertain(row, operation, code) {
+    const filter = { _id: row._id };
+    const token = row.operation?.token || operation.token;
+    if (token) filter['operation.token'] = token;
+    const updated = await Model.findOneAndUpdate(filter, {
+      $set: {
+        'operation.token': '',
+        'operation.reconciliationRequired': true,
+        'operation.lastError': code,
+        'operation.kind': operation.kind,
+        'operation.value': operation.value || '',
+        'operation.itemId': operation.itemId || '',
+        'operation.valueHash': operation.valueHash || '',
+      },
+    }, { new: true }).lean();
+    return updated || Model.findById(row._id).lean();
+  }
+
   async function storeSnapshot(raw) {
     const normalized = normalizeSubOrder(raw, now());
+    if (!normalized.externalId) throw subOrderError('medicalka_invalid_suborder', 502);
     const { firstSeenAt, ...snapshot } = normalized;
-    return Model.findOneAndUpdate({ externalId: normalized.externalId }, {
+    let stored = await Model.findOneAndUpdate({ externalId: normalized.externalId }, {
       $set: snapshot,
       $setOnInsert: { firstSeenAt },
     }, { upsert: true, new: true, setDefaultsOnInsert: true }).lean();
+
+    if (stored.sale?.state === 'sold' && REFUND_STATUSES.has(stored.status)) {
+      stored = await Model.findOneAndUpdate({ _id: stored._id }, {
+        $set: {
+          'sale.reconciliationRequired': true,
+          'sale.lastError': 'medicalka_billz_refund_required',
+        },
+      }, { new: true }).lean();
+    }
+
+    const operation = stored.operation || {};
+    if (operation.kind && operationApplied(stored, operation)) {
+      return settleAppliedOperation(stored, operation);
+    }
+    const started = new Date(operation.startedAt).getTime();
+    if (
+      operation.token
+      && Number.isFinite(started)
+      && started <= now().getTime() - OPERATION_LEASE_MS
+    ) {
+      return markOperationUncertain(
+        stored, operation, 'medicalka_suborder_action_uncertain'
+      );
+    }
+    return stored;
   }
 
   async function fullPayload(raw) {
     const normalized = normalizeSubOrder(raw, now());
-    if (normalized.items.length && normalized.items.every((item) => item.quantity > 0)) return raw;
-    if (typeof client.getSubOrder !== 'function') return raw;
+    if (typeof client.getSubOrder !== 'function' || !normalized.externalId) return raw;
     return client.getSubOrder(normalized.externalId);
+  }
+
+  async function refreshStored(externalId) {
+    if (typeof client.getSubOrder !== 'function') {
+      return Model.findOne({ externalId }).lean();
+    }
+    return storeSnapshot(await client.getSubOrder(externalId));
   }
 
   async function ingest(input) {
     const raw = await fullPayload(input);
     let stored = await storeSnapshot(raw);
     if (stored.sale?.state === 'sold') return stored;
-    if (stored.sale?.reconciliationRequired) return stored;
+    if (stored.sale?.reconciliationRequired || stored.operation?.reconciliationRequired) return stored;
+    if (!ACTIVE_STATUSES.includes(stored.status)) {
+      if (stored.paymentStatus !== 'paid') {
+        return Model.findOneAndUpdate({ _id: stored._id }, {
+          $set: { 'sale.state': 'waiting_payment', 'sale.lastError': '' },
+        }, { new: true }).lean();
+      }
+      return stored;
+    }
     if (stored.paymentStatus !== 'paid') {
       return Model.findOneAndUpdate({ _id: stored._id }, {
         $set: { 'sale.state': 'waiting_payment', 'sale.lastError': '' },
@@ -201,18 +323,40 @@ function createSubOrderService({
       const ids = pharmacyRows(await client.getPharmacies())
         .map((row) => text(row?.id)).filter(Boolean);
       if (!ids.length) return { received: 0 };
-      let page = 1;
       let received = 0;
       const pageSize = 100;
-      while (true) {
-        const response = await client.listSubOrders({
-          pharmacyIds: ids, status: 'processing', page, page_size: pageSize,
-        });
-        const rows = Array.isArray(response?.items) ? response.items : [];
-        for (const row of rows) await ingest(row);
-        received += rows.length;
-        if (!rows.length || rows.length < pageSize || received >= number(response?.total)) break;
-        page += 1;
+      const seen = new Set();
+      for (const status of ACTIVE_STATUSES) {
+        let page = 1;
+        let statusReceived = 0;
+        while (true) {
+          const response = await client.listSubOrders({
+            pharmacyIds: ids, status, page, page_size: pageSize,
+          });
+          const rows = Array.isArray(response?.items) ? response.items : [];
+          for (const row of rows) {
+            const externalId = text(row?.id);
+            if (externalId) seen.add(externalId);
+            await ingest(row);
+          }
+          received += rows.length;
+          statusReceived += rows.length;
+          const total = number(response?.total);
+          if (
+            !rows.length
+            || rows.length < pageSize
+            || (total && statusReceived >= total)
+          ) break;
+          page += 1;
+        }
+      }
+
+      const missingActive = await Model.find({
+        status: { $in: ACTIVE_STATUSES },
+        externalId: { $nin: [...seen] },
+      }).select({ externalId: 1 }).lean();
+      for (const row of missingActive) {
+        await ingest({ id: row.externalId });
       }
       return { received };
     } finally {
@@ -220,8 +364,82 @@ function createSubOrderService({
     }
   }
 
+  async function claimAction(stored, operation, actor) {
+    if (stored.operation?.reconciliationRequired) {
+      throw subOrderError('medicalka_suborder_reconciliation_required', 409);
+    }
+    if (stored.operation?.token) {
+      throw subOrderError('medicalka_suborder_action_in_progress', 409);
+    }
+    const token = randomUUID();
+    const claimed = await Model.findOneAndUpdate({
+      _id: stored._id,
+      status: stored.status,
+      'operation.token': { $in: ['', null] },
+      'operation.reconciliationRequired': { $ne: true },
+    }, {
+      $set: {
+        'operation.token': token,
+        'operation.kind': operation.kind,
+        'operation.value': operation.value || '',
+        'operation.itemId': operation.itemId || '',
+        'operation.valueHash': operation.valueHash || '',
+        'operation.startedAt': now(),
+        'operation.actorType': text(actor?.type),
+        'operation.actorTelegramId': actor?.telegramId ?? null,
+        'operation.actorName': text(actor?.name),
+        'operation.reconciliationRequired': false,
+        'operation.lastError': '',
+      },
+    }, { new: true }).lean();
+    if (!claimed) throw subOrderError('medicalka_suborder_action_in_progress', 409);
+    return { claimed, token };
+  }
+
+  async function completeAction(claimed, token, operation, actor, fields = {}) {
+    const actedAt = now();
+    const auditValue = operation.kind === 'label' ? operation.itemId : operation.value;
+    const updated = await Model.findOneAndUpdate({
+      _id: claimed._id,
+      'operation.token': token,
+    }, {
+      $set: {
+        ...fields,
+        ...clearOperationFields(),
+        ...actionFields(operation.kind, auditValue, actor, actedAt),
+        lastSeenAt: actedAt,
+      },
+    }, { new: true }).lean();
+    if (!updated) throw subOrderError('medicalka_suborder_action_conflict', 409);
+    return updated;
+  }
+
+  async function handleActionFailure(claimed, token, operation, err) {
+    if (err?.retrySafe !== false) {
+      await Model.updateOne({ _id: claimed._id, 'operation.token': token }, {
+        $set: {
+          ...clearOperationFields(),
+          'operation.lastError': text(err?.code) || 'medicalka_suborder_action_failed',
+        },
+      });
+      throw err;
+    }
+
+    try {
+      const refreshed = await refreshStored(claimed.externalId);
+      if (operationApplied(refreshed, operation)) {
+        if (!refreshed.operation?.token) return refreshed;
+        return settleAppliedOperation(refreshed, refreshed.operation);
+      }
+    } catch (_) { /* unknown write outcome stays fenced */ }
+    await markOperationUncertain(
+      claimed, operation, 'medicalka_suborder_action_uncertain'
+    );
+    throw subOrderError('medicalka_suborder_reconciliation_required', 409);
+  }
+
   async function transition(externalId, status, actor = {}) {
-    const stored = await Model.findOne({ externalId }).lean();
+    const stored = await refreshStored(externalId);
     if (!stored) throw subOrderError('medicalka_suborder_not_found', 404);
     if (stored.status === status) return stored;
     if (stored.deliveryType === 'delivery' && status === 'delivered') {
@@ -244,16 +462,18 @@ function createSubOrderService({
       ))
     ) throw subOrderError('medicalka_labels_incomplete', 409);
 
-    await client.updateSubOrderStatus(stored.externalId, status);
-    const actedAt = now();
-    await Model.updateOne({ _id: stored._id }, {
-      $set: { status, lastSeenAt: actedAt, ...actionFields('status', status, actor, actedAt) },
-    });
-    return Model.findById(stored._id).lean();
+    const operation = { kind: 'status', value: status };
+    const { claimed, token } = await claimAction(stored, operation, actor);
+    try {
+      await client.updateSubOrderStatus(stored.externalId, status);
+      return completeAction(claimed, token, operation, actor, { status });
+    } catch (err) {
+      return handleActionFailure(claimed, token, operation, err);
+    }
   }
 
   async function addLabel(externalId, { itemId, label, actor = {} }) {
-    const stored = await Model.findOne({ externalId }).lean();
+    const stored = await refreshStored(externalId);
     if (!stored) throw subOrderError('medicalka_suborder_not_found', 404);
     if (stored.deliveryType !== 'delivery') throw subOrderError('medicalka_labels_pickup_forbidden');
     const value = text(label);
@@ -261,41 +481,45 @@ function createSubOrderService({
     if (itemId && !stored.items.some((item) => item.itemId === itemId)) {
       throw subOrderError('medicalka_suborder_item_not_found', 404);
     }
-    const result = await client.addFiscalLabel(stored.externalId, { itemId, label: value });
-    const items = Array.isArray(result?.items)
-      ? normalizeSubOrder({ ...stored.rawIn, items: result.items }, now()).items
-      : stored.items;
-    const actedAt = now();
-    await Model.updateOne({ _id: stored._id }, {
-      $set: {
-        items,
-        lastSeenAt: actedAt,
-        ...actionFields('label', itemId, actor, actedAt),
-      },
-    });
-    return Model.findById(stored._id).lean();
+    const valueHash = labelHash(value);
+    const operation = { kind: 'label', itemId: text(itemId), valueHash };
+    if (operationApplied(stored, operation)) return stored;
+
+    const { claimed, token } = await claimAction(stored, operation, actor);
+    try {
+      const result = await client.addFiscalLabel(stored.externalId, { itemId, label: value });
+      const items = Array.isArray(result?.items)
+        ? normalizeSubOrder({ ...stored.rawIn, items: result.items }, now()).items
+        : stored.items;
+      return completeAction(claimed, token, operation, actor, { items });
+    } catch (err) {
+      return handleActionFailure(claimed, token, operation, err);
+    }
   }
 
   async function cancel(externalId, reason, actor = {}) {
-    const stored = await Model.findOne({ externalId }).lean();
+    const stored = await refreshStored(externalId);
     if (!stored) throw subOrderError('medicalka_suborder_not_found', 404);
     const cleanReason = text(reason).trim();
+    if (REFUND_STATUSES.has(stored.status)) return stored;
     if (stored.status !== 'processing') throw subOrderError('medicalka_cancel_status_conflict', 409);
     if (!cleanReason || cleanReason.length > 500) throw subOrderError('medicalka_invalid_cancel_reason');
-    await client.cancelSubOrder(stored.externalId, cleanReason);
-    const sold = stored.sale?.state === 'sold';
-    const actedAt = now();
-    return Model.findOneAndUpdate({ _id: stored._id }, {
-      $set: {
+
+    const operation = { kind: 'cancel', value: cleanReason };
+    const { claimed, token } = await claimAction(stored, operation, actor);
+    try {
+      await client.cancelSubOrder(stored.externalId, cleanReason);
+      const sold = claimed.sale?.state === 'sold';
+      return completeAction(claimed, token, operation, actor, {
         status: 'cancelled',
-        lastSeenAt: actedAt,
-        ...actionFields('cancel', cleanReason, actor, actedAt),
         ...(sold ? {
           'sale.reconciliationRequired': true,
           'sale.lastError': 'medicalka_billz_refund_required',
         } : {}),
-      },
-    }, { new: true }).lean();
+      });
+    } catch (err) {
+      return handleActionFailure(claimed, token, operation, err);
+    }
   }
 
   return { addLabel, cancel, ingest, pollOnce, transition };

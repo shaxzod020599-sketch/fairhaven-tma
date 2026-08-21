@@ -9,6 +9,7 @@ FairHaven must expose Medicalka-compatible catalogue and stock data, receive Med
 ## Non-negotiable constraints
 
 - Existing Medicalka catalogue token and order secret remain valid. No key issue, rotation, revocation, migration, or endpoint URL change is part of this work.
+- Legacy order writes and partner paid sub-orders are mutually exclusive. Enabling partner sales requires the legacy sender to be confirmed off and the legacy write gate disabled; catalogue and inventory access stays available through the same existing key.
 - No live Medicalka order, approval, rejection, Telegram message, or Billz write is used for testing.
 - Medicalka's current partner API in `api-reference.md` is authoritative for inbound authentication, approvals, sub-orders, and status rules.
 - Medicalka's pharmacy requirements are authoritative for the outbound catalogue and inventory fields. Compatibility aliases may remain where Medicalka already accepts them.
@@ -40,6 +41,7 @@ Channel hub owns partner API integration.
 - Sign-in happens in memory. Access token and rotated refresh token never enter logs or MongoDB.
 - One single-flight refresh handles concurrent 401 responses.
 - Network calls use bounded timeout, response-size limits, safe error messages, and retry only read operations or explicitly retry-safe responses.
+- Invalid refresh credentials fall back to one single-flight sign-in; failed authentication is rate-bounded.
 - Production base URL is HTTPS. Tests may point to a loopback fake server.
 
 ### 3. Approval synchroniser
@@ -65,6 +67,7 @@ Admin panel and Telegram call the same channel-hub internal endpoint.
 - Medicalka `accepted` or `rejected` is sent once per claimed operation.
 - A transient failure clears claim and preserves pending state.
 - An ambiguous or already-decided response triggers read reconciliation before any retry.
+- Expired action leases reconcile against Medicalka and never blindly resend a decision.
 - Actor type, Telegram ID, display name, action, comment, and time are audited.
 
 ### 5. Telegram
@@ -94,10 +97,11 @@ Medicalka remains inside existing `Orders` workspace, not a new sidebar product.
 
 Approval creates no sale. Poll paid sub-orders separately.
 
-- New paid sub-order is normalised and mapped back to stable FairHaven product IDs.
+- Paid sub-order lists are discovery only; every action uses a fresh full detail payload normalised and mapped back to stable FairHaven product IDs.
 - Existing `ChannelOrder` uniqueness on `(channel, externalId)` and Billz operation fencing remain sale idempotency boundary.
 - Billz completion occurs once when Medicalka reports paid processing order.
 - Medicalka cancellation/refund releases only a known reservation or records reconciliation-required state; uncertain Billz results never auto-retry.
+- Status, cancellation, and fiscal-label writes use durable operation claims. Ambiguous results reconcile against fresh detail; unresolved results are fenced for manual reconciliation.
 - Pickup may move to delivered/completed from panel. Delivery may move to shipped only after required fiscal labels; delivered stays Medicalka/courier-owned.
 
 If Medicalka sub-order detail lacks a stable external FairHaven product identifier, automatic Billz write is blocked and surfaced for reconciliation instead of guessing by name.

@@ -331,3 +331,79 @@ test('unresolved ambiguous write blocks blind retry until history reconciles it'
   assert.equal(stored.operation.reconciliationRequired, true);
   assert.equal(writes, 1);
 });
+
+test('inactive pending approval closes Telegram actions and cannot be answered', async () => {
+  await MedicalkaApproval().create(normalizeApproval(pending(), new Date()));
+  let finalized = 0;
+  let writes = 0;
+  const client = {
+    getPharmacies: async () => [{ id: 'pharmacy-a' }],
+    listApprovals: async () => ({
+      items: [pending({ checkout_is_active: false, requires_action: false })], total: 1,
+    }),
+    respondToApproval: async () => { writes += 1; },
+  };
+  const service = createApprovalService({
+    client, onDecision: async () => { finalized += 1; },
+  });
+
+  await service.pollOnce();
+  await assert.rejects(
+    () => service.respond('approval-a', { action: 'accepted' }),
+    (err) => err.code === 'medicalka_approval_not_actionable' && err.status === 409
+  );
+
+  const stored = await MedicalkaApproval().findOne({ externalId: 'approval-a' }).lean();
+  assert.equal(stored.checkoutActive, false);
+  assert.equal(stored.requiresAction, false);
+  assert.equal(finalized, 1);
+  assert.equal(writes, 0);
+});
+
+test('approval missing from a complete pending page is closed locally', async () => {
+  await MedicalkaApproval().create(normalizeApproval(pending(), new Date()));
+  let finalized = 0;
+  const service = createApprovalService({
+    client: {
+      getPharmacies: async () => [{ id: 'pharmacy-a' }],
+      listApprovals: async () => ({ items: [], total: 0 }),
+    },
+    onDecision: async () => { finalized += 1; },
+  });
+
+  await service.pollOnce();
+
+  const stored = await MedicalkaApproval().findOne({ externalId: 'approval-a' }).lean();
+  assert.equal(stored.requiresAction, false);
+  assert.equal(stored.sync.lastError, 'medicalka_approval_missing_from_pending');
+  assert.equal(finalized, 1);
+});
+
+test('stale decision lease reconciles and blocks a blind resend', async () => {
+  const fixed = new Date('2026-08-22T04:00:00.000Z');
+  await MedicalkaApproval().create({
+    ...normalizeApproval(pending(), fixed),
+    operation: {
+      token: 'dead-worker', action: 'accepted',
+      startedAt: new Date(fixed.getTime() - 120000), reconciliationRequired: false,
+    },
+  });
+  let writes = 0;
+  const service = createApprovalService({
+    client: {
+      listApprovals: async () => ({ items: [], total: 0 }),
+      respondToApproval: async () => { writes += 1; },
+    },
+    now: () => fixed,
+  });
+
+  await assert.rejects(
+    () => service.respond('approval-a', { action: 'accepted' }),
+    (err) => err.code === 'medicalka_reconciliation_required' && err.status === 409
+  );
+
+  const stored = await MedicalkaApproval().findOne({ externalId: 'approval-a' }).lean();
+  assert.equal(stored.operation.token, '');
+  assert.equal(stored.operation.reconciliationRequired, true);
+  assert.equal(writes, 0);
+});

@@ -130,7 +130,9 @@ export function MedicalkaSubOrders({ api }) {
         <div className="fh-medicalka-list">
           {rows.map((order) => {
             const blocked = order.mapping?.state === 'reconciliation_required'
-              || order.sale?.reconciliationRequired;
+              || order.sale?.reconciliationRequired
+              || order.operation?.reconciliationRequired
+              || order.operation?.inProgress;
             const statusAction = nextStatusAction(order);
             return (
               <Card key={order.id} className="fh-medicalka-card fh-medicalka-suborder">

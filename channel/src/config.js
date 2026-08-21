@@ -86,6 +86,7 @@ const config = {
 
   medicalkaPartner: {
     enabled: bool('MEDICALKA_INBOUND_ENABLED', false),
+    legacyOrdersEnabled: bool('MEDICALKA_LEGACY_ORDERS_ENABLED', true),
     baseUrl: process.env.MEDICALKA_PARTNER_BASE_URL || 'https://api.medicalka.com/api/v1',
     username: process.env.MEDICALKA_PARTNER_USERNAME || process.env.MEDICALKA_USERNAME || '',
     password: process.env.MEDICALKA_PARTNER_PASSWORD || process.env.MEDICALKA_PASSWORD || '',

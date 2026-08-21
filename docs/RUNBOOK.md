@@ -294,6 +294,7 @@ MEDICALKA_PARTNER_USERNAME=<Medicalka bergan login>
 MEDICALKA_PARTNER_PASSWORD=<Medicalka bergan parol>
 MEDICALKA_APPROVAL_POLL_MS=5000
 MEDICALKA_HISTORY_POLL_MS=60000
+MEDICALKA_LEGACY_ORDERS_ENABLED=true
 MEDICALKA_SUBORDERS_ENABLED=false
 ```
 
@@ -318,23 +319,32 @@ alohida yoqing:
 
 ```
 BILLZ_WRITE_ENABLED=true
+MEDICALKA_LEGACY_ORDERS_ENABLED=false
 MEDICALKA_SUBORDERS_ENABLED=true
 ```
 
 Server `MEDICALKA_SUBORDERS_ENABLED=true` holatini inbound yoki Billz write
-o'chiq bo'lsa rad etadi. Paid orderdagi har bir product ID aniq Medicalka
-mappingga ega bo'lishi shart; nom bo'yicha taxmin qilinmaydi. Mapping yo'q yoki
-Billz natijasi noaniq bo'lsa avtomatik retry/spisanie to'xtaydi va panelda
-`reconciliation required` chiqadi.
+o'chiq bo'lsa yoki `MEDICALKA_LEGACY_ORDERS_ENABLED=true` bo'lsa rad etadi.
+Bu ikkita sotuv manbasi bir orderni turli external ID bilan ikki marta Billz'ga
+yozishini qat'iy to'xtatadi. `false` qilishdan oldin Medicalka legacy order
+senderni o'chirganini tasdiqlashi shart. Eski key revoke/rotate qilinmaydi:
+katalog va ostatka tokeni ishlayveradi; mavjud secret autentifikatsiyadan o'tadi,
+lekin legacy order write partner flow faol vaqtda `503 mk_legacy_orders_disabled`
+oladi.
+
+Paid orderdagi har bir product ID aniq Medicalka mappingga ega bo'lishi shart;
+nom bo'yicha taxmin qilinmaydi. Mapping yo'q yoki Billz natijasi noaniq bo'lsa
+avtomatik retry/spisanie to'xtaydi va panelda `reconciliation required` chiqadi.
 
 Delivery order: markirovka talab qilingan barcha qatorga fiscal label kiritiladi,
 keyin faqat `shipped`; `delivered` Medicalka/kuryer tomoni. Pickup order:
 `shipped`, `delivered`, `completed` ruxsat. Sotilgan order bekor qilinsa Billz
 qaytarish avtomatik qilinmaydi — manual reconciliation talab qilinadi.
 
-**Orqaga qaytarish:** avval `MEDICALKA_SUBORDERS_ENABLED=false`, kerak bo'lsa
-keyin `MEDICALKA_INBOUND_ENABLED=false`, so'ng `pm2 restart channel-hub`.
-Bu eski `/medicalka/v1` token/secretni o'chirmaydi.
+**Orqaga qaytarish:** avval `MEDICALKA_SUBORDERS_ENABLED=false`, keyin eski
+senderga qaytilsa `MEDICALKA_LEGACY_ORDERS_ENABLED=true`; kerak bo'lsa
+`MEDICALKA_INBOUND_ENABLED=false`, so'ng `pm2 restart channel-hub`. Bu eski
+`/medicalka/v1` token/secretni o'chirmaydi.
 
 ---
 
@@ -404,6 +414,7 @@ Hammasi **o'chirilgan holatda** keladi. Har birini alohida, tekshirib yoqing.
 |---|---|---|
 | `BILLZ_WRITE_ENABLED` | Billz'ga yozishga ruxsat | Oqim jonli tekshirilgan (01.08.2026) — Medicalka ulangach yoqiladi |
 | `MEDICALKA_INBOUND_ENABLED` | Medicalka approvallarni o'qish va accept/reject | Partner login/parol, admin roli, panel tekshirilsin |
+| `MEDICALKA_LEGACY_ORDERS_ENABLED` | Eski Medicalka order write endpointini ochadi | Partner paid sub-order oqimi bilan bir vaqtda yoqmang; eski keyning o'zini o'zgartirmaydi |
 | `MEDICALKA_SUBORDERS_ENABLED` | Paid Medicalka sub-orderni Billz sotuviga o'tkazish | Inbound va Billz write yoqilgan, product mapping to'liq |
 | `BILLZ_BRIDGE_ENABLED` | Bot zakazlari Billz'ga | `BILLZ_BRIDGE_SINCE` qo'yilsin |
 | `UZUM_ENABLED` | Uzum endpointlari | Store ID, signing key, rasm domeni |

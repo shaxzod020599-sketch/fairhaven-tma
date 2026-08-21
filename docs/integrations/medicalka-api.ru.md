@@ -237,14 +237,16 @@ POST /orders?secret=<СЕКРЕТ>
 POST /orders/{order_id}/status?secret=<СЕКРЕТ>
 ```
 
-Действующий secret и оба endpoint остаются без изменений для обратной
-совместимости. Авторизованный `POST /orders` означает уже одобренную продажу и
-использует прежний синхронный контракт.
+Действующие token и secret не перевыпускаются, не отзываются и продолжают
+проходить прежнюю аутентификацию. Чтение каталога и остатков по token работает
+без изменений.
 
-Не отправляйте один заказ одновременно через legacy `POST /orders` и новый
-partner sub-order flow. Для нового потока Medicalka должна использовать
-pharmacy approvals + paid sub-orders; legacy sender для этих заказов должен
-быть выключен, иначе одна продажа придёт по двум разным внешним идентификаторам.
+Авторизованный legacy `POST /orders` означает уже одобренную продажу. Поэтому
+legacy write и partner paid sub-orders взаимно исключаются на стороне Fairhaven.
+Когда включён partner paid sub-order flow, legacy sender Medicalka должен быть
+выключен, а legacy write endpoint возвращает `503` с кодом
+`mk_legacy_orders_disabled`. Это не ошибка и не отзыв secret: защита исключает
+двойную продажу одного заказа по разным внешним идентификаторам.
 
 Этот документ описывает контракт API, а не факт развёртывания или включения
 продаж. После развёртывания оператор Fairhaven должен **отдельно** разрешить
@@ -349,8 +351,9 @@ POST /orders/{order_id}/status?secret=<СЕКРЕТ>
    partner API либо получает финальный статус из кабинета Medicalka.
 6. После оплаты Medicalka публикует `paid` sub-order. Fairhaven только на этом
    шаге проводит одну идемпотентную продажу в Billz.
-7. Legacy `POST /orders` остаётся доступен со старым secret, но не используется
-   параллельно с partner sub-order flow для одного заказа.
+7. Старые token и secret остаются действующими. При включённом partner paid
+   sub-order flow legacy order write намеренно отвечает
+   `503 mk_legacy_orders_disabled`; каталог и остатки продолжают работать.
 
 ---
 

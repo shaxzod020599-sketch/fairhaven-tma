@@ -4,6 +4,7 @@ const MedicalkaApproval = require('../models/MedicalkaApproval');
 const FINAL_STATUSES = new Set(['accepted', 'rejected', 'cancelled']);
 const HISTORY_STATUSES = ['accepted', 'rejected', 'cancelled'];
 const NOTIFICATION_LEASE_MS = 60 * 1000;
+const OPERATION_LEASE_MS = 60 * 1000;
 
 function text(value) {
   return value === null || value === undefined ? '' : String(value);
@@ -146,10 +147,15 @@ function createApprovalService({
     if (announce && stored.status === 'pending' && stored.requiresAction) {
       await announceIfNeeded(normalized.externalId);
     }
-    if (
-      FINAL_STATUSES.has(stored.status)
-      && (!previous || !FINAL_STATUSES.has(previous.status))
-    ) {
+    const becameFinal = FINAL_STATUSES.has(stored.status)
+      && (!previous || !FINAL_STATUSES.has(previous.status));
+    const lostActionability = Boolean(
+      previous?.status === 'pending'
+      && previous.requiresAction
+      && previous.checkoutActive
+      && (stored.status !== 'pending' || !stored.requiresAction || !stored.checkoutActive)
+    );
+    if (becameFinal || lostActionability) {
       try { await onDecision(stored); } catch (_) { /* source state is already durable */ }
     }
     return stored;
@@ -167,19 +173,51 @@ function createApprovalService({
   async function eachApproval(ids, status, visit) {
     let offset = 0;
     let received = 0;
+    const seen = new Set();
     const limit = 100;
     while (true) {
       const page = await client.listApprovals({
         pharmacyIds: ids, status, limit, offset,
       });
       const rows = Array.isArray(page?.items) ? page.items : [];
-      for (const row of rows) await visit(row);
+      for (const row of rows) {
+        const id = text(row?.id);
+        if (id) seen.add(id);
+        await visit(row);
+      }
       received += rows.length;
       offset += rows.length;
       const total = number(page?.total);
       if (!rows.length || rows.length < limit || (total && offset >= total)) break;
     }
-    return received;
+    return { received, seen };
+  }
+
+  async function closeMissingPending(ids, seen) {
+    const missing = await Model.find({
+      pharmacyId: { $in: ids },
+      status: 'pending',
+      requiresAction: true,
+      externalId: { $nin: [...seen] },
+    }).lean();
+    for (const row of missing) {
+      const closed = await Model.findOneAndUpdate({
+        _id: row._id,
+        status: 'pending',
+        requiresAction: true,
+      }, {
+        $set: {
+          requiresAction: false,
+          'operation.token': '',
+          'operation.action': '',
+          'operation.startedAt': null,
+          'sync.lastError': 'medicalka_approval_missing_from_pending',
+        },
+      }, { new: true }).lean();
+      if (closed) {
+        try { await onDecision(closed); } catch (_) { /* action was already closed upstream */ }
+      }
+    }
   }
 
   async function pollOnce() {
@@ -188,10 +226,11 @@ function createApprovalService({
     try {
       const ids = await pharmacyIds();
       if (!ids.length) return { received: 0 };
-      const received = await eachApproval(
+      const page = await eachApproval(
         ids, 'pending', (row) => upsertApproval(row, { announce: true })
       );
-      return { received };
+      await closeMissingPending(ids, page.seen);
+      return { received: page.received };
     } finally {
       syncing = false;
     }
@@ -205,9 +244,9 @@ function createApprovalService({
       if (!ids.length) return { received: 0 };
       let received = 0;
       for (const status of HISTORY_STATUSES) {
-        received += await eachApproval(
+        received += (await eachApproval(
           ids, status, (row) => upsertApproval(row, { announce: false })
-        );
+        )).received;
       }
       return { received };
     } finally {
@@ -245,7 +284,36 @@ function createApprovalService({
     if (FINAL_STATUSES.has(current.status)) {
       throw approvalError('medicalka_action_conflict', 409);
     }
+    if (!current.requiresAction || !current.checkoutActive) {
+      throw approvalError('medicalka_approval_not_actionable', 409);
+    }
     if (current.operation?.token) {
+      const started = new Date(current.operation.startedAt).getTime();
+      const stale = Number.isFinite(started) && started <= now().getTime() - OPERATION_LEASE_MS;
+      if (stale) {
+        let remote = null;
+        try { remote = await remoteFinal(current.externalId, current.pharmacyId); } catch (_) {}
+        if (remote) {
+          const reconciled = await upsertApproval(remote, { announce: false });
+          if (reconciled.status === action) {
+            return { approval: reconciled, idempotent: true, reconciled: true };
+          }
+          throw approvalError('medicalka_action_conflict', 409);
+        }
+        await Model.updateOne({
+          _id: current._id,
+          'operation.token': current.operation.token,
+        }, {
+          $set: {
+            'operation.token': '',
+            'operation.action': '',
+            'operation.startedAt': null,
+            'operation.reconciliationRequired': true,
+            'sync.lastError': 'medicalka_action_uncertain',
+          },
+        });
+        throw approvalError('medicalka_reconciliation_required', 409);
+      }
       throw approvalError('medicalka_action_in_progress', 409);
     }
     if (current.operation?.reconciliationRequired) {
@@ -257,6 +325,8 @@ function createApprovalService({
     const claimed = await Model.findOneAndUpdate({
       _id: current._id,
       status: current.status,
+      requiresAction: true,
+      checkoutActive: true,
       'operation.token': '',
       'operation.reconciliationRequired': { $ne: true },
     }, {
@@ -271,6 +341,9 @@ function createApprovalService({
       const latest = await Model.findOne({ externalId }).lean();
       if (latest?.status === action) return { approval: latest, idempotent: true };
       if (latest?.operation?.token) throw approvalError('medicalka_action_in_progress', 409);
+      if (!latest?.requiresAction || !latest?.checkoutActive) {
+        throw approvalError('medicalka_approval_not_actionable', 409);
+      }
       throw approvalError('medicalka_action_conflict', 409);
     }
 
