@@ -84,6 +84,17 @@ const config = {
     enabled: bool('CHANNEL_TELEGRAM_ENABLED', true),
   },
 
+  medicalkaPartner: {
+    enabled: bool('MEDICALKA_INBOUND_ENABLED', false),
+    baseUrl: process.env.MEDICALKA_PARTNER_BASE_URL || 'https://api.medicalka.com/api/v1',
+    username: process.env.MEDICALKA_PARTNER_USERNAME || '',
+    password: process.env.MEDICALKA_PARTNER_PASSWORD || '',
+    pollMs: number('MEDICALKA_APPROVAL_POLL_MS', 5000),
+    historyPollMs: number('MEDICALKA_HISTORY_POLL_MS', 60000),
+    timeoutMs: number('MEDICALKA_PARTNER_TIMEOUT_MS', 8000),
+    maxResponseBytes: number('MEDICALKA_PARTNER_MAX_RESPONSE_BYTES', 1024 * 1024),
+  },
+
   // Uzum Tezkor (Yandex Eats family). We are the provider: they authenticate
   // against us, poll our catalogue and post orders to us.
   uzum: {
