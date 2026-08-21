@@ -1,11 +1,10 @@
 /**
  * Wire format for Medicalka.
  *
- * Their integration guide is explicit about types and their client relies on
- * them: `id` and `total` are integers, while `price` and `quantity` arrive as
- * decimal *strings* ("749000.00"). Emitting a JSON number where a string is
- * expected is the kind of mismatch that only shows up as a parse error on
- * their side, so the conversion lives here and nowhere else.
+ * Medicalka's pharmacy-import contract uses integer ids and quantities plus
+ * JSON numbers for prices. The older client guide used decimal strings, so the
+ * legacy helper remains exported for order-response compatibility tests, while
+ * catalogue and stock rows follow the importer Medicalka runs in production.
  */
 
 const config = require('../../config');
@@ -15,6 +14,11 @@ const media = require('../../media/images');
 function decimalString(value) {
   const n = Number(value);
   return (Number.isFinite(n) ? n : 0).toFixed(2);
+}
+
+function number(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
 /** "2026-07-08T19:45:54" — ISO 8601, seconds precision, no timezone suffix. */
@@ -42,8 +46,10 @@ function pharmacy(shop) {
  * way, and a missing key is harder to notice than a blank one.
  */
 function taxCodes(card, defaults = {}) {
+  const ikpu = String(card.mxikCode || defaults.mxikCode || '').trim();
   return {
-    ikpu: String(card.mxikCode || defaults.mxikCode || '').trim(),
+    ikpu,
+    ikpu_code: ikpu,
     package_code: String(card.packageCode || defaults.packageCode || '').trim(),
   };
 }
@@ -93,7 +99,7 @@ function product({ card, mirror, medicalkaId, price, defaults }) {
     barcode: card.barcode || mirror.barcode || '',
     ...taxCodes(card, defaults),
     images: media.imagesFor(card),
-    price: decimalString(price),
+    price: number(price),
     updated_at: timestamp(card.updatedAt || mirror.syncedAt),
   };
 }
@@ -104,12 +110,14 @@ function product({ card, mirror, medicalkaId, price, defaults }) {
  * `is_available` is always true because the endpoint only ever lists products
  * that are in stock — their guide states absent products simply are not there.
  */
-function inventoryRow({ medicalkaId, quantity, price, pharmacyId }) {
+function inventoryRow({ medicalkaId, quantity, basePrice, price, pharmacyId }) {
+  const salePrice = number(price);
   return {
     pharmacy_id: pharmacyId,
     product_id: medicalkaId,
-    quantity: decimalString(quantity),
-    price: decimalString(price),
+    quantity: Math.max(0, Math.floor(number(quantity))),
+    base_price: number(basePrice) || salePrice,
+    price: salePrice,
     is_available: true,
   };
 }

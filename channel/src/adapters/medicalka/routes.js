@@ -17,8 +17,8 @@ const S = require('./serializers');
  *
  * We are the provider: Medicalka polls these endpoints with the token we issue
  * and posts orders with the secret. Shapes and status codes follow their
- * integration guide exactly — including the string-typed price and quantity,
- * and the 404 on a product that is out of stock, which their client turns into
+ * pharmacy importer contract — including numeric price/quantity and base
+ * price — and the 404 on a product that is out of stock, which their client turns into
  * `None` rather than an exception.
  */
 const router = express.Router();
@@ -69,7 +69,10 @@ const taxDefaults = () => settingView.readSettings(SETTING_KEYS)
 /** Attaches the integer id, channel price and tax codes each serialiser needs. */
 async function decorate(entry, defaults) {
   const medicalkaId = await catalog.ensureMedicalkaId(entry.mirror);
-  return { ...entry, medicalkaId, price: catalog.priceFor(entry.card, CHANNEL), defaults };
+  const price = catalog.priceFor(entry.card, CHANNEL);
+  const configuredBase = Number(entry.card?.channels?.[CHANNEL]?.oldPrice) || 0;
+  const basePrice = configuredBase > price ? configuredBase : price;
+  return { ...entry, medicalkaId, price, basePrice, defaults };
 }
 
 const read = [requireKey('token'), channelLimiter];
@@ -157,6 +160,7 @@ router.get('/inventory', read, async (req, res, next) => {
         pharmacyId: PHARMACY_ID,
         medicalkaId: decorated.medicalkaId,
         quantity: catalog.publishedQuantity(entry.card, entry.mirror, CHANNEL),
+        basePrice: decorated.basePrice,
         price: decorated.price,
       });
     }));
@@ -194,11 +198,13 @@ router.get('/stock', read, async (req, res, next) => {
       return notFound(res, `Product ${productId} is not in stock`);
     }
 
+    const decorated = await decorate(entry, await taxDefaults());
     res.json(S.inventoryRow({
       pharmacyId: PHARMACY_ID,
       medicalkaId: productId,
       quantity: catalog.publishedQuantity(entry.card, entry.mirror, CHANNEL),
-      price: catalog.priceFor(entry.card, CHANNEL),
+      basePrice: decorated.basePrice,
+      price: decorated.price,
     }));
   } catch (err) { next(err); }
 });

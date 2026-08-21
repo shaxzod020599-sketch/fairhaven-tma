@@ -151,6 +151,27 @@ test('a Medicalka pair is issued together and may revoke the old pair', async ()
   assert.equal(previous.active, false);
 });
 
+test('issuing a normal Medicalka pair keeps every existing key active', async () => {
+  const oldToken = await call('POST', '/internal/keys', {
+    body: { channel: 'medicalka', kind: 'token', label: 'Medicalka production' },
+  });
+  const oldSecret = await call('POST', '/internal/keys', {
+    body: { channel: 'medicalka', kind: 'secret', label: 'Medicalka production' },
+  });
+
+  const pair = await call('POST', '/internal/keys/pair', {
+    body: { label: 'additional connection' },
+  });
+
+  assert.equal(pair.status, 200);
+  const [token, secret] = await Promise.all([
+    ChannelKey().findById(oldToken.body.id).lean(),
+    ChannelKey().findById(oldSecret.body.id).lean(),
+  ]);
+  assert.equal(token.active, true);
+  assert.equal(secret.active, true);
+});
+
 test('a kind that does not belong to a channel is refused', async () => {
   // Uzum has no read token; Medicalka has no OAuth client. Issuing one would
   // produce a credential that authenticates nothing.
