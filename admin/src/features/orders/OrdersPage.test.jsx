@@ -34,7 +34,9 @@ function makeApi(over = {}) {
   };
 }
 
-const renderPage = (api) => render(<ToastProvider><OrdersPage api={api} /></ToastProvider>);
+const renderPage = (api, medicalkaApi) => render(
+  <ToastProvider><OrdersPage api={api} medicalkaApi={medicalkaApi} /></ToastProvider>
+);
 
 describe('OrdersPage', () => {
   beforeEach(() => {
@@ -100,5 +102,21 @@ describe('OrdersPage', () => {
     expect(screen.getByRole('button', { name: 'Печать чека' })).toBeInTheDocument();
     // Action buttons come from the server's answer, not the local table.
     expect(screen.getByRole('button', { name: 'Заказ собран' })).toBeInTheDocument();
+  });
+
+  it('opens Medicalka inside existing Orders workspace', async () => {
+    const api = makeApi();
+    const medicalkaApi = {
+      list: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 }, sync: { stale: false } }),
+      respond: vi.fn(),
+    };
+    renderPage(api, medicalkaApi);
+    await screen.findByText('Dilnoza Karimova');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Medicalka' }));
+
+    expect(await screen.findByText('Medicalka zayavkalari')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'FairHaven' })).toBeInTheDocument();
+    expect(medicalkaApi.list).toHaveBeenCalled();
   });
 });

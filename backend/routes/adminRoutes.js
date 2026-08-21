@@ -9,6 +9,7 @@ const upload = require('../controllers/uploadController');
 const channels = require('../controllers/channelController');
 const sales = require('../controllers/salesAnalyticsController');
 const salesExport = require('../controllers/salesExportController');
+const medicalka = require('../controllers/medicalkaController');
 const {
   adminLoginLimiter,
   adminPollLimiter,
@@ -80,6 +81,9 @@ router.post('/orders/:id/notes', ops.addOrderNote);
 router.post('/orders/:id/claim', ops.claimOrder);
 router.patch('/orders/:id/status', admin.updateOrderStatus);
 router.post('/orders/:id/revert', admin.revertOrder);
+router.get('/medicalka/approvals', medicalka.list);
+router.get('/medicalka/approvals/:id', medicalka.detail);
+router.post('/medicalka/approvals/:id/respond', medicalka.respond);
 
 // Products
 router.get('/products', admin.listProducts);

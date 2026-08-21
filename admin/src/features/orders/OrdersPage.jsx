@@ -12,6 +12,8 @@ import { Field } from '../../ui/Field';
 import { Pagination } from '../../ui/Pagination';
 import { useToast } from '../../ui/ToastProvider';
 import { OrderWorkbench } from './OrderWorkbench';
+import { MedicalkaQueue } from './MedicalkaQueue';
+import { medicalkaApi as defaultMedicalkaApi } from '../../api/medicalka';
 
 const LIMIT = 30;
 const BUCKETS = [
@@ -53,7 +55,16 @@ function OrderActions({ order, onAction }) {
   );
 }
 
-export function OrdersPage({ api = ordersApi, me = null }) {
+function SourceTabs({ source, onSource }) {
+  return (
+    <div className="fh-order-sources" aria-label="Buyurtma manbasi">
+      <button type="button" className={source === 'fairhaven' ? 'is-active' : ''} onClick={() => onSource('fairhaven')}>FairHaven</button>
+      <button type="button" className={source === 'medicalka' ? 'is-active' : ''} onClick={() => onSource('medicalka')}>Medicalka</button>
+    </div>
+  );
+}
+
+export function OrdersPage({ api = ordersApi, medicalkaApi = defaultMedicalkaApi, me = null }) {
   const toast = useToast();
   const route = useRoute();
   const openId = matchRoute(route, '/orders/:id')?.id || null;
@@ -69,6 +80,7 @@ export function OrdersPage({ api = ordersApi, me = null }) {
   const [confirm, setConfirm] = useState(null);
   const [fresh, setFresh] = useState(0);
   const [sound, setSound] = useState(() => window.localStorage.getItem(SOUND_KEY) === '1');
+  const [source, setSource] = useState('fairhaven');
   const requestId = useRef(0);
   const knownRows = useRef(null);
 
@@ -111,12 +123,13 @@ export function OrdersPage({ api = ordersApi, me = null }) {
   }, [api, bucket, page, query, sound]);
 
   useEffect(() => {
+    if (source !== 'fairhaven') return undefined;
     knownRows.current = null;
     load();
     if (bucket !== 'active') return undefined;
     const poll = window.setInterval(() => load({ silent: true }), 10_000);
     return () => window.clearInterval(poll);
-  }, [bucket, load]);
+  }, [bucket, load, source]);
 
   const mutateRow = (updated) => {
     setRows((current) => current.map((row) => (row._id === updated._id ? { ...row, ...updated } : row)));
@@ -162,6 +175,22 @@ export function OrdersPage({ api = ordersApi, me = null }) {
 
   const attention = useMemo(() => rows.filter((row) => attentionReason(row)), [rows]);
 
+  if (source === 'medicalka') {
+    return (
+      <div className="fh-page fh-orders">
+        <header className="fh-page-head" data-print-hide>
+          <div>
+            <p className="fh-eyebrow">OPERATOR NAVBATI</p>
+            <h1>Buyurtmalar</h1>
+            <p>FairHaven va Medicalka zayavkalari bitta ish joyida.</p>
+          </div>
+        </header>
+        <SourceTabs source={source} onSource={setSource} />
+        <MedicalkaQueue api={medicalkaApi} />
+      </div>
+    );
+  }
+
   return (
     <div className="fh-page fh-orders">
       <header className="fh-page-head" data-print-hide>
@@ -179,6 +208,8 @@ export function OrdersPage({ api = ordersApi, me = null }) {
           <Button onClick={() => { setFresh(0); load(); }}>Обновить</Button>
         </div>
       </header>
+
+      <SourceTabs source={source} onSource={setSource} />
 
       <div className="fh-toolbar" data-print-hide>
         <div className="fh-tabs">
