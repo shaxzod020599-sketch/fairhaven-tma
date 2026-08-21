@@ -4,6 +4,9 @@ const MedicalkaApproval = require('../models/MedicalkaApproval');
 const FINAL_STATUSES = new Set(['accepted', 'rejected', 'cancelled']);
 const HISTORY_STATUSES = ['accepted', 'rejected', 'cancelled'];
 const NOTIFICATION_LEASE_MS = 60 * 1000;
+const NOTIFICATION_BATCH_SIZE = 20;
+const NOTIFICATION_RETRY_BASE_MS = 30 * 1000;
+const NOTIFICATION_RETRY_MAX_MS = 10 * 60 * 1000;
 const OPERATION_LEASE_MS = 60 * 1000;
 
 function text(value) {
@@ -92,14 +95,25 @@ function decisionFields(operation, action, at) {
   };
 }
 
+function retryAt(at, attempts) {
+  const delay = Math.min(
+    NOTIFICATION_RETRY_BASE_MS * (2 ** Math.min(Math.max(attempts - 1, 0), 4)),
+    NOTIFICATION_RETRY_MAX_MS
+  );
+  return new Date(at.getTime() + delay);
+}
+
 function createApprovalService({
   client,
   Model = MedicalkaApproval(),
   onNew = async () => {},
   onDecision = async () => {},
   now = () => new Date(),
+  schedule = (job) => setImmediate(job),
 } = {}) {
   let syncing = false;
+  let notificationWorking = false;
+  let notificationScheduled = false;
 
   async function settleFinalOperation(stored, at) {
     const operation = stored?.operation || {};
@@ -125,10 +139,20 @@ function createApprovalService({
     const staleAt = new Date(claimedAt.getTime() - NOTIFICATION_LEASE_MS);
     const claimed = await Model.findOneAndUpdate({
       externalId,
+      status: 'pending',
+      requiresAction: true,
+      checkoutActive: true,
       'notification.notifiedAt': null,
-      $or: [
-        { 'notification.claimToken': '' },
-        { 'notification.claimedAt': { $lte: staleAt } },
+      $and: [
+        { $or: [
+          { 'notification.claimToken': '' },
+          { 'notification.claimToken': null },
+          { 'notification.claimedAt': { $lte: staleAt } },
+        ] },
+        { $or: [
+          { 'notification.retryAt': null },
+          { 'notification.retryAt': { $lte: claimedAt } },
+        ] },
       ],
     }, {
       $set: {
@@ -148,10 +172,13 @@ function createApprovalService({
           'notification.notifiedAt': now(),
           'notification.claimToken': '',
           'notification.claimedAt': null,
+          'notification.retryAt': null,
+          'notification.lastError': '',
         },
       });
       return true;
     } catch (err) {
+      const attempts = Number(claimed.notification?.attempts || 0) + 1;
       await Model.updateOne({
         externalId,
         'notification.claimToken': claimToken,
@@ -159,10 +186,64 @@ function createApprovalService({
         $set: {
           'notification.claimToken': '',
           'notification.claimedAt': null,
+          'notification.retryAt': retryAt(now(), attempts),
+          'notification.lastError': 'medicalka_telegram_announce_failed',
         },
+        $inc: { 'notification.attempts': 1 },
       });
       throw err;
     }
+  }
+
+  async function drainNotificationsOnce() {
+    if (notificationWorking) return { skipped: true };
+    notificationWorking = true;
+    try {
+      const queuedAt = now();
+      const announcements = await Model.find({
+        status: 'pending',
+        requiresAction: true,
+        checkoutActive: true,
+        'notification.notifiedAt': null,
+        $or: [
+          { 'notification.retryAt': null },
+          { 'notification.retryAt': { $lte: queuedAt } },
+        ],
+      }).sort({ sourceCreatedAt: 1 }).limit(NOTIFICATION_BATCH_SIZE).lean();
+      await Promise.allSettled(
+        announcements.map((row) => announceIfNeeded(row.externalId))
+      );
+
+      const finalizations = await Model.find({
+        'notification.messages': {
+          $elemMatch: {
+            finalizedAt: null,
+            $or: [
+              { finalizeRetryAt: null },
+              { finalizeRetryAt: { $lte: queuedAt } },
+            ],
+          },
+        },
+        $or: [
+          { status: { $in: [...FINAL_STATUSES] } },
+          { requiresAction: false },
+          { checkoutActive: false },
+        ],
+      }).sort({ updatedAt: 1 }).limit(NOTIFICATION_BATCH_SIZE).lean();
+      await Promise.allSettled(finalizations.map((row) => onDecision(row)));
+      return { announcements: announcements.length, finalizations: finalizations.length };
+    } finally {
+      notificationWorking = false;
+    }
+  }
+
+  function scheduleNotifications() {
+    if (notificationScheduled || notificationWorking) return;
+    notificationScheduled = true;
+    schedule(async () => {
+      notificationScheduled = false;
+      try { await drainNotificationsOnce(); } catch (_) { /* persisted work retries on next poll */ }
+    });
   }
 
   async function upsertApproval(raw, { announce = true } = {}) {
@@ -186,11 +267,8 @@ function createApprovalService({
     if (FINAL_STATUSES.has(stored.status) && stored.operation?.action) {
       stored = await settleFinalOperation(stored, seenAt);
     }
-    if (
-      announce && stored.status === 'pending'
-      && stored.requiresAction && stored.checkoutActive
-    ) {
-      await announceIfNeeded(normalized.externalId);
+    if (announce && stored.status === 'pending' && stored.requiresAction && stored.checkoutActive) {
+      scheduleNotifications();
     }
     const becameFinal = FINAL_STATUSES.has(stored.status)
       && (!previous || !FINAL_STATUSES.has(previous.status));
@@ -200,24 +278,8 @@ function createApprovalService({
       && previous.checkoutActive
       && (stored.status !== 'pending' || !stored.requiresAction || !stored.checkoutActive)
     );
-    if (becameFinal || lostActionability) {
-      try { await onDecision(stored); } catch (_) { /* source state is already durable */ }
-    }
+    if (becameFinal || lostActionability) scheduleNotifications();
     return stored;
-  }
-
-  async function retryFinalizations() {
-    const rows = await Model.find({
-      'notification.messages': { $elemMatch: { finalizedAt: null } },
-      $or: [
-        { status: { $in: [...FINAL_STATUSES] } },
-        { requiresAction: false },
-        { checkoutActive: false },
-      ],
-    }).sort({ updatedAt: 1 }).limit(100).lean();
-    for (const row of rows) {
-      try { await onDecision(row); } catch (_) { /* durable message state retries next poll */ }
-    }
   }
 
   async function pharmacyIds() {
@@ -272,7 +334,7 @@ function createApprovalService({
         },
       }, { new: true }).lean();
       if (closed) {
-        try { await onDecision(closed); } catch (_) { /* action was already closed upstream */ }
+        scheduleNotifications();
       }
     }
   }
@@ -287,7 +349,7 @@ function createApprovalService({
         ids, 'pending', (row) => upsertApproval(row, { announce: true })
       );
       await closeMissingPending(ids, page.seen);
-      await retryFinalizations();
+      scheduleNotifications();
       return { received: page.received };
     } finally {
       syncing = false;
@@ -306,7 +368,7 @@ function createApprovalService({
           ids, status, (row) => upsertApproval(row, { announce: false })
         )).received;
       }
-      await retryFinalizations();
+      scheduleNotifications();
       return { received };
     } finally {
       syncing = false;
@@ -494,11 +556,11 @@ function createApprovalService({
       }
       return recoverDecision(claimed, token, action);
     }
-    try { await onDecision(approval); } catch (_) { /* durable message state retries next poll */ }
+    scheduleNotifications();
     return { approval, idempotent: false };
   }
 
-  return { pollOnce, reconcileOnce, respond };
+  return { drainNotificationsOnce, pollOnce, reconcileOnce, respond };
 }
 
 module.exports = { createApprovalService, normalizeApproval };

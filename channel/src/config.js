@@ -94,6 +94,8 @@ const config = {
     historyPollMs: number('MEDICALKA_HISTORY_POLL_MS', 60000),
     subOrdersEnabled: bool('MEDICALKA_SUBORDERS_ENABLED', false),
     subOrderPollMs: number('MEDICALKA_SUBORDER_POLL_MS', 15000),
+    subOrderHistoryPollMs: number('MEDICALKA_SUBORDER_HISTORY_POLL_MS', 300000),
+    subOrderHistoryDays: number('MEDICALKA_SUBORDER_HISTORY_DAYS', 180),
     timeoutMs: number('MEDICALKA_PARTNER_TIMEOUT_MS', 8000),
     maxResponseBytes: number('MEDICALKA_PARTNER_MAX_RESPONSE_BYTES', 1024 * 1024),
   },

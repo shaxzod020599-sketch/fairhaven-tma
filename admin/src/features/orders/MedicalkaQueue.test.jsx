@@ -11,6 +11,7 @@ const approval = {
   checkoutId: 'checkout-a',
   status: 'pending',
   requiresAction: true,
+  checkoutActive: true,
   deadlineAt: new Date(Date.now() + 120_000).toISOString(),
   sourceCreatedAt: '2026-08-22T03:00:00.000Z',
   deliveryType: 'pickup',
@@ -90,5 +91,21 @@ describe('MedicalkaQueue', () => {
 
     await waitFor(() => expect(screen.getByText(/Oldingi ma’lumot ko‘rsatilmoqda/)).toBeInTheDocument());
     expect(screen.getByText('Ali Valiyev')).toBeInTheDocument();
+  });
+
+  it('does not render decision buttons for an inactive checkout in all view', async () => {
+    const api = makeApi({
+      list: vi.fn().mockResolvedValue({
+        data: [{ ...approval, checkoutActive: false }],
+        meta: { page: 1, limit: 30, total: 1 },
+        sync: { enabled: true, stale: false },
+      }),
+    });
+    renderQueue(api);
+
+    await screen.findByText('Ali Valiyev');
+
+    expect(screen.queryByRole('button', { name: 'Tasdiqlash' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rad etish' })).not.toBeInTheDocument();
   });
 });

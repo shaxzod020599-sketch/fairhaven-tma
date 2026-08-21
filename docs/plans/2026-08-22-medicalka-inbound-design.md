@@ -81,7 +81,7 @@ New approval is sent as a direct bot message to each current FairHaven admin. Ch
 - Callback data contains only local approval ID and action, never credentials or customer data.
 - Final action edits all delivered admin messages and removes buttons.
 - Each message stores finalization attempts and completion; failed edits retry on later polls without reopening the decision.
-- Failed delivery to one admin does not block other admins or approval sync.
+- Telegram delivery/finalization runs in a bounded persisted worker with exponential backoff. Failed delivery to one admin does not block other admins or approval sync.
 
 ### 6. Existing FairHaven admin panel
 
@@ -102,7 +102,8 @@ Approval creates no sale. Poll paid sub-orders separately.
 - Existing `ChannelOrder` uniqueness on `(channel, externalId)` and Billz operation fencing remain sale idempotency boundary.
 - Billz completion occurs once when Medicalka reports paid processing order.
 - Medicalka cancellation/refund releases only a known reservation or records reconciliation-required state; uncertain Billz results never auto-retry.
-- Polling covers every documented status; recent delivered/completed rows and all refund states remain reconciled after restarts and late returns.
+- Active polling stays fast; every documented terminal status is reconciled on a separate bounded 180-day history cadence configurable to Medicalka's return policy.
+- The Medicalka projection stores the `ChannelOrder` link before Billz completion and repairs itself from authoritative `ChannelOrder` state after a crash.
 - Status, cancellation, and fiscal-label writes use durable operation claims. Ambiguous results reconcile against fresh detail; unresolved results are fenced for manual reconciliation.
 - Pickup may move to delivered/completed from panel. Delivery may move to shipped only after required fiscal labels; delivered stays Medicalka/courier-owned.
 

@@ -196,7 +196,7 @@ export function MedicalkaQueue({ api = medicalkaApi }) {
                     {approval.reconciliationRequired && <span>Medicalka javobi noaniq — tarix sync kutilmoqda</span>}
                   </div>
                   <strong>{formatMoney(approval.subtotal)}</strong>
-                  {approval.status === 'pending' && approval.requiresAction && (
+                  {approval.status === 'pending' && approval.requiresAction && approval.checkoutActive && (
                     <div className="fh-order-actions">
                       <Button disabled={approval.inProgress || approval.reconciliationRequired} size="sm" variant="primary" onClick={() => setConfirm({ approval, action: 'accepted', comment: '' })}>Tasdiqlash</Button>
                       <Button disabled={approval.inProgress || approval.reconciliationRequired} size="sm" variant="danger" onClick={() => setConfirm({ approval, action: 'rejected', comment: '' })}>Rad etish</Button>

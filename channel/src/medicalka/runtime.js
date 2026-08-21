@@ -28,7 +28,11 @@ const service = createApprovalService({
     }
   },
 });
-const subOrders = createSubOrderService({ client });
+const subOrders = createSubOrderService({
+  client,
+  historyPollMs: config.medicalkaPartner.subOrderHistoryPollMs,
+  historyWindowDays: config.medicalkaPartner.subOrderHistoryDays,
+});
 
 let pollTimer = null;
 let historyTimer = null;

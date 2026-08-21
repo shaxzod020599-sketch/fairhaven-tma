@@ -1,17 +1,17 @@
 const { createHash, randomUUID } = require('node:crypto');
 const BillzProduct = require('../models/BillzProduct');
+const ChannelOrder = require('../models/ChannelOrder');
 const MedicalkaSubOrder = require('../models/MedicalkaSubOrder');
 const orders = require('../core/orders');
 
 const OPERATION_LEASE_MS = 60 * 1000;
 const REFUND_STATUSES = new Set(['cancelled', 'rejected', 'refunded', 'failed', 'returned']);
 const ACTIVE_STATUSES = ['processing', 'shipped'];
+const OPEN_STATUSES = ['pending', 'waiting_payment', ...ACTIVE_STATUSES];
+const TERMINAL_STATUSES = ['delivered', ...REFUND_STATUSES, 'completed'];
 const POLL_STATUSES = [
-  'pending', 'waiting_payment', ...ACTIVE_STATUSES, 'delivered',
-  ...REFUND_STATUSES, 'completed',
+  ...OPEN_STATUSES, ...TERMINAL_STATUSES,
 ];
-const RECENT_FINAL_STATUSES = new Set(['delivered', 'completed']);
-const RECENT_FINAL_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 function text(value) {
   return value === null || value === undefined ? '' : String(value);
@@ -148,10 +148,16 @@ function createSubOrderService({
   client,
   Model = MedicalkaSubOrder(),
   ProductModel = BillzProduct(),
+  ChannelOrderModel = ChannelOrder(),
   orderService = orders,
   now = () => new Date(),
+  historyPollMs = 5 * 60 * 1000,
+  historyWindowDays = 180,
 } = {}) {
   let polling = false;
+  let nextHistoryPollAt = 0;
+  const historyInterval = Math.max(60000, Number(historyPollMs) || 300000);
+  const historyDays = Math.max(1, Number(historyWindowDays) || 180);
 
   async function settleAppliedOperation(row, operation) {
     const actedAt = now();
@@ -233,9 +239,40 @@ function createSubOrderService({
     return storeSnapshot(await client.getSubOrder(externalId));
   }
 
+  async function reconcileSaleProjection(stored) {
+    if (stored.paymentStatus !== 'paid') return stored;
+    const channelOrder = await ChannelOrderModel.findOne(
+      stored.sale?.channelOrderId
+        ? { internalOrderId: stored.sale.channelOrderId, channel: 'medicalka' }
+        : { channel: 'medicalka', externalId: stored.externalId }
+    ).lean();
+    if (!channelOrder) return stored;
+
+    const billzUncertain = Boolean(channelOrder.billz?.reconciliationRequired);
+    const sold = channelOrder.status === 'sold';
+    const refundRequired = sold && REFUND_STATUSES.has(stored.status);
+    const fields = {
+      'sale.channelOrderId': channelOrder.internalOrderId,
+      ...(sold ? {
+        'sale.state': 'sold',
+        'sale.reconciliationRequired': refundRequired,
+        'sale.lastError': refundRequired ? 'medicalka_billz_refund_required' : '',
+      } : {}),
+      ...(billzUncertain ? {
+        'sale.state': 'failed',
+        'sale.reconciliationRequired': true,
+        'sale.lastError': 'medicalka_billz_reconciliation_required',
+      } : {}),
+    };
+    return Model.findOneAndUpdate({ _id: stored._id }, {
+      $set: fields,
+    }, { new: true }).lean();
+  }
+
   async function ingest(input) {
     const raw = await fullPayload(input);
     let stored = await storeSnapshot(raw);
+    stored = await reconcileSaleProjection(stored);
     if (stored.sale?.state === 'sold') return stored;
     if (stored.sale?.reconciliationRequired || stored.operation?.reconciliationRequired) return stored;
     if (!ACTIVE_STATUSES.includes(stored.status)) {
@@ -301,6 +338,14 @@ function createSubOrderService({
         },
         raw,
       });
+      stored = await Model.findOneAndUpdate({ _id: stored._id }, {
+        $set: {
+          'sale.state': 'processing',
+          'sale.channelOrderId': accepted.order.internalOrderId,
+          'sale.lastError': '',
+          'sale.reconciliationRequired': false,
+        },
+      }, { new: true }).lean();
       const outcome = await orderService.completeIncomingSale(accepted.order.internalOrderId);
       const state = outcome?.kind === 'sold' ? 'sold' : text(outcome?.kind) || 'failed';
       return Model.findOneAndUpdate({ _id: stored._id }, {
@@ -332,15 +377,20 @@ function createSubOrderService({
       let received = 0;
       const pageSize = 100;
       const seen = new Set();
-      const recentDate = new Date(now().getTime() - RECENT_FINAL_WINDOW_MS)
+      const polledAt = now();
+      const includeHistory = polledAt.getTime() >= nextHistoryPollAt;
+      const historyDate = new Date(
+        polledAt.getTime() - (historyDays * 24 * 60 * 60 * 1000)
+      )
         .toISOString().slice(0, 10);
-      for (const status of POLL_STATUSES) {
+      const statuses = includeHistory ? POLL_STATUSES : OPEN_STATUSES;
+      for (const status of statuses) {
         let page = 1;
         let statusReceived = 0;
         while (true) {
           const response = await client.listSubOrders({
             pharmacyIds: ids, status, page, page_size: pageSize,
-            ...(RECENT_FINAL_STATUSES.has(status) ? { date_from: recentDate } : {}),
+            ...(TERMINAL_STATUSES.includes(status) ? { date_from: historyDate } : {}),
           });
           const rows = Array.isArray(response?.items) ? response.items : [];
           const rowIds = rows.map((row) => text(row?.id)).filter(Boolean);
@@ -355,7 +405,7 @@ function createSubOrderService({
             const existing = existingById.get(externalId);
             if (
               existing?.status === status
-              && !['pending', 'waiting_payment', ...ACTIVE_STATUSES].includes(status)
+              && !OPEN_STATUSES.includes(status)
             ) {
               if (
                 REFUND_STATUSES.has(status)
@@ -392,6 +442,7 @@ function createSubOrderService({
       for (const row of missingActive) {
         await ingest({ id: row.externalId });
       }
+      if (includeHistory) nextHistoryPollAt = polledAt.getTime() + historyInterval;
       return { received };
     } finally {
       polling = false;

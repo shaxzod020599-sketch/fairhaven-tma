@@ -170,6 +170,7 @@ test('failed final edit remains pending and only unfinished cards retry', async 
   });
   let fail = true;
   let attempts = 0;
+  let current = new Date('2026-08-22T05:00:00.000Z');
   const notifier = createMedicalkaNotifier({
     send: async () => {
       attempts += 1;
@@ -178,6 +179,7 @@ test('failed final edit remains pending and only unfinished cards retry', async 
     },
     AdminModel: AdminView(),
     ApprovalModel: MedicalkaApproval(),
+    now: () => current,
   });
 
   await assert.rejects(
@@ -189,6 +191,7 @@ test('failed final edit remains pending and only unfinished cards retry', async 
   assert.equal(stored.notification.messages[0].finalizeAttempts, 1);
 
   fail = false;
+  current = new Date(current.getTime() + 30000);
   await notifier.finalize(String(approval._id));
   await notifier.finalize(String(approval._id));
   stored = await MedicalkaApproval().findById(approval._id).lean();

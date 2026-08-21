@@ -8,6 +8,7 @@ process.env.MONGO_DB_NAME = 'medicalka-suborders-test';
 let mongod;
 let db;
 let MedicalkaSubOrder;
+let ChannelOrder;
 let createSubOrderService;
 let normalizeSubOrder;
 
@@ -46,11 +47,15 @@ test.before(async () => {
   db = require('../src/db');
   await db.connect();
   MedicalkaSubOrder = require('../src/models/MedicalkaSubOrder');
+  ChannelOrder = require('../src/models/ChannelOrder');
   ({ createSubOrderService, normalizeSubOrder } = require('../src/medicalka/subOrders'));
 });
 
 test.beforeEach(async () => {
-  await MedicalkaSubOrder().deleteMany({});
+  await Promise.all([
+    MedicalkaSubOrder().deleteMany({}),
+    ChannelOrder().deleteMany({ channel: 'medicalka' }),
+  ]);
 });
 
 test.after(async () => {
@@ -328,6 +333,58 @@ test('late refund of a locally delivered sale is discovered from status polling'
   assert.ok(seenStatuses.includes('returned'));
   assert.equal(stored.status, 'returned');
   assert.equal(stored.sale.reconciliationRequired, true);
+});
+
+test('terminal history uses a bounded cadence instead of every active poll', async () => {
+  const statuses = [];
+  const fixed = new Date('2026-08-22T05:00:00.000Z');
+  const service = createSubOrderService({
+    client: {
+      getPharmacies: async () => [{ id: 'pharmacy-a' }],
+      listSubOrders: async (query) => {
+        statuses.push(query);
+        return { items: [], total: 0 };
+      },
+    },
+    ProductModel: products(), orderService: {}, now: () => fixed,
+    historyPollMs: 300000, historyWindowDays: 180,
+  });
+
+  await service.pollOnce();
+  const firstCount = statuses.length;
+  await service.pollOnce();
+  const second = statuses.slice(firstCount);
+
+  assert.equal(firstCount, 11);
+  assert.deepEqual(second.map((row) => row.status), [
+    'pending', 'waiting_payment', 'processing', 'shipped',
+  ]);
+  assert.ok(statuses
+    .filter((row) => !['pending', 'waiting_payment', 'processing', 'shipped'].includes(row.status))
+    .every((row) => row.date_from === '2026-02-23'));
+});
+
+test('authoritative sold ChannelOrder recovers projection before late refund', async () => {
+  await MedicalkaSubOrder().create({
+    ...normalizeSubOrder(paid({ status: 'delivered' }), new Date()),
+    sale: { state: 'processing', channelOrderId: '' },
+  });
+  await ChannelOrder().create({
+    channel: 'medicalka', externalId: 'sub-a', internalOrderId: 'internal-a',
+    items: [{ billzProductId: 'billz-a', name: 'OvaBoost', quantity: 2, unitPrice: 15000 }],
+    totalAmount: 30000, status: 'sold', soldAt: new Date(),
+  });
+  const service = createSubOrderService({
+    client: {}, ProductModel: products(), orderService: {},
+  });
+
+  await service.ingest(paid({ status: 'returned' }));
+
+  const stored = await MedicalkaSubOrder().findOne({ externalId: 'sub-a' }).lean();
+  assert.equal(stored.sale.channelOrderId, 'internal-a');
+  assert.equal(stored.sale.state, 'sold');
+  assert.equal(stored.sale.reconciliationRequired, true);
+  assert.equal(stored.sale.lastError, 'medicalka_billz_refund_required');
 });
 
 test('ambiguous fiscal label write reconciles detail and never sends twice', async () => {

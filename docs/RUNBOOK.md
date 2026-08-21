@@ -296,6 +296,9 @@ MEDICALKA_APPROVAL_POLL_MS=5000
 MEDICALKA_HISTORY_POLL_MS=60000
 MEDICALKA_LEGACY_ORDERS_ENABLED=true
 MEDICALKA_SUBORDERS_ENABLED=false
+MEDICALKA_SUBORDER_POLL_MS=15000
+MEDICALKA_SUBORDER_HISTORY_POLL_MS=300000
+MEDICALKA_SUBORDER_HISTORY_DAYS=180
 ```
 
 `MEDICALKA_USERNAME` va `MEDICALKA_PASSWORD` eski secret-store nomlari ham
@@ -309,8 +312,9 @@ Birinchi yoqish faqat approval oqimi:
    boradi. Kanal yoki alohida Telegram allow-list ishlatilmaydi.
 4. Panel va Telegram bir xil atomik accept/reject servisidan foydalanadi.
 5. Medicalka kabinetida qilingan qaror history sync orqali lokal holatga tushadi.
-6. Telegram tugmalarini yopish holati har bir xabar bo'yicha saqlanadi; vaqtinchalik
-   edit xatosi keyingi poll'da qayta uriniladi.
+6. Telegram yuborish Medicalka poll'dan ajratilgan durable worker orqali yuradi.
+   Telegram sekin yoki o'chiq bo'lsa ham yangi zayavkalar DB/admin panelga tushadi.
+   Har bir xabar retry/backoff va finalization holatini saqlaydi.
 
 Approve Billz ostatokni kamaytirmaydi. Faqat Medicalka `paid` sub-order berganda
 sotuv chegarasi boshlanadi. Shu sabab birinchi deployda
@@ -342,9 +346,13 @@ Delivery order: markirovka talab qilingan barcha qatorga fiscal label kiritiladi
 keyin faqat `shipped`; `delivered` Medicalka/kuryer tomoni. Pickup order:
 `shipped`, `delivered`, `completed` ruxsat. Sotilgan order bekor qilinsa Billz
 qaytarish avtomatik qilinmaydi — manual reconciliation talab qilinadi.
-Sub-order poll contractdagi takroriy `pharmacy_ids` parametrini ishlatadi,
-barcha statuslarni kuzatadi va kechikkan `returned/refunded` holatini ham
-reconciliation navbatiga chiqaradi.
+Sub-order poll contractdagi takroriy `pharmacy_ids` parametrini ishlatadi.
+Active statuslar 15 soniyada, terminal/refund history 5 daqiqada va oxirgi
+180 kun bilan chegaralangan holda tekshiriladi. Medicalka return policy uzunroq
+bo'lsa `MEDICALKA_SUBORDER_HISTORY_DAYS` shu policyga mos oshiriladi. Kechikkan
+`returned/refunded` holati reconciliation navbatiga chiqadi. Billz yakunlangan,
+lekin projection update crash bo'lgan bo'lsa authoritative `ChannelOrder`
+holati keyingi poll'da projectionni tiklaydi.
 
 **Orqaga qaytarish:** avval `MEDICALKA_SUBORDERS_ENABLED=false`, keyin eski
 senderga qaytilsa `MEDICALKA_LEGACY_ORDERS_ENABLED=true`; kerak bo'lsa

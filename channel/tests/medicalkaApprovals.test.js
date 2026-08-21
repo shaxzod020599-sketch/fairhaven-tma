@@ -110,10 +110,16 @@ test('poll upserts duplicates and announces a new approval once across restarts'
     listApprovals: async () => ({ items: [pending()], total: 1, limit: 100, offset: 0 }),
   };
 
-  const first = createApprovalService({ client, onNew: async (row) => announced.push(row.externalId) });
+  const first = createApprovalService({
+    client, onNew: async (row) => announced.push(row.externalId), schedule: () => {},
+  });
   await first.pollOnce();
-  const restarted = createApprovalService({ client, onNew: async (row) => announced.push(row.externalId) });
+  await first.drainNotificationsOnce();
+  const restarted = createApprovalService({
+    client, onNew: async (row) => announced.push(row.externalId), schedule: () => {},
+  });
   await restarted.pollOnce();
+  await restarted.drainNotificationsOnce();
 
   assert.equal(await MedicalkaApproval().countDocuments({ externalId: 'approval-a' }), 1);
   assert.deepEqual(announced, ['approval-a']);
@@ -150,6 +156,69 @@ test('overlapping polls never issue a second Medicalka request', async () => {
 
   assert.deepEqual(second, { skipped: true });
   assert.equal(calls, 1);
+});
+
+test('Telegram outage never blocks Medicalka approval persistence', async () => {
+  const release = deferred();
+  let scheduled;
+  const client = {
+    getPharmacies: async () => [{ id: 'pharmacy-a' }],
+    listApprovals: async () => ({
+      items: [
+        pending(),
+        pending({ id: 'approval-b', checkout_id: 'checkout-b' }),
+      ],
+      total: 2,
+    }),
+  };
+  const service = createApprovalService({
+    client,
+    onNew: async () => release.promise,
+    schedule: (job) => { scheduled = job; },
+  });
+
+  const poll = service.pollOnce();
+  const outcome = await Promise.race([
+    poll.then(() => 'persisted'),
+    new Promise((resolve) => setTimeout(() => resolve('blocked'), 1000)),
+  ]);
+  release.resolve();
+  const result = await poll;
+
+  assert.equal(outcome, 'persisted');
+  assert.deepEqual(result, { received: 2 });
+  assert.equal(await MedicalkaApproval().countDocuments({}), 2);
+  assert.equal(typeof scheduled, 'function');
+  release.resolve();
+  await scheduled();
+});
+
+test('failed Telegram announcement persists bounded backoff before retry', async () => {
+  let current = new Date('2026-08-22T05:00:00.000Z');
+  let attempts = 0;
+  await MedicalkaApproval().create(normalizeApproval(pending(), current));
+  const service = createApprovalService({
+    client: {}, schedule: () => {}, now: () => current,
+    onNew: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('telegram unavailable');
+    },
+  });
+
+  await service.drainNotificationsOnce();
+  let stored = await MedicalkaApproval().findOne({ externalId: 'approval-a' }).lean();
+  assert.equal(stored.notification.attempts, 1);
+  assert.equal(stored.notification.retryAt.toISOString(), '2026-08-22T05:00:30.000Z');
+
+  await service.drainNotificationsOnce();
+  assert.equal(attempts, 1);
+  current = new Date('2026-08-22T05:00:30.000Z');
+  await service.drainNotificationsOnce();
+
+  stored = await MedicalkaApproval().findOne({ externalId: 'approval-a' }).lean();
+  assert.equal(attempts, 2);
+  assert.ok(stored.notification.notifiedAt);
+  assert.equal(stored.notification.retryAt, null);
 });
 
 test('one atomic decision wins and the same completed action is idempotent', async () => {
@@ -226,16 +295,24 @@ test('transient failure releases the decision lease for a safe retry', async () 
 });
 
 test('notification edit failure cannot turn a completed Medicalka action into failure', async () => {
-  await MedicalkaApproval().create(normalizeApproval(pending(), new Date()));
+  await MedicalkaApproval().create({
+    ...normalizeApproval(pending(), new Date()),
+    notification: {
+      notifiedAt: new Date(),
+      messages: [{ telegramId: 1, messageId: 10, sentAt: new Date() }],
+    },
+  });
   let edits = 0;
   const service = createApprovalService({
     client: { respondToApproval: async () => ({}) },
     onDecision: async () => { edits += 1; throw new Error('telegram unavailable'); },
+    schedule: () => {},
   });
 
   const result = await service.respond('approval-a', {
     action: 'accepted', actor: { type: 'admin-panel', telegramId: 1, name: 'A' },
   });
+  await service.drainNotificationsOnce();
 
   assert.equal(result.approval.status, 'accepted');
   assert.equal(edits, 1);
@@ -260,7 +337,13 @@ test('stale pending poll never regresses a locally accepted approval', async () 
 });
 
 test('history reconciliation closes a pending approval changed in Medicalka panel', async () => {
-  await MedicalkaApproval().create(normalizeApproval(pending(), new Date()));
+  await MedicalkaApproval().create({
+    ...normalizeApproval(pending(), new Date()),
+    notification: {
+      notifiedAt: new Date(),
+      messages: [{ telegramId: 1, messageId: 10, sentAt: new Date() }],
+    },
+  });
   let finalized = 0;
   const client = {
     getPharmacies: async () => ({ items: [{ id: 'pharmacy-a' }] }),
@@ -270,9 +353,12 @@ test('history reconciliation closes a pending approval changed in Medicalka pane
       total: status === 'accepted' ? 1 : 0,
     }),
   };
-  const service = createApprovalService({ client, onDecision: async () => { finalized += 1; } });
+  const service = createApprovalService({
+    client, onDecision: async () => { finalized += 1; }, schedule: () => {},
+  });
 
   await service.reconcileOnce();
+  await service.drainNotificationsOnce();
 
   const stored = await MedicalkaApproval().findOne({ externalId: 'approval-a' }).lean();
   assert.equal(stored.status, 'accepted');
@@ -333,7 +419,13 @@ test('unresolved ambiguous write blocks blind retry until history reconciles it'
 });
 
 test('inactive pending approval closes Telegram actions and cannot be answered', async () => {
-  await MedicalkaApproval().create(normalizeApproval(pending(), new Date()));
+  await MedicalkaApproval().create({
+    ...normalizeApproval(pending(), new Date()),
+    notification: {
+      notifiedAt: new Date(),
+      messages: [{ telegramId: 1, messageId: 10, sentAt: new Date() }],
+    },
+  });
   let finalized = 0;
   let writes = 0;
   const client = {
@@ -344,10 +436,11 @@ test('inactive pending approval closes Telegram actions and cannot be answered',
     respondToApproval: async () => { writes += 1; },
   };
   const service = createApprovalService({
-    client, onDecision: async () => { finalized += 1; },
+    client, onDecision: async () => { finalized += 1; }, schedule: () => {},
   });
 
   await service.pollOnce();
+  await service.drainNotificationsOnce();
   await assert.rejects(
     () => service.respond('approval-a', { action: 'accepted' }),
     (err) => err.code === 'medicalka_approval_not_actionable' && err.status === 409
@@ -361,17 +454,24 @@ test('inactive pending approval closes Telegram actions and cannot be answered',
 });
 
 test('approval missing from a complete pending page is closed locally', async () => {
-  await MedicalkaApproval().create(normalizeApproval(pending(), new Date()));
+  await MedicalkaApproval().create({
+    ...normalizeApproval(pending(), new Date()),
+    notification: {
+      notifiedAt: new Date(),
+      messages: [{ telegramId: 1, messageId: 10, sentAt: new Date() }],
+    },
+  });
   let finalized = 0;
   const service = createApprovalService({
     client: {
       getPharmacies: async () => [{ id: 'pharmacy-a' }],
       listApprovals: async () => ({ items: [], total: 0 }),
     },
-    onDecision: async () => { finalized += 1; },
+    onDecision: async () => { finalized += 1; }, schedule: () => {},
   });
 
   await service.pollOnce();
+  await service.drainNotificationsOnce();
 
   const stored = await MedicalkaApproval().findOne({ externalId: 'approval-a' }).lean();
   assert.equal(stored.requiresAction, false);
@@ -537,9 +637,11 @@ test('final Telegram cleanup is retried from durable message state', async () =>
         $set: { 'notification.messages.0.finalizedAt': new Date() },
       });
     },
+    schedule: () => {},
   });
 
   await service.reconcileOnce();
+  await service.drainNotificationsOnce();
 
   assert.equal(finalizations, 1);
 });

@@ -237,6 +237,7 @@ function createMedicalkaNotifier({
   send = call,
   AdminModel = AdminView(),
   ApprovalModel = MedicalkaApproval(),
+  now = () => new Date(),
 } = {}) {
   async function announce(input) {
     const approval = await ApprovalModel.findById(input._id).lean();
@@ -274,7 +275,7 @@ function createMedicalkaNotifier({
           'notification.messages': {
             telegramId: admin.telegramId,
             messageId: sent.message_id,
-            sentAt: new Date(),
+            sentAt: now(),
           },
         },
       });
@@ -287,8 +288,12 @@ function createMedicalkaNotifier({
   async function finalize(id) {
     const approval = await ApprovalModel.findById(id).lean();
     if (!approval) return null;
+    const attemptedAt = now();
     const messages = (approval.notification?.messages || [])
-      .filter((message) => !message.finalizedAt);
+      .filter((message) => (
+        !message.finalizedAt
+        && (!message.finalizeRetryAt || new Date(message.finalizeRetryAt) <= attemptedAt)
+      ));
     const results = await Promise.all(messages.map(async (message) => {
       let edited = null;
       try {
@@ -312,9 +317,14 @@ function createMedicalkaNotifier({
         },
       };
       if (!edited) {
+        const attempts = Number(message.finalizeAttempts || 0) + 1;
+        const retryDelay = Math.min(30000 * (2 ** Math.min(attempts - 1, 4)), 600000);
         await ApprovalModel.updateOne(match, {
           $inc: { 'notification.messages.$.finalizeAttempts': 1 },
           $set: {
+            'notification.messages.$.finalizeRetryAt': new Date(
+              attemptedAt.getTime() + retryDelay
+            ),
             'notification.messages.$.finalizeLastError': 'medicalka_telegram_edit_failed',
           },
         });
@@ -323,7 +333,8 @@ function createMedicalkaNotifier({
       await ApprovalModel.updateOne(match, {
         $inc: { 'notification.messages.$.finalizeAttempts': 1 },
         $set: {
-          'notification.messages.$.finalizedAt': new Date(),
+          'notification.messages.$.finalizedAt': attemptedAt,
+          'notification.messages.$.finalizeRetryAt': null,
           'notification.messages.$.finalizeLastError': '',
         },
       });
