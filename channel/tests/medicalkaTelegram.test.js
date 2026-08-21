@@ -110,6 +110,23 @@ test('a failed admin retries without duplicating successful delivery', async () 
   assert.deepEqual(attempts, [11, 22, 22]);
 });
 
+test('inactive checkout never receives live approval buttons', async () => {
+  const approval = await seed();
+  await MedicalkaApproval().updateOne({ _id: approval._id }, {
+    $set: { checkoutActive: false },
+  });
+  let sends = 0;
+  const notifier = createMedicalkaNotifier({
+    send: async () => { sends += 1; return { message_id: 1 }; },
+    AdminModel: AdminView(),
+    ApprovalModel: MedicalkaApproval(),
+  });
+
+  await notifier.announce(approval);
+
+  assert.equal(sends, 0);
+});
+
 test('final decision edits every delivered card and removes buttons', async () => {
   const approval = await seed();
   await MedicalkaApproval().updateOne({ _id: approval._id }, {
@@ -137,4 +154,44 @@ test('final decision edits every delivered card and removes buttons', async () =
   assert.equal(calls[0].payload.chat_id, 11);
   assert.deepEqual(calls[0].payload.reply_markup, { inline_keyboard: [] });
   assert.match(calls[0].payload.text, /Operator/);
+  const stored = await MedicalkaApproval().findById(approval._id).lean();
+  assert.ok(stored.notification.messages[0].finalizedAt);
+});
+
+test('failed final edit remains pending and only unfinished cards retry', async () => {
+  const approval = await seed();
+  await MedicalkaApproval().updateOne({ _id: approval._id }, {
+    $set: { status: 'accepted', requiresAction: false },
+    $push: {
+      'notification.messages': {
+        telegramId: 11, messageId: 301, sentAt: new Date(),
+      },
+    },
+  });
+  let fail = true;
+  let attempts = 0;
+  const notifier = createMedicalkaNotifier({
+    send: async () => {
+      attempts += 1;
+      if (fail) return null;
+      return {};
+    },
+    AdminModel: AdminView(),
+    ApprovalModel: MedicalkaApproval(),
+  });
+
+  await assert.rejects(
+    () => notifier.finalize(String(approval._id)),
+    /medicalka_telegram_finalize_partial_failure/
+  );
+  let stored = await MedicalkaApproval().findById(approval._id).lean();
+  assert.equal(stored.notification.messages[0].finalizedAt, null);
+  assert.equal(stored.notification.messages[0].finalizeAttempts, 1);
+
+  fail = false;
+  await notifier.finalize(String(approval._id));
+  await notifier.finalize(String(approval._id));
+  stored = await MedicalkaApproval().findById(approval._id).lean();
+  assert.equal(attempts, 2);
+  assert.ok(stored.notification.messages[0].finalizedAt);
 });

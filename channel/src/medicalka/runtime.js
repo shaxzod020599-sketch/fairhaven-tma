@@ -114,6 +114,7 @@ async function listApprovals({ bucket = 'active', search = '', page = 1, limit =
   if (bucket === 'active') {
     query.status = 'pending';
     query.requiresAction = true;
+    query.checkoutActive = true;
   } else if (bucket === 'history') {
     query.status = { $ne: 'pending' };
   }

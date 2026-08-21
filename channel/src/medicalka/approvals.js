@@ -67,6 +67,31 @@ function approvalError(code, status) {
   return err;
 }
 
+function clearOperationFields() {
+  return {
+    'operation.token': '',
+    'operation.action': '',
+    'operation.startedAt': null,
+    'operation.actorType': '',
+    'operation.actorTelegramId': null,
+    'operation.actorName': '',
+    'operation.comment': '',
+    'operation.reconciliationRequired': false,
+  };
+}
+
+function decisionFields(operation, action, at) {
+  if (!operation || operation.action !== action) return {};
+  return {
+    'decision.action': action,
+    'decision.actorType': text(operation.actorType),
+    'decision.actorTelegramId': operation.actorTelegramId ?? null,
+    'decision.actorName': text(operation.actorName),
+    'decision.comment': text(operation.comment),
+    'decision.at': at,
+  };
+}
+
 function createApprovalService({
   client,
   Model = MedicalkaApproval(),
@@ -75,6 +100,24 @@ function createApprovalService({
   now = () => new Date(),
 } = {}) {
   let syncing = false;
+
+  async function settleFinalOperation(stored, at) {
+    const operation = stored?.operation || {};
+    if (!operation.action) return stored;
+    const filter = {
+      _id: stored._id,
+      status: stored.status,
+      'operation.action': operation.action,
+    };
+    if (operation.token) filter['operation.token'] = operation.token;
+    const updated = await Model.findOneAndUpdate(filter, {
+      $set: {
+        ...clearOperationFields(),
+        ...decisionFields(operation, stored.status, at),
+      },
+    }, { new: true }).lean();
+    return updated || Model.findById(stored._id).lean();
+  }
 
   async function announceIfNeeded(externalId) {
     const claimToken = randomUUID();
@@ -133,18 +176,20 @@ function createApprovalService({
     }
     if (FINAL_STATUSES.has(normalized.status)) {
       snapshot.requiresAction = false;
-      snapshot['operation.token'] = '';
-      snapshot['operation.action'] = '';
-      snapshot['operation.startedAt'] = null;
-      snapshot['operation.reconciliationRequired'] = false;
       snapshot['sync.lastError'] = '';
       snapshot['sync.lastSuccessAt'] = seenAt;
     }
-    const stored = await Model.findOneAndUpdate({ externalId: normalized.externalId }, {
+    let stored = await Model.findOneAndUpdate({ externalId: normalized.externalId }, {
       $set: snapshot,
       $setOnInsert: { firstSeenAt },
     }, { upsert: true, new: true, setDefaultsOnInsert: true }).lean();
-    if (announce && stored.status === 'pending' && stored.requiresAction) {
+    if (FINAL_STATUSES.has(stored.status) && stored.operation?.action) {
+      stored = await settleFinalOperation(stored, seenAt);
+    }
+    if (
+      announce && stored.status === 'pending'
+      && stored.requiresAction && stored.checkoutActive
+    ) {
       await announceIfNeeded(normalized.externalId);
     }
     const becameFinal = FINAL_STATUSES.has(stored.status)
@@ -159,6 +204,20 @@ function createApprovalService({
       try { await onDecision(stored); } catch (_) { /* source state is already durable */ }
     }
     return stored;
+  }
+
+  async function retryFinalizations() {
+    const rows = await Model.find({
+      'notification.messages': { $elemMatch: { finalizedAt: null } },
+      $or: [
+        { status: { $in: [...FINAL_STATUSES] } },
+        { requiresAction: false },
+        { checkoutActive: false },
+      ],
+    }).sort({ updatedAt: 1 }).limit(100).lean();
+    for (const row of rows) {
+      try { await onDecision(row); } catch (_) { /* durable message state retries next poll */ }
+    }
   }
 
   async function pharmacyIds() {
@@ -205,12 +264,10 @@ function createApprovalService({
         _id: row._id,
         status: 'pending',
         requiresAction: true,
+        'operation.token': { $in: ['', null] },
       }, {
         $set: {
           requiresAction: false,
-          'operation.token': '',
-          'operation.action': '',
-          'operation.startedAt': null,
           'sync.lastError': 'medicalka_approval_missing_from_pending',
         },
       }, { new: true }).lean();
@@ -230,6 +287,7 @@ function createApprovalService({
         ids, 'pending', (row) => upsertApproval(row, { announce: true })
       );
       await closeMissingPending(ids, page.seen);
+      await retryFinalizations();
       return { received: page.received };
     } finally {
       syncing = false;
@@ -248,6 +306,7 @@ function createApprovalService({
           ids, status, (row) => upsertApproval(row, { announce: false })
         )).received;
       }
+      await retryFinalizations();
       return { received };
     } finally {
       syncing = false;
@@ -265,6 +324,40 @@ function createApprovalService({
     return null;
   }
 
+  async function markDecisionUncertain(claimed, token) {
+    try {
+      await Model.updateOne({
+        _id: claimed._id,
+        'operation.token': token,
+      }, {
+        $set: {
+          'operation.token': '',
+          'operation.startedAt': null,
+          'operation.reconciliationRequired': true,
+          'sync.lastError': 'medicalka_action_uncertain',
+        },
+      });
+    } catch (_) { /* existing claim still prevents a blind retry */ }
+    throw approvalError('medicalka_reconciliation_required', 409);
+  }
+
+  async function recoverDecision(claimed, token, action) {
+    let remote = null;
+    try { remote = await remoteFinal(claimed.externalId, claimed.pharmacyId); } catch (_) {}
+    if (remote) {
+      try {
+        const reconciled = await upsertApproval(remote, { announce: false });
+        if (reconciled.status === action) {
+          return { approval: reconciled, idempotent: true, reconciled: true };
+        }
+        throw approvalError('medicalka_action_conflict', 409);
+      } catch (err) {
+        if (err?.code === 'medicalka_action_conflict') throw err;
+      }
+    }
+    return markDecisionUncertain(claimed, token);
+  }
+
   async function respond(externalId, {
     action,
     comment = '',
@@ -280,7 +373,11 @@ function createApprovalService({
 
     const current = await Model.findOne({ externalId }).lean();
     if (!current) throw approvalError('medicalka_approval_not_found', 404);
-    if (current.status === action) return { approval: current, idempotent: true };
+    if (current.status === action) {
+      const approval = current.operation?.action
+        ? await settleFinalOperation(current, now()) : current;
+      return { approval, idempotent: true };
+    }
     if (FINAL_STATUSES.has(current.status)) {
       throw approvalError('medicalka_action_conflict', 409);
     }
@@ -306,7 +403,6 @@ function createApprovalService({
         }, {
           $set: {
             'operation.token': '',
-            'operation.action': '',
             'operation.startedAt': null,
             'operation.reconciliationRequired': true,
             'sync.lastError': 'medicalka_action_uncertain',
@@ -334,6 +430,10 @@ function createApprovalService({
         'operation.token': token,
         'operation.action': action,
         'operation.startedAt': startedAt,
+        'operation.actorType': text(actor?.type),
+        'operation.actorTelegramId': actor?.telegramId ?? null,
+        'operation.actorName': text(actor?.name),
+        'operation.comment': cleanComment,
       },
     }, { new: true }).lean();
 
@@ -354,68 +454,48 @@ function createApprovalService({
         action,
         comment: cleanComment,
       });
-      const decidedAt = now();
-      const approval = await Model.findOneAndUpdate({
+    } catch (err) {
+      if (err?.retrySafe !== true) return recoverDecision(claimed, token, action);
+      await Model.updateOne({
+        _id: claimed._id,
+        'operation.token': token,
+      }, {
+        $set: {
+          ...clearOperationFields(),
+          'sync.lastError': text(err?.code) || 'medicalka_partner_error',
+        },
+      });
+      throw err;
+    }
+
+    const decidedAt = now();
+    let approval;
+    try {
+      approval = await Model.findOneAndUpdate({
         _id: claimed._id,
         'operation.token': token,
       }, {
         $set: {
           status: action,
           requiresAction: false,
-          'decision.action': action,
-          'decision.actorType': text(actor?.type),
-          'decision.actorTelegramId': actor?.telegramId ?? null,
-          'decision.actorName': text(actor?.name),
-          'decision.comment': cleanComment,
-          'decision.at': decidedAt,
-          'operation.token': '',
-          'operation.action': '',
-          'operation.startedAt': null,
-          'operation.reconciliationRequired': false,
+          ...decisionFields(claimed.operation, action, decidedAt),
+          ...clearOperationFields(),
           'sync.lastError': '',
           'sync.lastSuccessAt': decidedAt,
         },
       }, { new: true }).lean();
-      try { await onDecision(approval); } catch (_) { /* decision already committed upstream */ }
-      return { approval, idempotent: false };
-    } catch (err) {
-      if (err?.retrySafe === false) {
-        let remote = null;
-        try { remote = await remoteFinal(claimed.externalId, claimed.pharmacyId); } catch (_) {}
-        if (remote) {
-          const reconciled = await upsertApproval(remote, { announce: false });
-          if (reconciled.status === action) {
-            return { approval: reconciled, idempotent: true, reconciled: true };
-          }
-          throw approvalError('medicalka_action_conflict', 409);
-        }
-        await Model.updateOne({
-          _id: claimed._id,
-          'operation.token': token,
-        }, {
-          $set: {
-            'operation.token': '',
-            'operation.action': '',
-            'operation.startedAt': null,
-            'operation.reconciliationRequired': true,
-            'sync.lastError': 'medicalka_action_uncertain',
-          },
-        });
-        throw approvalError('medicalka_reconciliation_required', 409);
-      }
-      await Model.updateOne({
-        _id: claimed._id,
-        'operation.token': token,
-      }, {
-        $set: {
-          'operation.token': '',
-          'operation.action': '',
-          'operation.startedAt': null,
-          'sync.lastError': text(err?.code) || 'medicalka_partner_error',
-        },
-      });
-      throw err;
+    } catch (_) {
+      return recoverDecision(claimed, token, action);
     }
+    if (!approval) {
+      const latest = await Model.findOne({ externalId }).lean();
+      if (latest?.status === action) {
+        return { approval: latest, idempotent: true, reconciled: true };
+      }
+      return recoverDecision(claimed, token, action);
+    }
+    try { await onDecision(approval); } catch (_) { /* durable message state retries next poll */ }
+    return { approval, idempotent: false };
   }
 
   return { pollOnce, reconcileOnce, respond };

@@ -407,3 +407,139 @@ test('stale decision lease reconciles and blocks a blind resend', async () => {
   assert.equal(stored.operation.reconciliationRequired, true);
   assert.equal(writes, 0);
 });
+
+test('pending poll cannot clear a live decision claim', async () => {
+  await MedicalkaApproval().create({
+    ...normalizeApproval(pending(), new Date()),
+    operation: {
+      token: 'live-worker', action: 'accepted', startedAt: new Date(),
+      actorType: 'telegram', actorTelegramId: 77, actorName: 'Operator',
+      comment: 'Ready', reconciliationRequired: false,
+    },
+  });
+  const service = createApprovalService({
+    client: {
+      getPharmacies: async () => [{ id: 'pharmacy-a' }],
+      listApprovals: async () => ({ items: [], total: 0 }),
+    },
+  });
+
+  await service.pollOnce();
+
+  const stored = await MedicalkaApproval().findOne({ externalId: 'approval-a' }).lean();
+  assert.equal(stored.operation.token, 'live-worker');
+  assert.equal(stored.operation.actorTelegramId, 77);
+});
+
+test('history race promotes claimed actor audit and owner returns final row', async () => {
+  await MedicalkaApproval().create(normalizeApproval(pending(), new Date()));
+  const entered = deferred();
+  const release = deferred();
+  let writes = 0;
+  const client = {
+    getPharmacies: async () => [{ id: 'pharmacy-a' }],
+    respondToApproval: async () => {
+      writes += 1;
+      entered.resolve();
+      await release.promise;
+    },
+    listApprovals: async ({ status }) => ({
+      items: status === 'accepted'
+        ? [pending({ status: 'accepted', requires_action: false })] : [],
+      total: status === 'accepted' ? 1 : 0,
+    }),
+  };
+  const service = createApprovalService({ client });
+  const response = service.respond('approval-a', {
+    action: 'accepted', comment: 'Ready',
+    actor: { type: 'telegram', telegramId: 77, name: 'Operator' },
+  });
+  await entered.promise;
+  await service.reconcileOnce();
+  release.resolve();
+
+  const result = await response;
+  assert.equal(result.approval.status, 'accepted');
+  assert.equal(result.approval.decision.actorTelegramId, 77);
+  assert.equal(result.approval.decision.comment, 'Ready');
+  assert.equal(writes, 1);
+});
+
+test('remote success followed by local commit failure is reconciled without a second write', async () => {
+  await MedicalkaApproval().create(normalizeApproval(pending(), new Date()));
+  let writes = 0;
+  let applied = false;
+  let failCommit = true;
+  const Model = MedicalkaApproval();
+  const original = Model.findOneAndUpdate.bind(Model);
+  Model.findOneAndUpdate = (...args) => {
+    const [filter, update] = args;
+    if (failCommit && filter?.['operation.token'] && update?.$set?.['decision.action']) {
+      failCommit = false;
+      throw new Error('local commit failed');
+    }
+    return original(...args);
+  };
+  const service = createApprovalService({
+    client: {
+      respondToApproval: async () => { writes += 1; applied = true; },
+      listApprovals: async ({ status }) => ({
+        items: applied && status === 'accepted'
+          ? [pending({ status: 'accepted', requires_action: false })] : [],
+        total: applied && status === 'accepted' ? 1 : 0,
+      }),
+    },
+  });
+
+  try {
+    const first = await service.respond('approval-a', {
+      action: 'accepted', comment: 'Ready',
+      actor: { type: 'admin-panel', telegramId: 1, name: 'A' },
+    });
+    const second = await service.respond('approval-a', {
+      action: 'accepted', comment: 'Ready',
+      actor: { type: 'admin-panel', telegramId: 1, name: 'A' },
+    });
+
+    assert.equal(first.approval.status, 'accepted');
+    assert.equal(first.approval.decision.actorTelegramId, 1);
+    assert.equal(second.idempotent, true);
+    assert.equal(writes, 1);
+  } finally {
+    Model.findOneAndUpdate = original;
+  }
+});
+
+test('final Telegram cleanup is retried from durable message state', async () => {
+  const row = normalizeApproval(pending({
+    status: 'accepted', requires_action: false,
+  }), new Date());
+  await MedicalkaApproval().create({
+    ...row,
+    notification: {
+      notifiedAt: new Date(),
+      messages: [{ telegramId: 77, messageId: 900, sentAt: new Date() }],
+    },
+  });
+  let finalizations = 0;
+  const service = createApprovalService({
+    client: {
+      getPharmacies: async () => [{ id: 'pharmacy-a' }],
+      listApprovals: async ({ status }) => ({
+        items: status === 'accepted'
+          ? [pending({ status: 'accepted', requires_action: false })] : [],
+        total: status === 'accepted' ? 1 : 0,
+      }),
+    },
+    onDecision: async (approval) => {
+      finalizations += 1;
+      await MedicalkaApproval().updateOne({ _id: approval._id }, {
+        $set: { 'notification.messages.0.finalizedAt': new Date() },
+      });
+    },
+  });
+
+  await service.reconcileOnce();
+
+  assert.equal(finalizations, 1);
+});

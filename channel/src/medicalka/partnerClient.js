@@ -206,8 +206,10 @@ class MedicalkaPartnerClient {
     );
   }
 
-  listSubOrders(query) {
-    return this.request('/orders/sub-orders', { query });
+  listSubOrders({ pharmacyIds, ...query }) {
+    return this.request('/orders/sub-orders', {
+      query: { pharmacy_ids: pharmacyIds, ...query },
+    });
   }
 
   getSubOrder(id) {

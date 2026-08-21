@@ -240,7 +240,10 @@ function createMedicalkaNotifier({
 } = {}) {
   async function announce(input) {
     const approval = await ApprovalModel.findById(input._id).lean();
-    if (!approval || approval.status !== 'pending' || !approval.requiresAction) return null;
+    if (
+      !approval || approval.status !== 'pending'
+      || !approval.requiresAction || !approval.checkoutActive
+    ) return null;
 
     const admins = await AdminModel.find({
       role: 'admin', telegramId: { $gt: 0 }, botBlocked: { $ne: true },
@@ -284,15 +287,51 @@ function createMedicalkaNotifier({
   async function finalize(id) {
     const approval = await ApprovalModel.findById(id).lean();
     if (!approval) return null;
-    const messages = approval.notification?.messages || [];
-    await Promise.all(messages.map((message) => send('editMessageText', {
-      chat_id: message.telegramId,
-      message_id: message.messageId,
-      text: renderMedicalkaApproval(approval),
-      parse_mode: 'HTML',
-      disable_web_page_preview: true,
-      reply_markup: { inline_keyboard: [] },
-    })));
+    const messages = (approval.notification?.messages || [])
+      .filter((message) => !message.finalizedAt);
+    const results = await Promise.all(messages.map(async (message) => {
+      let edited = null;
+      try {
+        edited = await send('editMessageText', {
+          chat_id: message.telegramId,
+          message_id: message.messageId,
+          text: renderMedicalkaApproval(approval),
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: { inline_keyboard: [] },
+        });
+      } catch (_) { /* persist generic failure below */ }
+      const match = {
+        _id: approval._id,
+        'notification.messages': {
+          $elemMatch: {
+            telegramId: message.telegramId,
+            messageId: message.messageId,
+            finalizedAt: null,
+          },
+        },
+      };
+      if (!edited) {
+        await ApprovalModel.updateOne(match, {
+          $inc: { 'notification.messages.$.finalizeAttempts': 1 },
+          $set: {
+            'notification.messages.$.finalizeLastError': 'medicalka_telegram_edit_failed',
+          },
+        });
+        return false;
+      }
+      await ApprovalModel.updateOne(match, {
+        $inc: { 'notification.messages.$.finalizeAttempts': 1 },
+        $set: {
+          'notification.messages.$.finalizedAt': new Date(),
+          'notification.messages.$.finalizeLastError': '',
+        },
+      });
+      return true;
+    }));
+    if (results.some((result) => !result)) {
+      throw new Error('medicalka_telegram_finalize_partial_failure');
+    }
     return true;
   }
 

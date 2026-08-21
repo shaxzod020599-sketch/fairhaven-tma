@@ -4,8 +4,14 @@ const MedicalkaSubOrder = require('../models/MedicalkaSubOrder');
 const orders = require('../core/orders');
 
 const OPERATION_LEASE_MS = 60 * 1000;
-const REFUND_STATUSES = new Set(['cancelled', 'rejected', 'refunded', 'returned', 'failed']);
+const REFUND_STATUSES = new Set(['cancelled', 'rejected', 'refunded', 'failed', 'returned']);
 const ACTIVE_STATUSES = ['processing', 'shipped'];
+const POLL_STATUSES = [
+  'pending', 'waiting_payment', ...ACTIVE_STATUSES, 'delivered',
+  ...REFUND_STATUSES, 'completed',
+];
+const RECENT_FINAL_STATUSES = new Set(['delivered', 'completed']);
+const RECENT_FINAL_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 function text(value) {
   return value === null || value === undefined ? '' : String(value);
@@ -326,17 +332,45 @@ function createSubOrderService({
       let received = 0;
       const pageSize = 100;
       const seen = new Set();
-      for (const status of ACTIVE_STATUSES) {
+      const recentDate = new Date(now().getTime() - RECENT_FINAL_WINDOW_MS)
+        .toISOString().slice(0, 10);
+      for (const status of POLL_STATUSES) {
         let page = 1;
         let statusReceived = 0;
         while (true) {
           const response = await client.listSubOrders({
             pharmacyIds: ids, status, page, page_size: pageSize,
+            ...(RECENT_FINAL_STATUSES.has(status) ? { date_from: recentDate } : {}),
           });
           const rows = Array.isArray(response?.items) ? response.items : [];
+          const rowIds = rows.map((row) => text(row?.id)).filter(Boolean);
+          const existingRows = rowIds.length
+            ? await Model.find({ externalId: { $in: rowIds } })
+              .select({ externalId: 1, status: 1, sale: 1 }).lean()
+            : [];
+          const existingById = new Map(existingRows.map((row) => [row.externalId, row]));
           for (const row of rows) {
             const externalId = text(row?.id);
             if (externalId) seen.add(externalId);
+            const existing = existingById.get(externalId);
+            if (
+              existing?.status === status
+              && !['pending', 'waiting_payment', ...ACTIVE_STATUSES].includes(status)
+            ) {
+              if (
+                REFUND_STATUSES.has(status)
+                && existing.sale?.state === 'sold'
+                && !existing.sale?.reconciliationRequired
+              ) {
+                await Model.updateOne({ _id: existing._id }, {
+                  $set: {
+                    'sale.reconciliationRequired': true,
+                    'sale.lastError': 'medicalka_billz_refund_required',
+                  },
+                });
+              }
+              continue;
+            }
             await ingest(row);
           }
           received += rows.length;
@@ -414,17 +448,7 @@ function createSubOrderService({
     return updated;
   }
 
-  async function handleActionFailure(claimed, token, operation, err) {
-    if (err?.retrySafe !== false) {
-      await Model.updateOne({ _id: claimed._id, 'operation.token': token }, {
-        $set: {
-          ...clearOperationFields(),
-          'operation.lastError': text(err?.code) || 'medicalka_suborder_action_failed',
-        },
-      });
-      throw err;
-    }
-
+  async function reconcileActionOutcome(claimed, operation) {
     try {
       const refreshed = await refreshStored(claimed.externalId);
       if (operationApplied(refreshed, operation)) {
@@ -436,6 +460,19 @@ function createSubOrderService({
       claimed, operation, 'medicalka_suborder_action_uncertain'
     );
     throw subOrderError('medicalka_suborder_reconciliation_required', 409);
+  }
+
+  async function handleRemoteActionFailure(claimed, token, operation, err) {
+    if (err?.retrySafe === true) {
+      await Model.updateOne({ _id: claimed._id, 'operation.token': token }, {
+        $set: {
+          ...clearOperationFields(),
+          'operation.lastError': text(err?.code) || 'medicalka_suborder_action_failed',
+        },
+      });
+      throw err;
+    }
+    return reconcileActionOutcome(claimed, operation);
   }
 
   async function transition(externalId, status, actor = {}) {
@@ -466,9 +503,13 @@ function createSubOrderService({
     const { claimed, token } = await claimAction(stored, operation, actor);
     try {
       await client.updateSubOrderStatus(stored.externalId, status);
-      return completeAction(claimed, token, operation, actor, { status });
     } catch (err) {
-      return handleActionFailure(claimed, token, operation, err);
+      return handleRemoteActionFailure(claimed, token, operation, err);
+    }
+    try {
+      return await completeAction(claimed, token, operation, actor, { status });
+    } catch (_) {
+      return reconcileActionOutcome(claimed, operation);
     }
   }
 
@@ -486,14 +527,19 @@ function createSubOrderService({
     if (operationApplied(stored, operation)) return stored;
 
     const { claimed, token } = await claimAction(stored, operation, actor);
+    let result;
     try {
-      const result = await client.addFiscalLabel(stored.externalId, { itemId, label: value });
-      const items = Array.isArray(result?.items)
-        ? normalizeSubOrder({ ...stored.rawIn, items: result.items }, now()).items
-        : stored.items;
-      return completeAction(claimed, token, operation, actor, { items });
+      result = await client.addFiscalLabel(stored.externalId, { itemId, label: value });
     } catch (err) {
-      return handleActionFailure(claimed, token, operation, err);
+      return handleRemoteActionFailure(claimed, token, operation, err);
+    }
+    const items = Array.isArray(result?.items)
+      ? normalizeSubOrder({ ...stored.rawIn, items: result.items }, now()).items
+      : stored.items;
+    try {
+      return await completeAction(claimed, token, operation, actor, { items });
+    } catch (_) {
+      return reconcileActionOutcome(claimed, operation);
     }
   }
 
@@ -509,16 +555,20 @@ function createSubOrderService({
     const { claimed, token } = await claimAction(stored, operation, actor);
     try {
       await client.cancelSubOrder(stored.externalId, cleanReason);
-      const sold = claimed.sale?.state === 'sold';
-      return completeAction(claimed, token, operation, actor, {
+    } catch (err) {
+      return handleRemoteActionFailure(claimed, token, operation, err);
+    }
+    const sold = claimed.sale?.state === 'sold';
+    try {
+      return await completeAction(claimed, token, operation, actor, {
         status: 'cancelled',
         ...(sold ? {
           'sale.reconciliationRequired': true,
           'sale.lastError': 'medicalka_billz_refund_required',
         } : {}),
       });
-    } catch (err) {
-      return handleActionFailure(claimed, token, operation, err);
+    } catch (_) {
+      return reconcileActionOutcome(claimed, operation);
     }
   }
 

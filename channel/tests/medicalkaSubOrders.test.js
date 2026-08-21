@@ -265,7 +265,10 @@ test('poll loads full detail and never trusts partial marking data from list row
 
   await service.pollOnce();
 
-  assert.deepEqual(receivedStatuses, ['processing', 'shipped']);
+  assert.deepEqual(receivedStatuses, [
+    'pending', 'waiting_payment', 'processing', 'shipped', 'delivered',
+    'cancelled', 'rejected', 'refunded', 'failed', 'returned', 'completed',
+  ]);
   const stored = await MedicalkaSubOrder().findOne({ externalId: 'sub-a' }).lean();
   assert.equal(stored.items[0].markingRequired, true);
   await assert.rejects(
@@ -295,6 +298,36 @@ test('external cancellation of a sold sub-order is reconciled from polling', asy
   assert.equal(stored.status, 'cancelled');
   assert.equal(stored.sale.reconciliationRequired, true);
   assert.equal(stored.sale.lastError, 'medicalka_billz_refund_required');
+});
+
+test('late refund of a locally delivered sale is discovered from status polling', async () => {
+  await MedicalkaSubOrder().create({
+    ...normalizeSubOrder(paid({ status: 'delivered' }), new Date()),
+    sale: { state: 'sold', channelOrderId: 'internal-a' },
+  });
+  const returned = paid({ status: 'returned' });
+  const seenStatuses = [];
+  const service = createSubOrderService({
+    client: {
+      getPharmacies: async () => [{ id: 'pharmacy-a' }],
+      listSubOrders: async ({ status }) => {
+        seenStatuses.push(status);
+        return {
+          items: status === 'returned' ? [{ id: 'sub-a', status: 'returned' }] : [],
+          total: status === 'returned' ? 1 : 0,
+        };
+      },
+      getSubOrder: async () => returned,
+    },
+    ProductModel: products(), orderService: {},
+  });
+
+  await service.pollOnce();
+
+  const stored = await MedicalkaSubOrder().findOne({ externalId: 'sub-a' }).lean();
+  assert.ok(seenStatuses.includes('returned'));
+  assert.equal(stored.status, 'returned');
+  assert.equal(stored.sale.reconciliationRequired, true);
 });
 
 test('ambiguous fiscal label write reconciles detail and never sends twice', async () => {
@@ -380,4 +413,49 @@ test('unresolved ambiguous lifecycle write is fenced from a blind retry', async 
   assert.equal(writes, 1);
   const stored = await MedicalkaSubOrder().findOne({ externalId: 'sub-a' }).lean();
   assert.equal(stored.operation.reconciliationRequired, true);
+});
+
+test('remote label success followed by local commit failure is fenced from retry', async () => {
+  const label = '0104780012960092217Jh';
+  const remote = paid({
+    delivery_type: 'delivery',
+    items: [{
+      id: 'line-a', product_external_id: 501, quantity: 1,
+      is_marking_required: true, labels: [],
+    }],
+  });
+  await MedicalkaSubOrder().create(normalizeSubOrder(remote, new Date()));
+  let writes = 0;
+  let failCommit = true;
+  const Model = MedicalkaSubOrder();
+  const original = Model.findOneAndUpdate.bind(Model);
+  Model.findOneAndUpdate = (...args) => {
+    const [filter, update] = args;
+    if (failCommit && filter?.['operation.token'] && update?.$set?.['lastAction.kind']) {
+      failCommit = false;
+      throw new Error('local commit failed');
+    }
+    return original(...args);
+  };
+  const service = createSubOrderService({
+    client: {
+      getSubOrder: async () => remote,
+      addFiscalLabel: async () => { writes += 1; return {}; },
+    },
+    ProductModel: products(), orderService: {},
+  });
+
+  try {
+    await assert.rejects(
+      () => service.addLabel('sub-a', { itemId: 'line-a', label }),
+      (err) => err.code === 'medicalka_suborder_reconciliation_required'
+    );
+    await assert.rejects(
+      () => service.addLabel('sub-a', { itemId: 'line-a', label }),
+      (err) => err.code === 'medicalka_suborder_reconciliation_required'
+    );
+    assert.equal(writes, 1);
+  } finally {
+    Model.findOneAndUpdate = original;
+  }
 });

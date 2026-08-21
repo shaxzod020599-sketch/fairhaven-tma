@@ -84,6 +84,24 @@ test('signs in once and sends the documented approval query', async () => {
   assert.equal(query.get('offset'), '0');
 });
 
+test('sends repeated pharmacy_ids for the documented sub-order query', async () => {
+  handler = (request, res) => {
+    if (request.url === '/api/v1/signin') {
+      return json(res, 200, { access_token: 'access-1', refresh_token: 'refresh-1' });
+    }
+    return json(res, 200, { items: [], total: 0, page: 1, page_size: 100 });
+  };
+
+  await client().listSubOrders({
+    pharmacyIds: ['pharmacy-a', 'pharmacy-b'], status: 'returned', page: 1, page_size: 100,
+  });
+
+  const query = new URL(calls[1].url, baseUrl).searchParams;
+  assert.deepEqual(query.getAll('pharmacy_ids'), ['pharmacy-a', 'pharmacy-b']);
+  assert.equal(query.has('pharmacyIds'), false);
+  assert.equal(query.get('status'), 'returned');
+});
+
 test('rotates refresh token once when concurrent requests receive 401', async () => {
   let refreshes = 0;
   handler = (request, res) => {

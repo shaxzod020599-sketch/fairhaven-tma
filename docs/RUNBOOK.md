@@ -309,6 +309,8 @@ Birinchi yoqish faqat approval oqimi:
    boradi. Kanal yoki alohida Telegram allow-list ishlatilmaydi.
 4. Panel va Telegram bir xil atomik accept/reject servisidan foydalanadi.
 5. Medicalka kabinetida qilingan qaror history sync orqali lokal holatga tushadi.
+6. Telegram tugmalarini yopish holati har bir xabar bo'yicha saqlanadi; vaqtinchalik
+   edit xatosi keyingi poll'da qayta uriniladi.
 
 Approve Billz ostatokni kamaytirmaydi. Faqat Medicalka `paid` sub-order berganda
 sotuv chegarasi boshlanadi. Shu sabab birinchi deployda
@@ -340,6 +342,9 @@ Delivery order: markirovka talab qilingan barcha qatorga fiscal label kiritiladi
 keyin faqat `shipped`; `delivered` Medicalka/kuryer tomoni. Pickup order:
 `shipped`, `delivered`, `completed` ruxsat. Sotilgan order bekor qilinsa Billz
 qaytarish avtomatik qilinmaydi — manual reconciliation talab qilinadi.
+Sub-order poll contractdagi takroriy `pharmacy_ids` parametrini ishlatadi,
+barcha statuslarni kuzatadi va kechikkan `returned/refunded` holatini ham
+reconciliation navbatiga chiqaradi.
 
 **Orqaga qaytarish:** avval `MEDICALKA_SUBORDERS_ENABLED=false`, keyin eski
 senderga qaytilsa `MEDICALKA_LEGACY_ORDERS_ENABLED=true`; kerak bo'lsa
