@@ -306,6 +306,9 @@
 .fh-medicalka-comment { display: grid; gap: 7px; }
 .fh-medicalka-comment > span { font-size: 13px; font-weight: 800; }
 .fh-medicalka-comment > small { justify-self: end; color: var(--fh-muted); }
+.fh-medicalka-reconcile { padding: 11px 13px; border: 1px solid var(--fh-danger); border-radius: var(--fh-radius-sm); background: var(--fh-danger-wash); color: var(--fh-danger); font-size: 13px; font-weight: 700; }
+.fh-medicalka-marking { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0 11px; }
+.fh-medicalka-suborders { display: grid; gap: 14px; }
 
 @media (max-width: 760px) {
   .fh-medicalka-queue__head, .fh-medicalka-card > header, .fh-medicalka-card > footer { align-items: stretch; flex-direction: column; }

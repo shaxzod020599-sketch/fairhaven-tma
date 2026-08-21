@@ -84,6 +84,11 @@ router.post('/orders/:id/revert', admin.revertOrder);
 router.get('/medicalka/approvals', medicalka.list);
 router.get('/medicalka/approvals/:id', medicalka.detail);
 router.post('/medicalka/approvals/:id/respond', medicalka.respond);
+router.get('/medicalka/sub-orders', medicalka.listSubOrders);
+router.get('/medicalka/sub-orders/:id', medicalka.detailSubOrder);
+router.post('/medicalka/sub-orders/:id/status', medicalka.transitionSubOrder);
+router.post('/medicalka/sub-orders/:id/cancel', medicalka.cancelSubOrder);
+router.post('/medicalka/sub-orders/:id/labels', medicalka.addSubOrderLabel);
 
 // Products
 router.get('/products', admin.listProducts);

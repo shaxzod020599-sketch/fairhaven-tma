@@ -8,6 +8,7 @@ import { DataState } from '../../ui/DataState';
 import { Dialog } from '../../ui/Dialog';
 import { Pagination } from '../../ui/Pagination';
 import { useToast } from '../../ui/ToastProvider';
+import { MedicalkaSubOrders } from './MedicalkaSubOrders';
 
 const LIMIT = 30;
 const BUCKETS = [
@@ -46,6 +47,7 @@ export function MedicalkaQueue({ api = medicalkaApi }) {
   const [confirm, setConfirm] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [view, setView] = useState('approvals');
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -63,10 +65,11 @@ export function MedicalkaQueue({ api = medicalkaApi }) {
   }, [api, bucket, page]);
 
   useEffect(() => {
+    if (view !== 'approvals') return undefined;
     load();
     const poll = window.setInterval(() => load({ silent: true }), 10_000);
     return () => window.clearInterval(poll);
-  }, [load]);
+  }, [load, view]);
 
   useEffect(() => {
     const tick = window.setInterval(() => setNow(Date.now()), 1000);
@@ -94,6 +97,25 @@ export function MedicalkaQueue({ api = medicalkaApi }) {
     }
   };
 
+  if (view === 'suborders') {
+    return (
+      <section className="fh-medicalka-queue">
+        <div className="fh-medicalka-queue__head">
+          <div>
+            <p className="fh-eyebrow">MEDICALKA · PAID SUB-ORDERS</p>
+            <h2>Medicalka paid orderlari</h2>
+            <p>Faqat paid sub-order Billz sotuv oqimiga kiradi. Mapping noaniq bo‘lsa avtomatik sotuv bloklanadi.</p>
+          </div>
+        </div>
+        <div className="fh-order-sources">
+          <button type="button" onClick={() => setView('approvals')}>Zayavkalar</button>
+          <button type="button" className="is-active" onClick={() => setView('suborders')}>Paid orderlar</button>
+        </div>
+        <MedicalkaSubOrders api={api} />
+      </section>
+    );
+  }
+
   return (
     <section className="fh-medicalka-queue">
       <div className="fh-medicalka-queue__head">
@@ -103,6 +125,11 @@ export function MedicalkaQueue({ api = medicalkaApi }) {
           <p>Tasdiqlash ostatkani kamaytirmaydi. Sotuv faqat paid sub-order kelganda yoziladi.</p>
         </div>
         <Button onClick={() => load()} disabled={loading}>Yangilash</Button>
+      </div>
+
+      <div className="fh-order-sources">
+        <button type="button" className="is-active" onClick={() => setView('approvals')}>Zayavkalar</button>
+        <button type="button" onClick={() => setView('suborders')}>Paid orderlar</button>
       </div>
 
       <div className="fh-toolbar">
@@ -166,12 +193,13 @@ export function MedicalkaQueue({ api = medicalkaApi }) {
                   <div>
                     <small>{remaining(approval.deadlineAt, now)} · axborot uchun</small>
                     {approval.decision?.actorName && <span>Qaror: {approval.decision.actorName}</span>}
+                    {approval.reconciliationRequired && <span>Medicalka javobi noaniq — tarix sync kutilmoqda</span>}
                   </div>
                   <strong>{formatMoney(approval.subtotal)}</strong>
                   {approval.status === 'pending' && approval.requiresAction && (
                     <div className="fh-order-actions">
-                      <Button size="sm" variant="primary" onClick={() => setConfirm({ approval, action: 'accepted', comment: '' })}>Tasdiqlash</Button>
-                      <Button size="sm" variant="danger" onClick={() => setConfirm({ approval, action: 'rejected', comment: '' })}>Rad etish</Button>
+                      <Button disabled={approval.inProgress || approval.reconciliationRequired} size="sm" variant="primary" onClick={() => setConfirm({ approval, action: 'accepted', comment: '' })}>Tasdiqlash</Button>
+                      <Button disabled={approval.inProgress || approval.reconciliationRequired} size="sm" variant="danger" onClick={() => setConfirm({ approval, action: 'rejected', comment: '' })}>Rad etish</Button>
                     </div>
                   )}
                 </footer>

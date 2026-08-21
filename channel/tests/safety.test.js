@@ -24,12 +24,15 @@ test('the writable-collection list stays limited to this service', () => {
   // the new collection is genuinely owned here and not by the bot backend.
   assert.deepEqual(
     [...db.OWNED_COLLECTIONS].sort(),
-    ['billzproducts', 'billztokens', 'channelcounters', 'channelkeys', 'channelorders', 'synclogs']
+    [
+      'billzproducts', 'billztokens', 'channelcounters', 'channelkeys', 'channelorders',
+      'medicalkaapprovals', 'medicalkasuborders', 'synclogs',
+    ]
   );
 });
 
 test('bot-owned collections are readable but never writable', () => {
-  assert.deepEqual([...db.READABLE_COLLECTIONS].sort(), ['products', 'settings']);
+  assert.deepEqual([...db.READABLE_COLLECTIONS].sort(), ['products', 'settings', 'users']);
 
   // Read access must not become a back door to writing.
   for (const collection of db.READABLE_COLLECTIONS) {

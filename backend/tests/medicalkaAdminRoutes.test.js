@@ -122,3 +122,31 @@ test('respond maps conflict and unavailable hub without leaking private errors',
     hub.requestInternal = original;
   }
 });
+
+test('sub-order lifecycle actions use authenticated actor and official internal routes', async () => {
+  const original = hub.requestInternal;
+  const calls = [];
+  hub.requestInternal = async (...args) => {
+    calls.push(args);
+    return { ok: true, body: { data: { id: '507f1f77bcf86cd799439011', status: 'shipped' } } };
+  };
+  const req = {
+    params: { id: '507f1f77bcf86cd799439011' },
+    admin: { telegramId: 77, firstName: 'Ali', lastName: 'Admin' },
+  };
+  try {
+    await controller.transitionSubOrder({ ...req, body: { status: 'shipped' } }, response());
+    await controller.addSubOrderLabel({
+      ...req, body: { itemId: 'line-a', label: 'x'.repeat(21) },
+    }, response());
+    await controller.cancelSubOrder({
+      ...req, body: { reason: 'Out of stock' },
+    }, response());
+
+    assert.deepEqual(calls.map((row) => row[1].at(-1)), ['status', 'labels', 'cancel']);
+    assert.ok(calls.every((row) => row[2].body.actor.telegramId === 77));
+    assert.equal(calls[1][2].body.label, 'x'.repeat(21));
+  } finally {
+    hub.requestInternal = original;
+  }
+});

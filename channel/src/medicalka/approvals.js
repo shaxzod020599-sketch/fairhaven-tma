@@ -1,7 +1,8 @@
 const { randomUUID } = require('node:crypto');
 const MedicalkaApproval = require('../models/MedicalkaApproval');
 
-const FINAL_STATUSES = new Set(['accepted', 'rejected']);
+const FINAL_STATUSES = new Set(['accepted', 'rejected', 'cancelled']);
+const HISTORY_STATUSES = ['accepted', 'rejected', 'cancelled'];
 const NOTIFICATION_LEASE_MS = 60 * 1000;
 
 function text(value) {
@@ -72,7 +73,7 @@ function createApprovalService({
   onDecision = async () => {},
   now = () => new Date(),
 } = {}) {
-  let polling = false;
+  let syncing = false;
 
   async function announceIfNeeded(externalId) {
     const claimToken = randomUUID();
@@ -120,44 +121,109 @@ function createApprovalService({
     }
   }
 
-  async function upsertApproval(raw) {
+  async function upsertApproval(raw, { announce = true } = {}) {
     const seenAt = now();
     const normalized = normalizeApproval(raw, seenAt);
+    const previous = await Model.findOne({ externalId: normalized.externalId }).lean();
     const { firstSeenAt, ...snapshot } = normalized;
-    await Model.findOneAndUpdate({ externalId: normalized.externalId }, {
+    if (previous && FINAL_STATUSES.has(previous.status) && normalized.status === 'pending') {
+      delete snapshot.status;
+      delete snapshot.requiresAction;
+    }
+    if (FINAL_STATUSES.has(normalized.status)) {
+      snapshot.requiresAction = false;
+      snapshot['operation.token'] = '';
+      snapshot['operation.action'] = '';
+      snapshot['operation.startedAt'] = null;
+      snapshot['operation.reconciliationRequired'] = false;
+      snapshot['sync.lastError'] = '';
+      snapshot['sync.lastSuccessAt'] = seenAt;
+    }
+    const stored = await Model.findOneAndUpdate({ externalId: normalized.externalId }, {
       $set: snapshot,
       $setOnInsert: { firstSeenAt },
-    }, { upsert: true, new: true, setDefaultsOnInsert: true });
-    await announceIfNeeded(normalized.externalId);
+    }, { upsert: true, new: true, setDefaultsOnInsert: true }).lean();
+    if (announce && stored.status === 'pending' && stored.requiresAction) {
+      await announceIfNeeded(normalized.externalId);
+    }
+    if (
+      FINAL_STATUSES.has(stored.status)
+      && (!previous || !FINAL_STATUSES.has(previous.status))
+    ) {
+      try { await onDecision(stored); } catch (_) { /* source state is already durable */ }
+    }
+    return stored;
+  }
+
+  async function pharmacyIds() {
+    const pharmacies = await client.getPharmacies();
+    const rows = Array.isArray(pharmacies)
+      ? pharmacies
+      : (Array.isArray(pharmacies?.items) ? pharmacies.items : []);
+    return rows
+      .map((row) => text(row?.id)).filter(Boolean);
+  }
+
+  async function eachApproval(ids, status, visit) {
+    let offset = 0;
+    let received = 0;
+    const limit = 100;
+    while (true) {
+      const page = await client.listApprovals({
+        pharmacyIds: ids, status, limit, offset,
+      });
+      const rows = Array.isArray(page?.items) ? page.items : [];
+      for (const row of rows) await visit(row);
+      received += rows.length;
+      offset += rows.length;
+      const total = number(page?.total);
+      if (!rows.length || rows.length < limit || (total && offset >= total)) break;
+    }
+    return received;
   }
 
   async function pollOnce() {
-    if (polling) return { skipped: true };
-    polling = true;
+    if (syncing) return { skipped: true };
+    syncing = true;
     try {
-      const pharmacies = await client.getPharmacies();
-      const pharmacyIds = (Array.isArray(pharmacies?.items) ? pharmacies.items : [])
-        .map((row) => text(row?.id)).filter(Boolean);
-      if (!pharmacyIds.length) return { received: 0 };
+      const ids = await pharmacyIds();
+      if (!ids.length) return { received: 0 };
+      const received = await eachApproval(
+        ids, 'pending', (row) => upsertApproval(row, { announce: true })
+      );
+      return { received };
+    } finally {
+      syncing = false;
+    }
+  }
 
-      let offset = 0;
+  async function reconcileOnce() {
+    if (syncing) return { skipped: true };
+    syncing = true;
+    try {
+      const ids = await pharmacyIds();
+      if (!ids.length) return { received: 0 };
       let received = 0;
-      const limit = 100;
-      while (true) {
-        const page = await client.listApprovals({
-          pharmacyIds, status: 'pending', limit, offset,
-        });
-        const rows = Array.isArray(page?.items) ? page.items : [];
-        for (const row of rows) await upsertApproval(row);
-        received += rows.length;
-        offset += rows.length;
-        const total = number(page?.total);
-        if (!rows.length || rows.length < limit || (total && offset >= total)) break;
+      for (const status of HISTORY_STATUSES) {
+        received += await eachApproval(
+          ids, status, (row) => upsertApproval(row, { announce: false })
+        );
       }
       return { received };
     } finally {
-      polling = false;
+      syncing = false;
     }
+  }
+
+  async function remoteFinal(externalId, pharmacyId) {
+    for (const status of HISTORY_STATUSES) {
+      let found = null;
+      await eachApproval([pharmacyId], status, async (row) => {
+        if (text(row?.id) === externalId) found = row;
+      });
+      if (found) return found;
+    }
+    return null;
   }
 
   async function respond(externalId, {
@@ -182,6 +248,9 @@ function createApprovalService({
     if (current.operation?.token) {
       throw approvalError('medicalka_action_in_progress', 409);
     }
+    if (current.operation?.reconciliationRequired) {
+      throw approvalError('medicalka_reconciliation_required', 409);
+    }
 
     const token = randomUUID();
     const startedAt = now();
@@ -189,6 +258,7 @@ function createApprovalService({
       _id: current._id,
       status: current.status,
       'operation.token': '',
+      'operation.reconciliationRequired': { $ne: true },
     }, {
       $set: {
         'operation.token': token,
@@ -228,6 +298,7 @@ function createApprovalService({
           'operation.token': '',
           'operation.action': '',
           'operation.startedAt': null,
+          'operation.reconciliationRequired': false,
           'sync.lastError': '',
           'sync.lastSuccessAt': decidedAt,
         },
@@ -235,6 +306,30 @@ function createApprovalService({
       try { await onDecision(approval); } catch (_) { /* decision already committed upstream */ }
       return { approval, idempotent: false };
     } catch (err) {
+      if (err?.retrySafe === false) {
+        let remote = null;
+        try { remote = await remoteFinal(claimed.externalId, claimed.pharmacyId); } catch (_) {}
+        if (remote) {
+          const reconciled = await upsertApproval(remote, { announce: false });
+          if (reconciled.status === action) {
+            return { approval: reconciled, idempotent: true, reconciled: true };
+          }
+          throw approvalError('medicalka_action_conflict', 409);
+        }
+        await Model.updateOne({
+          _id: claimed._id,
+          'operation.token': token,
+        }, {
+          $set: {
+            'operation.token': '',
+            'operation.action': '',
+            'operation.startedAt': null,
+            'operation.reconciliationRequired': true,
+            'sync.lastError': 'medicalka_action_uncertain',
+          },
+        });
+        throw approvalError('medicalka_reconciliation_required', 409);
+      }
       await Model.updateOne({
         _id: claimed._id,
         'operation.token': token,
@@ -250,7 +345,7 @@ function createApprovalService({
     }
   }
 
-  return { pollOnce, respond };
+  return { pollOnce, reconcileOnce, respond };
 }
 
 module.exports = { createApprovalService, normalizeApproval };

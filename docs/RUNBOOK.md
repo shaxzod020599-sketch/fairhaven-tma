@@ -278,7 +278,67 @@ so'rovda kalitga qarab tekshiriladi.
 
 ---
 
-## 8. Uzum Tezkor
+## 8. Medicalka inbound approval va paid orderlar
+
+Bu oqim Medicalka bizning `/medicalka/v1` endpointlarimizni o'qishidan alohida.
+Eski katalog tokeni va order secreti o'zgarmaydi: yangi kalit chiqarmang,
+rotatsiya yoki revoke qilmang.
+
+Medicalka bergan partner login/parol `channel/.env` ga secret store orqali
+uzatiladi. Qiymatni repo yoki logga yozmang:
+
+```
+MEDICALKA_INBOUND_ENABLED=true
+MEDICALKA_PARTNER_BASE_URL=https://api.medicalka.com/api/v1
+MEDICALKA_PARTNER_USERNAME=<Medicalka bergan login>
+MEDICALKA_PARTNER_PASSWORD=<Medicalka bergan parol>
+MEDICALKA_APPROVAL_POLL_MS=5000
+MEDICALKA_HISTORY_POLL_MS=60000
+MEDICALKA_SUBORDERS_ENABLED=false
+```
+
+`MEDICALKA_USERNAME` va `MEDICALKA_PASSWORD` eski secret-store nomlari ham
+alias sifatida ishlaydi. Yangi nomlar berilsa ular ustun.
+
+Birinchi yoqish faqat approval oqimi:
+
+1. channel-hub Medicalka'dan pending zayavkalarni o'qiydi.
+2. Zayavka mavjud `Orders` panelidagi `Medicalka` bo'limida ko'rinadi.
+3. Har bir hozirgi `users.role=admin` foydalanuvchiga botdan shaxsiy xabar
+   boradi. Kanal yoki alohida Telegram allow-list ishlatilmaydi.
+4. Panel va Telegram bir xil atomik accept/reject servisidan foydalanadi.
+5. Medicalka kabinetida qilingan qaror history sync orqali lokal holatga tushadi.
+
+Approve Billz ostatokni kamaytirmaydi. Faqat Medicalka `paid` sub-order berganda
+sotuv chegarasi boshlanadi. Shu sabab birinchi deployda
+`MEDICALKA_SUBORDERS_ENABLED=false` qoladi.
+
+Approval oqimini read/decision darajasida tekshirgandan keyin paid orderlarni
+alohida yoqing:
+
+```
+BILLZ_WRITE_ENABLED=true
+MEDICALKA_SUBORDERS_ENABLED=true
+```
+
+Server `MEDICALKA_SUBORDERS_ENABLED=true` holatini inbound yoki Billz write
+o'chiq bo'lsa rad etadi. Paid orderdagi har bir product ID aniq Medicalka
+mappingga ega bo'lishi shart; nom bo'yicha taxmin qilinmaydi. Mapping yo'q yoki
+Billz natijasi noaniq bo'lsa avtomatik retry/spisanie to'xtaydi va panelda
+`reconciliation required` chiqadi.
+
+Delivery order: markirovka talab qilingan barcha qatorga fiscal label kiritiladi,
+keyin faqat `shipped`; `delivered` Medicalka/kuryer tomoni. Pickup order:
+`shipped`, `delivered`, `completed` ruxsat. Sotilgan order bekor qilinsa Billz
+qaytarish avtomatik qilinmaydi — manual reconciliation talab qilinadi.
+
+**Orqaga qaytarish:** avval `MEDICALKA_SUBORDERS_ENABLED=false`, kerak bo'lsa
+keyin `MEDICALKA_INBOUND_ENABLED=false`, so'ng `pm2 restart channel-hub`.
+Bu eski `/medicalka/v1` token/secretni o'chirmaydi.
+
+---
+
+## 9. Uzum Tezkor
 
 Uzum menejeri bilan kelishilgandan keyin. `channel/.env`:
 
@@ -303,7 +363,7 @@ taqiqlaydi.
 
 ---
 
-## 9. Bot zakazlari → Billz
+## 10. Bot zakazlari → Billz
 
 Eng oxirida yoqiladi, 1–8 barqaror ishlagandan keyin.
 
@@ -343,6 +403,8 @@ Hammasi **o'chirilgan holatda** keladi. Har birini alohida, tekshirib yoqing.
 | Bayroq | Nima qiladi | Yoqishdan oldin |
 |---|---|---|
 | `BILLZ_WRITE_ENABLED` | Billz'ga yozishga ruxsat | Oqim jonli tekshirilgan (01.08.2026) — Medicalka ulangach yoqiladi |
+| `MEDICALKA_INBOUND_ENABLED` | Medicalka approvallarni o'qish va accept/reject | Partner login/parol, admin roli, panel tekshirilsin |
+| `MEDICALKA_SUBORDERS_ENABLED` | Paid Medicalka sub-orderni Billz sotuviga o'tkazish | Inbound va Billz write yoqilgan, product mapping to'liq |
 | `BILLZ_BRIDGE_ENABLED` | Bot zakazlari Billz'ga | `BILLZ_BRIDGE_SINCE` qo'yilsin |
 | `UZUM_ENABLED` | Uzum endpointlari | Store ID, signing key, rasm domeni |
 | `STOCK_RECONCILE_ENABLED` | Ostatokni avtomatik boshqarish | `reconcile-stock.js` hisoboti ko'rilsin |

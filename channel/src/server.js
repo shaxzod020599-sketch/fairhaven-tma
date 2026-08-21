@@ -107,6 +107,12 @@ function checkUzumConfig() {
 }
 
 function checkMedicalkaPartnerConfig() {
+  if (config.medicalkaPartner.subOrdersEnabled && !config.medicalkaPartner.enabled) {
+    throw new Error('MEDICALKA_SUBORDERS_ENABLED requires MEDICALKA_INBOUND_ENABLED');
+  }
+  if (config.medicalkaPartner.subOrdersEnabled && !config.billzWriteEnabled) {
+    throw new Error('MEDICALKA_SUBORDERS_ENABLED requires BILLZ_WRITE_ENABLED');
+  }
   if (!config.medicalkaPartner.enabled) return;
   const missing = [];
   if (!config.medicalkaPartner.username) missing.push('MEDICALKA_PARTNER_USERNAME');

@@ -146,6 +146,7 @@ router.get('/analytics/billz/capability', async (req, res) => {
 // ── Medicalka pharmacy approvals ───────────────────────────────────────────
 
 const MEDICALKA_BUCKETS = new Set(['active', 'history', 'all']);
+const MEDICALKA_SUBORDER_BUCKETS = new Set(['active', 'history', 'reconciliation', 'all']);
 const MEDICALKA_ACTORS = new Set(['admin-panel', 'telegram']);
 
 function medicalkaError(res, err) {
@@ -159,32 +160,40 @@ function medicalkaError(res, err) {
   return res.status(502).json({ error: safeCode });
 }
 
-function readMedicalkaQuery(query) {
+function readMedicalkaQuery(query, buckets = MEDICALKA_BUCKETS) {
   const bucket = String(query?.bucket || 'active');
   const page = Number(query?.page || 1);
   const limit = Math.min(100, Number(query?.limit || 30));
   const search = String(query?.search || '').trim().slice(0, 120);
   if (
-    !MEDICALKA_BUCKETS.has(bucket)
+    !buckets.has(bucket)
     || !Number.isSafeInteger(page) || page < 1
     || !Number.isSafeInteger(limit) || limit < 1
   ) return null;
   return { bucket, page, limit, search };
 }
 
-function readMedicalkaDecision(body) {
-  const action = String(body?.action || '');
-  const comment = String(body?.comment || '').trim();
+function readMedicalkaActor(body) {
   const type = String(body?.actor?.type || '');
   const telegramId = Number(body?.actor?.telegramId);
   const name = String(body?.actor?.name || '').trim().slice(0, 120);
   if (
-    !['accepted', 'rejected'].includes(action)
-    || !MEDICALKA_ACTORS.has(type)
+    !MEDICALKA_ACTORS.has(type)
     || !Number.isSafeInteger(telegramId) || telegramId <= 0
+  ) return null;
+  return { type, telegramId, name };
+}
+
+function readMedicalkaDecision(body) {
+  const action = String(body?.action || '');
+  const comment = String(body?.comment || '').trim();
+  const actor = readMedicalkaActor(body);
+  if (
+    !['accepted', 'rejected'].includes(action)
+    || !actor
     || comment.length > 500
   ) return null;
-  return { action, comment, actor: { type, telegramId, name } };
+  return { action, comment, actor };
 }
 
 router.get('/medicalka/approvals', async (req, res) => {
@@ -212,6 +221,68 @@ router.post('/medicalka/approvals/:id/respond', async (req, res) => {
   if (!decision) return res.status(422).json({ error: 'medicalka_invalid_decision' });
   try {
     return res.json(await medicalka.respondToApproval(req.params.id, decision));
+  } catch (err) {
+    return medicalkaError(res, err);
+  }
+});
+
+router.get('/medicalka/sub-orders', async (req, res) => {
+  const query = readMedicalkaQuery(req.query, MEDICALKA_SUBORDER_BUCKETS);
+  if (!query) return res.status(422).json({ error: 'medicalka_invalid_query' });
+  try {
+    return res.json(await medicalka.listSubOrders(query));
+  } catch (err) {
+    return medicalkaError(res, err);
+  }
+});
+
+router.get('/medicalka/sub-orders/:id', async (req, res) => {
+  try {
+    const row = await medicalka.getSubOrder(req.params.id);
+    if (!row) return res.status(404).json({ error: 'medicalka_suborder_not_found' });
+    return res.json({ data: row });
+  } catch (err) {
+    return medicalkaError(res, err);
+  }
+});
+
+router.post('/medicalka/sub-orders/:id/status', async (req, res) => {
+  const status = String(req.body?.status || '');
+  const actor = readMedicalkaActor(req.body);
+  if (!actor || !['shipped', 'delivered', 'completed'].includes(status)) {
+    return res.status(422).json({ error: 'medicalka_invalid_suborder_status' });
+  }
+  try {
+    return res.json({ data: await medicalka.transitionSubOrder(req.params.id, status, actor) });
+  } catch (err) {
+    return medicalkaError(res, err);
+  }
+});
+
+router.post('/medicalka/sub-orders/:id/cancel', async (req, res) => {
+  const reason = String(req.body?.reason || '').trim();
+  const actor = readMedicalkaActor(req.body);
+  if (!actor || !reason || reason.length > 500) {
+    return res.status(422).json({ error: 'medicalka_invalid_cancel_reason' });
+  }
+  try {
+    return res.json({ data: await medicalka.cancelSubOrder(req.params.id, reason, actor) });
+  } catch (err) {
+    return medicalkaError(res, err);
+  }
+});
+
+router.post('/medicalka/sub-orders/:id/labels', async (req, res) => {
+  const label = String(req.body?.label || '');
+  const itemId = String(req.body?.itemId || '').trim();
+  const actor = readMedicalkaActor(req.body);
+  if (!actor || !itemId || label.length < 21 || label.length > 500) {
+    return res.status(422).json({ error: 'medicalka_invalid_label' });
+  }
+  try {
+    return res.json({
+      data: await medicalka.addSubOrderLabel(req.params.id, { itemId, label, actor }),
+    });
   } catch (err) {
     return medicalkaError(res, err);
   }

@@ -1,9 +1,11 @@
 const config = require('../config');
 const logger = require('../logger');
 const MedicalkaApproval = require('../models/MedicalkaApproval');
+const MedicalkaSubOrder = require('../models/MedicalkaSubOrder');
 const notify = require('../notify/telegram');
 const { MedicalkaPartnerClient } = require('./partnerClient');
 const { createApprovalService } = require('./approvals');
+const { createSubOrderService } = require('./subOrders');
 
 const client = new MedicalkaPartnerClient({
   baseUrl: config.medicalkaPartner.baseUrl,
@@ -26,12 +28,17 @@ const service = createApprovalService({
     }
   },
 });
+const subOrders = createSubOrderService({ client });
 
 let pollTimer = null;
+let historyTimer = null;
+let subOrderTimer = null;
 const health = {
   lastPollAt: null,
   lastSuccessAt: null,
   lastError: '',
+  subOrdersLastSuccessAt: null,
+  subOrdersLastError: '',
 };
 
 function cleanApproval(row) {
@@ -57,11 +64,37 @@ function cleanApproval(row) {
     subtotal: row.subtotal,
     decision: row.decision,
     inProgress: Boolean(row.operation?.token),
+    reconciliationRequired: Boolean(row.operation?.reconciliationRequired),
     sync: {
       lastError: row.sync?.lastError || '',
       lastSuccessAt: row.sync?.lastSuccessAt || null,
     },
     firstSeenAt: row.firstSeenAt,
+    lastSeenAt: row.lastSeenAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function cleanSubOrder(row) {
+  if (!row) return null;
+  return {
+    id: String(row._id),
+    externalId: row.externalId,
+    orderId: row.orderId,
+    orderNumber: row.orderNumber,
+    subOrderNumber: row.subOrderNumber,
+    pharmacyName: row.pharmacyName,
+    paymentStatus: row.paymentStatus,
+    paymentMethod: row.paymentMethod,
+    status: row.status,
+    deliveryType: row.deliveryType,
+    subtotal: row.subtotal,
+    sourceCreatedAt: row.sourceCreatedAt,
+    customer: row.customer,
+    items: row.items,
+    mapping: row.mapping,
+    sale: row.sale,
+    lastAction: row.lastAction,
     lastSeenAt: row.lastSeenAt,
     updatedAt: row.updatedAt,
   };
@@ -114,6 +147,90 @@ async function getApproval(id) {
   return cleanApproval(await MedicalkaApproval().findById(id).lean());
 }
 
+async function listSubOrders({ bucket = 'active', search = '', page = 1, limit = 30 } = {}) {
+  const query = {};
+  if (bucket === 'active') {
+    query.paymentStatus = 'paid';
+    query.status = { $in: ['processing', 'shipped'] };
+  } else if (bucket === 'history') {
+    query.status = { $nin: ['processing', 'shipped'] };
+  } else if (bucket === 'reconciliation') {
+    query.$or = [
+      { 'mapping.state': 'reconciliation_required' },
+      { 'sale.reconciliationRequired': true },
+    ];
+  }
+  if (search) {
+    const match = new RegExp(escapeRegex(search), 'i');
+    const searchRows = [
+      { externalId: match }, { orderNumber: match }, { subOrderNumber: match },
+      { 'customer.firstName': match }, { 'customer.lastName': match }, { 'customer.phone': match },
+    ];
+    query.$and = [...(query.$and || []), { $or: searchRows }];
+  }
+  const [rows, total] = await Promise.all([
+    MedicalkaSubOrder().find(query).sort({ sourceCreatedAt: -1 })
+      .skip((page - 1) * limit).limit(limit).lean(),
+    MedicalkaSubOrder().countDocuments(query),
+  ]);
+  return {
+    data: rows.map(cleanSubOrder),
+    meta: { page, limit, total },
+    sync: {
+      enabled: config.medicalkaPartner.enabled && config.medicalkaPartner.subOrdersEnabled,
+      lastSuccessAt: health.subOrdersLastSuccessAt,
+      lastError: health.subOrdersLastError,
+      stale: Boolean(health.subOrdersLastError),
+    },
+  };
+}
+
+async function getSubOrder(id) {
+  if (!/^[a-f\d]{24}$/i.test(String(id || ''))) return null;
+  return cleanSubOrder(await MedicalkaSubOrder().findById(id).lean());
+}
+
+function subOrdersEnabled() {
+  return config.medicalkaPartner.enabled && config.medicalkaPartner.subOrdersEnabled;
+}
+
+function requireSubOrders() {
+  if (subOrdersEnabled()) return;
+  const err = new Error('medicalka_suborders_disabled');
+  err.code = 'medicalka_suborders_disabled';
+  err.status = 503;
+  throw err;
+}
+
+async function storedSubOrder(id) {
+  const stored = /^[a-f\d]{24}$/i.test(String(id || ''))
+    ? await MedicalkaSubOrder().findById(id).select({ externalId: 1 }).lean()
+    : null;
+  if (stored) return stored;
+  const err = new Error('medicalka_suborder_not_found');
+  err.code = 'medicalka_suborder_not_found';
+  err.status = 404;
+  throw err;
+}
+
+async function transitionSubOrder(id, status, actor) {
+  requireSubOrders();
+  const stored = await storedSubOrder(id);
+  return cleanSubOrder(await subOrders.transition(stored.externalId, status, actor));
+}
+
+async function cancelSubOrder(id, reason, actor) {
+  requireSubOrders();
+  const stored = await storedSubOrder(id);
+  return cleanSubOrder(await subOrders.cancel(stored.externalId, reason, actor));
+}
+
+async function addSubOrderLabel(id, body) {
+  requireSubOrders();
+  const stored = await storedSubOrder(id);
+  return cleanSubOrder(await subOrders.addLabel(stored.externalId, body));
+}
+
 async function respondToApproval(id, decision) {
   if (!config.medicalkaPartner.enabled) {
     const err = new Error('medicalka_inbound_disabled');
@@ -148,25 +265,75 @@ async function pollOnce() {
   }
 }
 
+async function reconcileOnce() {
+  try {
+    return await service.reconcileOnce();
+  } catch (err) {
+    const code = String(err?.code || 'medicalka_history_sync_failed');
+    logger.warn('medicalka approval history sync failed', { code });
+    throw err;
+  }
+}
+
+async function pollSubOrdersOnce() {
+  try {
+    const result = await subOrders.pollOnce();
+    if (!result.skipped) {
+      health.subOrdersLastSuccessAt = new Date();
+      health.subOrdersLastError = '';
+    }
+    return result;
+  } catch (err) {
+    health.subOrdersLastError = String(err?.code || 'medicalka_suborders_poll_failed');
+    logger.warn('medicalka sub-orders poll failed', { code: health.subOrdersLastError });
+    throw err;
+  }
+}
+
 function start() {
   if (!config.medicalkaPartner.enabled || pollTimer) return pollTimer;
   pollOnce().catch(() => {});
   pollTimer = setInterval(() => pollOnce().catch(() => {}), config.medicalkaPartner.pollMs);
   pollTimer.unref?.();
+  historyTimer = setInterval(
+    () => reconcileOnce().catch(() => {}),
+    config.medicalkaPartner.historyPollMs
+  );
+  historyTimer.unref?.();
+  if (config.medicalkaPartner.subOrdersEnabled) {
+    pollSubOrdersOnce().catch(() => {});
+    subOrderTimer = setInterval(
+      () => pollSubOrdersOnce().catch(() => {}),
+      config.medicalkaPartner.subOrderPollMs
+    );
+    subOrderTimer.unref?.();
+  }
   return pollTimer;
 }
 
 function stop() {
   if (pollTimer) clearInterval(pollTimer);
+  if (historyTimer) clearInterval(historyTimer);
+  if (subOrderTimer) clearInterval(subOrderTimer);
   pollTimer = null;
+  historyTimer = null;
+  subOrderTimer = null;
 }
 
 module.exports = {
   cleanApproval,
+  cleanSubOrder,
+  addSubOrderLabel,
+  cancelSubOrder,
   getApproval,
+  getSubOrder,
   listApprovals,
+  listSubOrders,
   pollOnce,
+  pollSubOrdersOnce,
+  reconcileOnce,
   respondToApproval,
   start,
   stop,
+  transitionSubOrder,
 };

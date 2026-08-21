@@ -49,6 +49,7 @@ const approvalSchema = new mongoose.Schema({
     token: { type: String, default: '' },
     action: { type: String, default: '' },
     startedAt: { type: Date, default: null },
+    reconciliationRequired: { type: Boolean, default: false },
   },
   notification: {
     claimToken: { type: String, default: '' },

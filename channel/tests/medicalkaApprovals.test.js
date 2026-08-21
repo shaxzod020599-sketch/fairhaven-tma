@@ -119,6 +119,15 @@ test('poll upserts duplicates and announces a new approval once across restarts'
   assert.deepEqual(announced, ['approval-a']);
 });
 
+test('poll accepts documented bare pharmacy array response', async () => {
+  const client = {
+    getPharmacies: async () => [{ id: 'pharmacy-a' }],
+    listApprovals: async () => ({ items: [], total: 0 }),
+  };
+  const result = await createApprovalService({ client }).pollOnce();
+  assert.deepEqual(result, { received: 0 });
+});
+
 test('overlapping polls never issue a second Medicalka request', async () => {
   const entered = deferred();
   const release = deferred();
@@ -230,4 +239,95 @@ test('notification edit failure cannot turn a completed Medicalka action into fa
 
   assert.equal(result.approval.status, 'accepted');
   assert.equal(edits, 1);
+});
+
+test('stale pending poll never regresses a locally accepted approval', async () => {
+  await MedicalkaApproval().create(normalizeApproval(pending({
+    status: 'accepted', requires_action: false,
+  }), new Date()));
+  const service = createApprovalService({
+    client: {
+      getPharmacies: async () => ({ items: [{ id: 'pharmacy-a' }] }),
+      listApprovals: async () => ({ items: [pending()], total: 1 }),
+    },
+  });
+
+  await service.pollOnce();
+
+  const stored = await MedicalkaApproval().findOne({ externalId: 'approval-a' }).lean();
+  assert.equal(stored.status, 'accepted');
+  assert.equal(stored.requiresAction, false);
+});
+
+test('history reconciliation closes a pending approval changed in Medicalka panel', async () => {
+  await MedicalkaApproval().create(normalizeApproval(pending(), new Date()));
+  let finalized = 0;
+  const client = {
+    getPharmacies: async () => ({ items: [{ id: 'pharmacy-a' }] }),
+    listApprovals: async ({ status }) => ({
+      items: status === 'accepted'
+        ? [pending({ status: 'accepted', requires_action: false })] : [],
+      total: status === 'accepted' ? 1 : 0,
+    }),
+  };
+  const service = createApprovalService({ client, onDecision: async () => { finalized += 1; } });
+
+  await service.reconcileOnce();
+
+  const stored = await MedicalkaApproval().findOne({ externalId: 'approval-a' }).lean();
+  assert.equal(stored.status, 'accepted');
+  assert.equal(stored.requiresAction, false);
+  assert.equal(finalized, 1);
+});
+
+test('ambiguous write reconciles remote final state before returning', async () => {
+  await MedicalkaApproval().create(normalizeApproval(pending(), new Date()));
+  const ambiguous = Object.assign(new Error('private timeout'), {
+    code: 'medicalka_timeout', retrySafe: false,
+  });
+  const client = {
+    respondToApproval: async () => { throw ambiguous; },
+    listApprovals: async ({ status }) => ({
+      items: status === 'accepted'
+        ? [pending({ status: 'accepted', requires_action: false })] : [],
+      total: status === 'accepted' ? 1 : 0,
+    }),
+  };
+  const service = createApprovalService({ client });
+
+  const result = await service.respond('approval-a', {
+    action: 'accepted', actor: { type: 'admin-panel', telegramId: 1, name: 'A' },
+  });
+
+  assert.equal(result.approval.status, 'accepted');
+  assert.equal(result.reconciled, true);
+});
+
+test('unresolved ambiguous write blocks blind retry until history reconciles it', async () => {
+  await MedicalkaApproval().create(normalizeApproval(pending(), new Date()));
+  const ambiguous = Object.assign(new Error('private timeout'), {
+    code: 'medicalka_timeout', retrySafe: false,
+  });
+  let writes = 0;
+  const client = {
+    respondToApproval: async () => { writes += 1; throw ambiguous; },
+    listApprovals: async () => ({ items: [], total: 0 }),
+  };
+  const service = createApprovalService({ client });
+
+  await assert.rejects(
+    () => service.respond('approval-a', {
+      action: 'accepted', actor: { type: 'admin-panel', telegramId: 1, name: 'A' },
+    }),
+    (err) => err.code === 'medicalka_reconciliation_required' && err.status === 409
+  );
+  await assert.rejects(
+    () => service.respond('approval-a', {
+      action: 'accepted', actor: { type: 'admin-panel', telegramId: 1, name: 'A' },
+    }),
+    (err) => err.code === 'medicalka_reconciliation_required' && err.status === 409
+  );
+  const stored = await MedicalkaApproval().findOne({ externalId: 'approval-a' }).lean();
+  assert.equal(stored.operation.reconciliationRequired, true);
+  assert.equal(writes, 1);
 });
