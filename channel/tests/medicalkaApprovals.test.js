@@ -215,3 +215,19 @@ test('transient failure releases the decision lease for a safe retry', async () 
   assert.equal(stored.sync.lastError, 'medicalka_timeout');
   assert.doesNotMatch(JSON.stringify(stored), /upstream private text/);
 });
+
+test('notification edit failure cannot turn a completed Medicalka action into failure', async () => {
+  await MedicalkaApproval().create(normalizeApproval(pending(), new Date()));
+  let edits = 0;
+  const service = createApprovalService({
+    client: { respondToApproval: async () => ({}) },
+    onDecision: async () => { edits += 1; throw new Error('telegram unavailable'); },
+  });
+
+  const result = await service.respond('approval-a', {
+    action: 'accepted', actor: { type: 'admin-panel', telegramId: 1, name: 'A' },
+  });
+
+  assert.equal(result.approval.status, 'accepted');
+  assert.equal(edits, 1);
+});

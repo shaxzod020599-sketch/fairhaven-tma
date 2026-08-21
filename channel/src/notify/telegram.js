@@ -1,6 +1,8 @@
 const config = require('../config');
 const logger = require('../logger');
 const ChannelOrder = require('../models/ChannelOrder');
+const AdminView = require('../models/AdminView');
+const MedicalkaApproval = require('../models/MedicalkaApproval');
 
 /**
  * Order cards in the Telegram operations channel.
@@ -54,6 +56,10 @@ function isConfigured() {
   return Boolean(
     config.telegram.enabled && config.telegram.botToken && config.telegram.ordersChannelId
   );
+}
+
+function isMedicalkaConfigured() {
+  return Boolean(config.telegram.enabled && config.telegram.botToken);
 }
 
 /**
@@ -186,4 +192,138 @@ async function announceOrder(channel, externalId) {
   return sent.message_id;
 }
 
-module.exports = { announceOrder, escapeHtml, isConfigured, renderCard };
+function approvalStatus(status) {
+  return {
+    pending: '⏳ Tasdiq kutilmoqda / Ожидает решения',
+    accepted: '✅ Tasdiqlandi / Подтверждено',
+    rejected: '❌ Rad etildi / Отклонено',
+    cancelled: '🚫 Bekor qilindi / Отменено',
+  }[status] || escapeHtml(status);
+}
+
+function renderMedicalkaApproval(approval) {
+  const customerName = [approval.customer?.firstName, approval.customer?.lastName]
+    .filter(Boolean).join(' ');
+  const lines = (approval.items || []).map((item) => (
+    `• ${escapeHtml(item.name || item.externalName || item.productId)}`
+      + ` × ${Number(item.quantity) || 0} — ${formatUZS(item.lineTotal)}`
+  ));
+  const actor = approval.decision?.actorName
+    ? `\n👮 ${escapeHtml(approval.decision.actorName)}` : '';
+  return [
+    `🏥 <b>Medicalka zayavka / Заявка</b> · <code>${escapeHtml(approval.checkoutId)}</code>`,
+    '',
+    lines.join('\n'),
+    '',
+    `💰 <b>${formatUZS(approval.subtotal)}</b>`,
+    customerName ? `👤 ${escapeHtml(customerName)}` : '',
+    approval.customer?.phone ? `📞 ${escapeHtml(approval.customer.phone)}` : '',
+    approval.deliveryType ? `🚚 ${escapeHtml(approval.deliveryType)}` : '',
+    '',
+    `${approvalStatus(approval.status)}${actor}`,
+  ].filter((part) => part !== '').join('\n');
+}
+
+function approvalKeyboard(id) {
+  return {
+    inline_keyboard: [
+      [{ text: '✅ Tasdiqlash / Принять', callback_data: `ma:a:${id}` }],
+      [{ text: '❌ Rad etish / Отклонить', callback_data: `ma:r:${id}` }],
+    ],
+  };
+}
+
+function createMedicalkaNotifier({
+  send = call,
+  AdminModel = AdminView(),
+  ApprovalModel = MedicalkaApproval(),
+} = {}) {
+  async function announce(input) {
+    const approval = await ApprovalModel.findById(input._id).lean();
+    if (!approval || approval.status !== 'pending' || !approval.requiresAction) return null;
+
+    const admins = await AdminModel.find({
+      role: 'admin', telegramId: { $gt: 0 }, botBlocked: { $ne: true },
+    }).sort({ telegramId: 1 }).lean();
+    const delivered = new Set(
+      (approval.notification?.messages || []).map((row) => Number(row.telegramId))
+    );
+    let failed = false;
+
+    for (const admin of admins) {
+      if (delivered.has(Number(admin.telegramId))) continue;
+      const sent = await send('sendMessage', {
+        chat_id: admin.telegramId,
+        text: renderMedicalkaApproval(approval),
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+        reply_markup: approvalKeyboard(String(approval._id)),
+      });
+      if (!sent?.message_id) {
+        failed = true;
+        continue;
+      }
+      await ApprovalModel.updateOne({
+        _id: approval._id,
+        'notification.messages.telegramId': { $ne: admin.telegramId },
+      }, {
+        $push: {
+          'notification.messages': {
+            telegramId: admin.telegramId,
+            messageId: sent.message_id,
+            sentAt: new Date(),
+          },
+        },
+      });
+    }
+
+    if (failed) throw new Error('medicalka_telegram_partial_failure');
+    return true;
+  }
+
+  async function finalize(id) {
+    const approval = await ApprovalModel.findById(id).lean();
+    if (!approval) return null;
+    const messages = approval.notification?.messages || [];
+    await Promise.all(messages.map((message) => send('editMessageText', {
+      chat_id: message.telegramId,
+      message_id: message.messageId,
+      text: renderMedicalkaApproval(approval),
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup: { inline_keyboard: [] },
+    })));
+    return true;
+  }
+
+  return { announce, finalize };
+}
+
+let medicalkaNotifier = null;
+
+function getMedicalkaNotifier() {
+  if (!medicalkaNotifier) medicalkaNotifier = createMedicalkaNotifier();
+  return medicalkaNotifier;
+}
+
+async function announceMedicalkaApproval(approval) {
+  if (!isMedicalkaConfigured()) return null;
+  return getMedicalkaNotifier().announce(approval);
+}
+
+async function finalizeMedicalkaApproval(id) {
+  if (!isMedicalkaConfigured()) return null;
+  return getMedicalkaNotifier().finalize(id);
+}
+
+module.exports = {
+  announceMedicalkaApproval,
+  announceOrder,
+  createMedicalkaNotifier,
+  escapeHtml,
+  finalizeMedicalkaApproval,
+  isConfigured,
+  isMedicalkaConfigured,
+  renderCard,
+  renderMedicalkaApproval,
+};

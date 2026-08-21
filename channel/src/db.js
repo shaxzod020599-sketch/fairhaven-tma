@@ -41,6 +41,7 @@ const OWNED_COLLECTIONS = new Set([
 const READABLE_COLLECTIONS = new Set([
   'products',
   'settings',
+  'users',
 ]);
 
 // Everything a feed legitimately needs, and nothing that mutates.

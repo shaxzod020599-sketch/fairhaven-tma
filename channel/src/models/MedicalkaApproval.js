@@ -54,6 +54,14 @@ const approvalSchema = new mongoose.Schema({
     claimToken: { type: String, default: '' },
     claimedAt: { type: Date, default: null },
     notifiedAt: { type: Date, default: null },
+    messages: {
+      type: [{
+        telegramId: { type: Number, required: true },
+        messageId: { type: Number, required: true },
+        sentAt: { type: Date, required: true },
+      }],
+      default: [],
+    },
   },
   sync: {
     lastError: { type: String, default: '' },

@@ -17,6 +17,7 @@ const {
 } = require('../utils/telegramRetry');
 const { mapWithConcurrency } = require('../utils/pool');
 const adminLogin = require('../services/adminLogin');
+const { createMedicalkaTelegramAction } = require('../services/medicalkaTelegramAction');
 
 /**
  * Broadcast pacing.
@@ -580,6 +581,71 @@ async function broadcastProductToUsers(bot, product, frontendUrl, kind = 'new') 
   return { sent, failed, blocked: unreachable.length, total: recipients.length };
 }
 
+function medicalkaKeyboard(id) {
+  return {
+    inline_keyboard: [
+      [{ text: '✅ Tasdiqlash / Принять', callback_data: `ma:a:${id}` }],
+      [{ text: '❌ Rad etish / Отклонить', callback_data: `ma:r:${id}` }],
+    ],
+  };
+}
+
+function registerMedicalkaActions(bot, {
+  actionService = createMedicalkaTelegramAction(),
+} = {}) {
+  bot.action(/^ma:(a|r|rc|x):([a-fA-F0-9]{24})$/, async (ctx) => {
+    const [, command, approvalId] = ctx.match;
+    try {
+      if (!await actionService.canAct(ctx.from?.id)) {
+        return ctx.answerCbQuery('⛔ Ruxsat yo‘q / Доступ запрещён');
+      }
+
+      if (command === 'r') {
+        await ctx.editMessageReplyMarkup({
+          inline_keyboard: [
+            [{ text: '❌ Ha, rad etish / Да, отклонить', callback_data: `ma:rc:${approvalId}` }],
+            [{ text: '↩️ Bekor qilish / Отмена', callback_data: `ma:x:${approvalId}` }],
+          ],
+        });
+        return ctx.answerCbQuery('Rad etishni tasdiqlang / Подтвердите');
+      }
+
+      if (command === 'x') {
+        await ctx.editMessageReplyMarkup(medicalkaKeyboard(approvalId));
+        return ctx.answerCbQuery('Bekor qilindi / Отменено');
+      }
+
+      const action = command === 'a' ? 'accepted' : 'rejected';
+      const result = await actionService.respond({
+        telegramId: ctx.from.id,
+        approvalId,
+        action,
+      });
+      if (result.ok) {
+        try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (_) {}
+        return ctx.answerCbQuery(
+          action === 'accepted' ? '✅ Tasdiqlandi / Подтверждено' : '❌ Rad etildi / Отклонено'
+        );
+      }
+
+      if (result.approval && ['accepted', 'rejected', 'cancelled'].includes(result.approval.status)) {
+        try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (_) {}
+        const label = result.approval.status === 'accepted'
+          ? '✅ Allaqachon tasdiqlangan / Уже принято'
+          : '❌ Allaqachon yopilgan / Уже закрыто';
+        return ctx.answerCbQuery(label);
+      }
+      if (result.code === 'forbidden') {
+        return ctx.answerCbQuery('⛔ Ruxsat yo‘q / Доступ запрещён');
+      }
+      return ctx.answerCbQuery('⚠️ Medicalka javob bermadi / Нет ответа');
+    } catch (err) {
+      console.error('medicalka callback:', errorLabel(err));
+      return ctx.answerCbQuery('Ошибка');
+    }
+  });
+}
+
 function createBot(token, frontendUrl) {
   if (!token) throw new Error('TELEGRAM_BOT_TOKEN is required');
   const bot = new Telegraf(token);
@@ -593,6 +659,7 @@ function createBot(token, frontendUrl) {
   bot.broadcastNewProduct = (product) => broadcastProductToUsers(bot, product, FRONTEND, 'new');
   bot.broadcastBackInStock = (product) => broadcastProductToUsers(bot, product, FRONTEND, 'restock');
   bot.broadcastDiscount = (product) => broadcastProductToUsers(bot, product, FRONTEND, 'discount');
+  registerMedicalkaActions(bot);
 
   // Attach a helper for customer-initiated cancellations — edits the existing
   // channel card to strip the approve/reject buttons and append a verdict.
@@ -957,4 +1024,5 @@ module.exports = {
   createBot,
   ORDERS_CHANNEL_ID,
   forwardOrderToChannel,
+  registerMedicalkaActions,
 };

@@ -20,6 +20,11 @@ const service = createApprovalService({
       await notify.announceMedicalkaApproval(approval);
     }
   },
+  onDecision: async (approval) => {
+    if (typeof notify.finalizeMedicalkaApproval === 'function') {
+      await notify.finalizeMedicalkaApproval(String(approval._id));
+    }
+  },
 });
 
 let pollTimer = null;

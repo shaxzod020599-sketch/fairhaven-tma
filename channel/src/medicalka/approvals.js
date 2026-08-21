@@ -69,6 +69,7 @@ function createApprovalService({
   client,
   Model = MedicalkaApproval(),
   onNew = async () => {},
+  onDecision = async () => {},
   now = () => new Date(),
 } = {}) {
   let polling = false;
@@ -231,6 +232,7 @@ function createApprovalService({
           'sync.lastSuccessAt': decidedAt,
         },
       }, { new: true }).lean();
+      try { await onDecision(approval); } catch (_) { /* decision already committed upstream */ }
       return { approval, idempotent: false };
     } catch (err) {
       await Model.updateOne({
