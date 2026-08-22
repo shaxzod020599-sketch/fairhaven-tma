@@ -9,7 +9,7 @@ const S = require('../src/adapters/medicalka/serializers');
 const catalog = require('../src/core/catalog');
 const { generateKey, describeKey, hashKey } = require('../src/models/ChannelKey');
 
-/** Medicalka's pharmacy-import contract uses JSON numbers for stock and price. */
+/** Medicalka's live v1 importer follows the original client guide wire types. */
 
 test('legacy decimal helper serialises fixed 2-decimal strings', () => {
   assert.equal(S.decimalString(749000), '749000.00');
@@ -26,7 +26,7 @@ test('timestamps have seconds precision and no timezone suffix', () => {
   assert.match(S.timestamp('not a date'), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
 });
 
-test('a product carries Medicalka import fields with numeric price', () => {
+test('a v1 product keeps price as a fixed-decimal string', () => {
   const payload = S.product({
     card: { name: 'Fairhaven OvaBoost, №120', brand: 'FAIRHAVEN HEALTH', barcode: '895749000851', updatedAt: new Date('2026-07-24T11:34:43Z') },
     mirror: { name: 'x', brandName: 'y', barcode: 'z' },
@@ -36,11 +36,10 @@ test('a product carries Medicalka import fields with numeric price', () => {
 
   assert.equal(typeof payload.id, 'number');
   assert.equal(Number.isInteger(payload.id), true);
-  assert.equal(typeof payload.price, 'number');
-  assert.equal(payload.price, 600000);
-  assert.equal(payload.ikpu_code, '');
+  assert.equal(typeof payload.price, 'string');
+  assert.equal(payload.price, '600000.00');
   assert.deepEqual(Object.keys(payload).sort(),
-    ['barcode', 'id', 'ikpu', 'ikpu_code', 'images', 'manufacturer', 'name', 'package_code',
+    ['barcode', 'id', 'ikpu', 'images', 'manufacturer', 'name', 'package_code',
      'price', 'updated_at']);
 });
 
@@ -59,7 +58,6 @@ test('a product carries its own fiscal codes when it has them', () => {
   });
 
   assert.equal(payload.ikpu, '02106999028000001');
-  assert.equal(payload.ikpu_code, '02106999028000001');
   assert.equal(payload.package_code, '1490780');
 });
 
@@ -105,7 +103,7 @@ test('a default the operator cleared stays cleared on the wire', () => {
   assert.equal(payload.package_code, '');
 });
 
-test('an inventory row exactly matches Medicalka stock-import types', () => {
+test('a v1 inventory row keeps quantity and price as fixed-decimal strings', () => {
   const row = S.inventoryRow({
     pharmacyId: 1,
     medicalkaId: 7,
@@ -117,9 +115,8 @@ test('an inventory row exactly matches Medicalka stock-import types', () => {
   assert.deepEqual(row, {
     pharmacy_id: 1,
     product_id: 7,
-    quantity: 20,
-    base_price: 650000,
-    price: 600000,
+    quantity: '20.00',
+    price: '600000.00',
     is_available: true,
   });
 });

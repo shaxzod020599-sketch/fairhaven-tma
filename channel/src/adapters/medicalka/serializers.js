@@ -1,10 +1,9 @@
 /**
  * Wire format for Medicalka.
  *
- * Medicalka's pharmacy-import contract uses integer ids and quantities plus
- * JSON numbers for prices. The older client guide used decimal strings, so the
- * legacy helper remains exported for order-response compatibility tests, while
- * catalogue and stock rows follow the importer Medicalka runs in production.
+ * Medicalka's live /v1 importer follows the original client guide: `id` and
+ * `total` are integers, while `price` and `quantity` are fixed-decimal strings.
+ * Changing these wire types in place makes its hourly sync discard the feed.
  */
 
 const config = require('../../config');
@@ -14,11 +13,6 @@ const media = require('../../media/images');
 function decimalString(value) {
   const n = Number(value);
   return (Number.isFinite(n) ? n : 0).toFixed(2);
-}
-
-function number(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
 }
 
 /** "2026-07-08T19:45:54" — ISO 8601, seconds precision, no timezone suffix. */
@@ -49,7 +43,6 @@ function taxCodes(card, defaults = {}) {
   const ikpu = String(card.mxikCode || defaults.mxikCode || '').trim();
   return {
     ikpu,
-    ikpu_code: ikpu,
     package_code: String(card.packageCode || defaults.packageCode || '').trim(),
   };
 }
@@ -99,7 +92,7 @@ function product({ card, mirror, medicalkaId, price, defaults }) {
     barcode: card.barcode || mirror.barcode || '',
     ...taxCodes(card, defaults),
     images: media.imagesFor(card),
-    price: number(price),
+    price: decimalString(price),
     updated_at: timestamp(card.updatedAt || mirror.syncedAt),
   };
 }
@@ -110,14 +103,12 @@ function product({ card, mirror, medicalkaId, price, defaults }) {
  * `is_available` is always true because the endpoint only ever lists products
  * that are in stock — their guide states absent products simply are not there.
  */
-function inventoryRow({ medicalkaId, quantity, basePrice, price, pharmacyId }) {
-  const salePrice = number(price);
+function inventoryRow({ medicalkaId, quantity, price, pharmacyId }) {
   return {
     pharmacy_id: pharmacyId,
     product_id: medicalkaId,
-    quantity: Math.max(0, Math.floor(number(quantity))),
-    base_price: number(basePrice) || salePrice,
-    price: salePrice,
+    quantity: decimalString(quantity),
+    price: decimalString(price),
     is_available: true,
   };
 }

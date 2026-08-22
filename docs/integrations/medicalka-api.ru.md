@@ -1,7 +1,7 @@
 # Fairhaven Health — API для Medicalka
 
 Документ для интеграционной команды Medicalka.
-Версия 2 · 22.08.2026
+Версия 1.1 · 22.08.2026
 
 ---
 
@@ -61,13 +61,12 @@ curl "https://api.fairhaven.uz/medicalka/v1/pharmacies?token=<ТОКЕН>"
 
 ## Типы полей
 
-Совпадают с вашим руководством, повторяем во избежание разночтений:
+Совпадают с действующим руководством клиента `/medicalka/v1`:
 
 | Поле | Тип |
 |---|---|
 | `id`, `product_id`, `pharmacy_id`, `total` | целое число |
-| `quantity` | целое число |
-| `base_price`, `price` | число |
+| `quantity`, `price` | строка с двумя знаками после точки |
 | `updated_at`, `created_at` | строка `YYYY-MM-DDTHH:MM:SS` (UTC, без смещения) |
 
 ---
@@ -88,7 +87,6 @@ GET /products?skip=0&limit=50
       "name": "Fairhaven OvaBoost, №120",
       "manufacturer": "FAIRHAVEN HEALTH",
       "barcode": "895749000851",
-      "ikpu_code": "02106999028000000",
       "ikpu": "02106999028000000",
       "package_code": "1490779",
       "images": [
@@ -97,7 +95,7 @@ GET /products?skip=0&limit=50
           "hash": "9c1185a5c5e9fc54612808977ee8f548b2258d31"
         }
       ],
-      "price": 600000,
+      "price": "600000.00",
       "updated_at": "2026-07-24T11:34:43"
     }
   ],
@@ -117,11 +115,10 @@ GET /products/{id}
 
 | Поле | Что это | Тип |
 |------|---------|-----|
-| `ikpu_code` | ИКПУ (MXIK) — код товара в справочнике налоговой | строка из цифр |
-| `ikpu` | Совместимый alias `ikpu_code` для старого импорта | строка из цифр |
+| `ikpu` | ИКПУ (MXIK) — код товара в справочнике налоговой | строка из цифр |
 | `package_code` | Код упаковки — единица, в которой товар продаётся | строка из цифр |
 
-Оба поля присутствуют в ответе всегда — в `/products`, `/products/search` и
+Оба кода присутствуют в ответе всегда — в `/products`, `/products/search` и
 `/products/{id}`. Пустая строка означает, что код по этой позиции ещё не
 заведён; такого в норме быть не должно, и это повод написать нам, а не
 подставлять своё значение.
@@ -187,9 +184,8 @@ GET /inventory?skip=0&limit=100
     {
       "pharmacy_id": 1,
       "product_id": 25432,
-      "quantity": 20,
-      "base_price": 600000,
-      "price": 600000,
+      "quantity": "20.00",
+      "price": "600000.00",
       "is_available": true
     }
   ],

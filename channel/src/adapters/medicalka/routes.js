@@ -17,8 +17,8 @@ const S = require('./serializers');
  *
  * We are the provider: Medicalka polls these endpoints with the token we issue
  * and posts orders with the secret. Shapes and status codes follow their
- * pharmacy importer contract — including numeric price/quantity and base
- * price — and the 404 on a product that is out of stock, which their client turns into
+ * live v1 client contract — including fixed-decimal string price/quantity —
+ * and the 404 on a product that is out of stock, which their client turns into
  * `None` rather than an exception.
  */
 const router = express.Router();
@@ -70,9 +70,7 @@ const taxDefaults = () => settingView.readSettings(SETTING_KEYS)
 async function decorate(entry, defaults) {
   const medicalkaId = await catalog.ensureMedicalkaId(entry.mirror);
   const price = catalog.priceFor(entry.card, CHANNEL);
-  const configuredBase = Number(entry.card?.channels?.[CHANNEL]?.oldPrice) || 0;
-  const basePrice = configuredBase > price ? configuredBase : price;
-  return { ...entry, medicalkaId, price, basePrice, defaults };
+  return { ...entry, medicalkaId, price, defaults };
 }
 
 const read = [requireKey('token'), channelLimiter];
@@ -160,7 +158,6 @@ router.get('/inventory', read, async (req, res, next) => {
         pharmacyId: PHARMACY_ID,
         medicalkaId: decorated.medicalkaId,
         quantity: catalog.publishedQuantity(entry.card, entry.mirror, CHANNEL),
-        basePrice: decorated.basePrice,
         price: decorated.price,
       });
     }));
@@ -203,7 +200,6 @@ router.get('/stock', read, async (req, res, next) => {
       pharmacyId: PHARMACY_ID,
       medicalkaId: productId,
       quantity: catalog.publishedQuantity(entry.card, entry.mirror, CHANNEL),
-      basePrice: decorated.basePrice,
       price: decorated.price,
     }));
   } catch (err) { next(err); }

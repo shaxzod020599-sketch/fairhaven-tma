@@ -33,8 +33,9 @@ POST /orders/{order_id}/status         смена статуса (`wc_order_id` 
 
 ## Типы данных — важно
 
-`id`, `product_id`, `pharmacy_id`, `total`, `quantity` — **целые числа**.
-`base_price` и `price` — **числа**. Это формат импортера Medicalka v2.
+`id`, `product_id`, `pharmacy_id`, `total` — **целые числа**.
+`quantity` и `price` — **строки с двумя знаками после точки** (`"20.00"`).
+Это стабильный контракт `/medicalka/v1`; `base_price` в нём отсутствует.
 
 ## Фискальные коды
 

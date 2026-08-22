@@ -130,7 +130,7 @@ test('GET /products/{id} carries them too', async () => {
   assert.equal(res.body.package_code, '1490780');
 });
 
-test('GET endpoints expose the Medicalka v2 importer types over HTTP', async () => {
+test('GET endpoints preserve the Medicalka v1 client wire types over HTTP', async () => {
   const pharmacies = await get('/pharmacies');
   assert.equal(pharmacies.status, 200);
   assert.equal(typeof pharmacies.body.total, 'number');
@@ -141,8 +141,8 @@ test('GET endpoints expose the Medicalka v2 importer types over HTTP', async () 
   assert.equal(typeof products.body.total, 'number');
   assert.equal(products.body.items.length, 1);
   assert.equal(typeof products.body.items[0].id, 'number');
-  assert.equal(typeof products.body.items[0].price, 'number');
-  assert.equal(typeof products.body.items[0].ikpu_code, 'string');
+  assert.equal(typeof products.body.items[0].price, 'string');
+  assert.equal('ikpu_code' in products.body.items[0], false);
 
   const inventory = await get('/inventory?skip=0&limit=10');
   assert.equal(inventory.status, 200);
@@ -151,9 +151,8 @@ test('GET endpoints expose the Medicalka v2 importer types over HTTP', async () 
   assert.deepEqual(discounted, {
     pharmacy_id: 1,
     product_id: 602,
-    quantity: 10,
-    base_price: 450000,
-    price: 400000,
+    quantity: '10.00',
+    price: '400000.00',
     is_available: true,
   });
 
