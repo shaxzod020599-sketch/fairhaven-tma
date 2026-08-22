@@ -16,24 +16,43 @@ const client = new MedicalkaPartnerClient({
   maxResponseBytes: config.medicalkaPartner.maxResponseBytes,
 });
 
-const service = createApprovalService({
-  client,
-  onNew: async (approval) => {
-    if (typeof notify.announceMedicalkaApproval === 'function') {
-      await notify.announceMedicalkaApproval(approval);
-    }
-  },
-  onDecision: async (approval) => {
-    if (typeof notify.finalizeMedicalkaApproval === 'function') {
-      await notify.finalizeMedicalkaApproval(String(approval._id));
-    }
-  },
-});
-const subOrders = createSubOrderService({
-  client,
-  historyPollMs: config.medicalkaPartner.subOrderHistoryPollMs,
-  historyWindowDays: config.medicalkaPartner.subOrderHistoryDays,
-});
+let service = null;
+let subOrders = null;
+
+function initializeServices() {
+  if (!service) {
+    service = createApprovalService({
+      client,
+      onNew: async (approval) => {
+        if (typeof notify.announceMedicalkaApproval === 'function') {
+          await notify.announceMedicalkaApproval(approval);
+        }
+      },
+      onDecision: async (approval) => {
+        if (typeof notify.finalizeMedicalkaApproval === 'function') {
+          await notify.finalizeMedicalkaApproval(String(approval._id));
+        }
+      },
+    });
+  }
+  if (!subOrders) {
+    subOrders = createSubOrderService({
+      client,
+      historyPollMs: config.medicalkaPartner.subOrderHistoryPollMs,
+      historyWindowDays: config.medicalkaPartner.subOrderHistoryDays,
+    });
+  }
+}
+
+function approvalService() {
+  initializeServices();
+  return service;
+}
+
+function subOrderService() {
+  initializeServices();
+  return subOrders;
+}
 
 let pollTimer = null;
 let historyTimer = null;
@@ -229,19 +248,19 @@ async function storedSubOrder(id) {
 async function transitionSubOrder(id, status, actor) {
   requireSubOrders();
   const stored = await storedSubOrder(id);
-  return cleanSubOrder(await subOrders.transition(stored.externalId, status, actor));
+  return cleanSubOrder(await subOrderService().transition(stored.externalId, status, actor));
 }
 
 async function cancelSubOrder(id, reason, actor) {
   requireSubOrders();
   const stored = await storedSubOrder(id);
-  return cleanSubOrder(await subOrders.cancel(stored.externalId, reason, actor));
+  return cleanSubOrder(await subOrderService().cancel(stored.externalId, reason, actor));
 }
 
 async function addSubOrderLabel(id, body) {
   requireSubOrders();
   const stored = await storedSubOrder(id);
-  return cleanSubOrder(await subOrders.addLabel(stored.externalId, body));
+  return cleanSubOrder(await subOrderService().addLabel(stored.externalId, body));
 }
 
 async function respondToApproval(id, decision) {
@@ -258,14 +277,14 @@ async function respondToApproval(id, decision) {
     err.status = 404;
     throw err;
   }
-  const result = await service.respond(stored.externalId, decision);
+  const result = await approvalService().respond(stored.externalId, decision);
   return { ...result, approval: cleanApproval(result.approval) };
 }
 
 async function pollOnce() {
   health.lastPollAt = new Date();
   try {
-    const result = await service.pollOnce();
+    const result = await approvalService().pollOnce();
     if (!result.skipped) {
       health.lastSuccessAt = new Date();
       health.lastError = '';
@@ -280,7 +299,7 @@ async function pollOnce() {
 
 async function reconcileOnce() {
   try {
-    return await service.reconcileOnce();
+    return await approvalService().reconcileOnce();
   } catch (err) {
     const code = String(err?.code || 'medicalka_history_sync_failed');
     logger.warn('medicalka approval history sync failed', { code });
@@ -290,7 +309,7 @@ async function reconcileOnce() {
 
 async function pollSubOrdersOnce() {
   try {
-    const result = await subOrders.pollOnce();
+    const result = await subOrderService().pollOnce();
     if (!result.skipped) {
       health.subOrdersLastSuccessAt = new Date();
       health.subOrdersLastError = '';
@@ -305,6 +324,7 @@ async function pollSubOrdersOnce() {
 
 function start() {
   if (!config.medicalkaPartner.enabled || pollTimer) return pollTimer;
+  initializeServices();
   pollOnce().catch(() => {});
   pollTimer = setInterval(() => pollOnce().catch(() => {}), config.medicalkaPartner.pollMs);
   pollTimer.unref?.();
@@ -314,7 +334,7 @@ function start() {
   );
   historyTimer.unref?.();
   notificationTimer = startNotificationWorker({
-    drain: () => service.drainNotificationsOnce(),
+    drain: () => approvalService().drainNotificationsOnce(),
     intervalMs: config.medicalkaPartner.notificationPollMs,
   });
   if (config.medicalkaPartner.subOrdersEnabled) {
