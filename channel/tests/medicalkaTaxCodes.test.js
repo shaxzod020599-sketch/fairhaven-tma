@@ -62,7 +62,12 @@ test.before(async () => {
   await products.insertOne({
     name: 'Без своих кодов', category: 'vitamins', billzProductId: 'bp-default',
     mxikCode: '', packageCode: '',
-    channels: { medicalka: { enabled: true, price: 400000, forceStatus: 'auto', minStock: 0 } },
+    channels: {
+      medicalka: {
+        enabled: true, price: 400000, oldPrice: 450000,
+        forceStatus: 'auto', minStock: 0,
+      },
+    },
   });
 
   // What the admin panel writes when an operator saves the shop-wide defaults.
@@ -123,6 +128,38 @@ test('GET /products/{id} carries them too', async () => {
   assert.equal(res.status, 200);
   assert.equal(res.body.ikpu, '02106999028000001');
   assert.equal(res.body.package_code, '1490780');
+});
+
+test('GET endpoints expose the Medicalka v2 importer types over HTTP', async () => {
+  const pharmacies = await get('/pharmacies');
+  assert.equal(pharmacies.status, 200);
+  assert.equal(typeof pharmacies.body.total, 'number');
+  assert.equal(typeof pharmacies.body.items[0].id, 'number');
+
+  const products = await get('/products?skip=0&limit=1');
+  assert.equal(products.status, 200);
+  assert.equal(typeof products.body.total, 'number');
+  assert.equal(products.body.items.length, 1);
+  assert.equal(typeof products.body.items[0].id, 'number');
+  assert.equal(typeof products.body.items[0].price, 'number');
+  assert.equal(typeof products.body.items[0].ikpu_code, 'string');
+
+  const inventory = await get('/inventory?skip=0&limit=10');
+  assert.equal(inventory.status, 200);
+  assert.equal(typeof inventory.body.total, 'number');
+  const discounted = inventory.body.items.find((item) => item.product_id === 602);
+  assert.deepEqual(discounted, {
+    pharmacy_id: 1,
+    product_id: 602,
+    quantity: 10,
+    base_price: 450000,
+    price: 400000,
+    is_available: true,
+  });
+
+  const stock = await get('/stock?pharmacy_id=1&product_id=602');
+  assert.equal(stock.status, 200);
+  assert.deepEqual(stock.body, discounted);
 });
 
 test('an unreadable settings collection does not take the catalogue down', async () => {

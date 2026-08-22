@@ -33,7 +33,8 @@ POST /orders/{order_id}/status         смена статуса (`wc_order_id` 
 
 ## Типы данных — важно
 
-`id`, `total` — **числа**. `price`, `quantity` — **строки** («301000.00»).
+`id`, `product_id`, `pharmacy_id`, `total`, `quantity` — **целые числа**.
+`base_price` и `price` — **числа**. Это формат импортера Medicalka v2.
 
 ## Фискальные коды
 
@@ -57,11 +58,12 @@ POST /orders/{order_id}/status         смена статуса (`wc_order_id` 
 Ключ для картинок **не нужен**: файлы публичные. Не добавляйте `?token=` к
 адресу картинки.
 
-## Текущий TEST MODE
+## Текущий безопасный режим
 
-`BILLZ_WRITE_ENABLED=false`. `POST /orders` принимает и сохраняет заказ, но
-резерв в Billz не записывается. Статусы `paid` и `payment_confirmed` сейчас
-возвращают ожидаемый `422` до отдельного включения боевого режима.
+При `BILLZ_WRITE_ENABLED=false` legacy `POST /orders` не оформляет продажу и
+возвращает `503 mk_unavailable`. Основной поток заказов идёт через partner API:
+сначала pharmacy approval, затем после оплаты — `paid` sub-order. Само
+подтверждение заявки остаток в Billz не уменьшает.
 
 ## Заказ
 
@@ -87,10 +89,10 @@ POST /orders?secret=…
 
 ```json
 POST /orders/{order_id}/status?secret=…   { "status": "paid" }
-→ HTTP 422 — заказ не зарезервирован
+→ HTTP 503 — запись в Billz выключена
 ```
 
-Для `payment_confirmed` ответ в текущем TEST MODE такой же.
+Для `payment_confirmed` ответ в безопасном режиме такой же.
 
 ### После отдельной активации боевого режима
 

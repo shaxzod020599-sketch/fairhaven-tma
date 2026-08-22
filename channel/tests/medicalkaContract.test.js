@@ -11,7 +11,7 @@ const { generateKey, describeKey, hashKey } = require('../src/models/ChannelKey'
 
 /** Medicalka's pharmacy-import contract uses JSON numbers for stock and price. */
 
-test('price and quantity serialise as fixed 2-decimal strings', () => {
+test('legacy decimal helper serialises fixed 2-decimal strings', () => {
   assert.equal(S.decimalString(749000), '749000.00');
   assert.equal(S.decimalString('600000'), '600000.00');
   assert.equal(S.decimalString(0), '0.00');
