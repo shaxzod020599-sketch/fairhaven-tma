@@ -92,6 +92,7 @@ const config = {
     password: process.env.MEDICALKA_PARTNER_PASSWORD || process.env.MEDICALKA_PASSWORD || '',
     pollMs: number('MEDICALKA_APPROVAL_POLL_MS', 5000),
     historyPollMs: number('MEDICALKA_HISTORY_POLL_MS', 60000),
+    notificationPollMs: number('MEDICALKA_NOTIFICATION_POLL_MS', 5000),
     subOrdersEnabled: bool('MEDICALKA_SUBORDERS_ENABLED', false),
     subOrderPollMs: number('MEDICALKA_SUBORDER_POLL_MS', 15000),
     subOrderHistoryPollMs: number('MEDICALKA_SUBORDER_HISTORY_POLL_MS', 300000),

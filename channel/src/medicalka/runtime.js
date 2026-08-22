@@ -5,6 +5,7 @@ const MedicalkaSubOrder = require('../models/MedicalkaSubOrder');
 const notify = require('../notify/telegram');
 const { MedicalkaPartnerClient } = require('./partnerClient');
 const { createApprovalService } = require('./approvals');
+const { startNotificationWorker } = require('./notificationWorker');
 const { createSubOrderService } = require('./subOrders');
 
 const client = new MedicalkaPartnerClient({
@@ -36,6 +37,7 @@ const subOrders = createSubOrderService({
 
 let pollTimer = null;
 let historyTimer = null;
+let notificationTimer = null;
 let subOrderTimer = null;
 const health = {
   lastPollAt: null,
@@ -311,6 +313,10 @@ function start() {
     config.medicalkaPartner.historyPollMs
   );
   historyTimer.unref?.();
+  notificationTimer = startNotificationWorker({
+    drain: () => service.drainNotificationsOnce(),
+    intervalMs: config.medicalkaPartner.notificationPollMs,
+  });
   if (config.medicalkaPartner.subOrdersEnabled) {
     pollSubOrdersOnce().catch(() => {});
     subOrderTimer = setInterval(
@@ -325,9 +331,11 @@ function start() {
 function stop() {
   if (pollTimer) clearInterval(pollTimer);
   if (historyTimer) clearInterval(historyTimer);
+  if (notificationTimer) clearInterval(notificationTimer);
   if (subOrderTimer) clearInterval(subOrderTimer);
   pollTimer = null;
   historyTimer = null;
+  notificationTimer = null;
   subOrderTimer = null;
 }
 

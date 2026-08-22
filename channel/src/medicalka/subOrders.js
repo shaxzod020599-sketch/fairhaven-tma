@@ -396,7 +396,7 @@ function createSubOrderService({
           const rowIds = rows.map((row) => text(row?.id)).filter(Boolean);
           const existingRows = rowIds.length
             ? await Model.find({ externalId: { $in: rowIds } })
-              .select({ externalId: 1, status: 1, sale: 1 }).lean()
+              .select({ externalId: 1, paymentStatus: 1, status: 1, sale: 1 }).lean()
             : [];
           const existingById = new Map(existingRows.map((row) => [row.externalId, row]));
           for (const row of rows) {
@@ -407,12 +407,23 @@ function createSubOrderService({
               existing?.status === status
               && !OPEN_STATUSES.includes(status)
             ) {
+              let current = existing;
+              const projectionNeedsRepair = existing.paymentStatus === 'paid' && (
+                existing.sale?.state !== 'sold'
+                || (
+                  REFUND_STATUSES.has(status)
+                  && !existing.sale?.reconciliationRequired
+                )
+              );
+              if (projectionNeedsRepair) {
+                current = await reconcileSaleProjection(existing);
+              }
               if (
                 REFUND_STATUSES.has(status)
-                && existing.sale?.state === 'sold'
-                && !existing.sale?.reconciliationRequired
+                && current?.sale?.state === 'sold'
+                && !current.sale.reconciliationRequired
               ) {
-                await Model.updateOne({ _id: existing._id }, {
+                await Model.updateOne({ _id: current._id }, {
                   $set: {
                     'sale.reconciliationRequired': true,
                     'sale.lastError': 'medicalka_billz_refund_required',

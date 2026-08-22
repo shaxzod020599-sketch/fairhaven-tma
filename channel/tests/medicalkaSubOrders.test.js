@@ -387,6 +387,36 @@ test('authoritative sold ChannelOrder recovers projection before late refund', a
   assert.equal(stored.sale.lastError, 'medicalka_billz_refund_required');
 });
 
+test('terminal polling repairs a stale sale projection from authoritative ChannelOrder', async () => {
+  await MedicalkaSubOrder().create({
+    ...normalizeSubOrder(paid({ status: 'returned' }), new Date()),
+    sale: { state: 'processing', channelOrderId: 'internal-a' },
+  });
+  await ChannelOrder().create({
+    channel: 'medicalka', externalId: 'sub-a', internalOrderId: 'internal-a',
+    items: [{ billzProductId: 'billz-a', name: 'OvaBoost', quantity: 2, unitPrice: 15000 }],
+    totalAmount: 30000, status: 'sold', soldAt: new Date(),
+  });
+  const service = createSubOrderService({
+    client: {
+      getPharmacies: async () => [{ id: 'pharmacy-a' }],
+      listSubOrders: async ({ status }) => ({
+        items: status === 'returned' ? [{ id: 'sub-a', status: 'returned' }] : [],
+        total: status === 'returned' ? 1 : 0,
+      }),
+    },
+    ProductModel: products(), orderService: {},
+  });
+
+  await service.pollOnce();
+
+  const stored = await MedicalkaSubOrder().findOne({ externalId: 'sub-a' }).lean();
+  assert.equal(stored.sale.channelOrderId, 'internal-a');
+  assert.equal(stored.sale.state, 'sold');
+  assert.equal(stored.sale.reconciliationRequired, true);
+  assert.equal(stored.sale.lastError, 'medicalka_billz_refund_required');
+});
+
 test('ambiguous fiscal label write reconciles detail and never sends twice', async () => {
   let applied = false;
   let writes = 0;

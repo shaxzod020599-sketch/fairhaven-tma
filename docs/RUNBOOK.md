@@ -294,6 +294,7 @@ MEDICALKA_PARTNER_USERNAME=<Medicalka bergan login>
 MEDICALKA_PARTNER_PASSWORD=<Medicalka bergan parol>
 MEDICALKA_APPROVAL_POLL_MS=5000
 MEDICALKA_HISTORY_POLL_MS=60000
+MEDICALKA_NOTIFICATION_POLL_MS=5000
 MEDICALKA_LEGACY_ORDERS_ENABLED=true
 MEDICALKA_SUBORDERS_ENABLED=false
 MEDICALKA_SUBORDER_POLL_MS=15000
@@ -314,7 +315,8 @@ Birinchi yoqish faqat approval oqimi:
 5. Medicalka kabinetida qilingan qaror history sync orqali lokal holatga tushadi.
 6. Telegram yuborish Medicalka poll'dan ajratilgan durable worker orqali yuradi.
    Telegram sekin yoki o'chiq bo'lsa ham yangi zayavkalar DB/admin panelga tushadi.
-   Har bir xabar retry/backoff va finalization holatini saqlaydi.
+   Har bir xabar retry/backoff va finalization holatini saqlaydi. Mustaqil
+   `MEDICALKA_NOTIFICATION_POLL_MS` timer Medicalka API ishlamasa ham retry qiladi.
 
 Approve Billz ostatokni kamaytirmaydi. Faqat Medicalka `paid` sub-order berganda
 sotuv chegarasi boshlanadi. Shu sabab birinchi deployda
