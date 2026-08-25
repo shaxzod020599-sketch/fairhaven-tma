@@ -284,70 +284,80 @@ Bu oqim Medicalka bizning `/medicalka/v1` endpointlarimizni o'qishidan alohida.
 Eski katalog tokeni va order secreti o'zgarmaydi: yangi kalit chiqarmang,
 rotatsiya yoki revoke qilmang.
 
-Medicalka bergan partner login/parol `channel/.env` ga secret store orqali
-uzatiladi. Qiymatni repo yoki logga yozmang:
+`channel/.env` da partner profillarni shifrlaydigan alohida 32+ belgili kalit
+bo'lishi shart. Qiymatni repo yoki logga yozmang. Partner login/parol admin
+paneldagi `Connections → Medicalka partner` oynasidan kiritiladi; parol qayta
+o'qilmaydi, MongoDB'da AES-256-GCM bilan shifrlanadi. Staging va production URL
+kodda qat'iy belgilangan, paneldan o'zgartirib bo'lmaydi:
+
+- staging: `https://api.staging.medicalka.com/api/v1`
+- production: `https://api.medicalka.com/api/v1`
+
+Minimal observe rollout:
 
 ```
 MEDICALKA_INBOUND_ENABLED=true
-MEDICALKA_PARTNER_BASE_URL=https://api.medicalka.com/api/v1
-MEDICALKA_PARTNER_USERNAME=<Medicalka bergan login>
-MEDICALKA_PARTNER_PASSWORD=<Medicalka bergan parol>
+MEDICALKA_CREDENTIALS_ENCRYPTION_KEY=<32+ belgili maxfiy kalit>
 MEDICALKA_APPROVAL_POLL_MS=5000
 MEDICALKA_HISTORY_POLL_MS=60000
 MEDICALKA_NOTIFICATION_POLL_MS=5000
 MEDICALKA_LEGACY_ORDERS_ENABLED=true
-MEDICALKA_SUBORDERS_ENABLED=false
+MEDICALKA_SUBORDERS_ENABLED=true
 MEDICALKA_SUBORDER_POLL_MS=15000
 MEDICALKA_SUBORDER_HISTORY_POLL_MS=300000
 MEDICALKA_SUBORDER_HISTORY_DAYS=180
+BILLZ_WRITE_ENABLED=false
 ```
 
-`MEDICALKA_USERNAME` va `MEDICALKA_PASSWORD` eski secret-store nomlari ham
-alias sifatida ishlaydi. Yangi nomlar berilsa ular ustun.
+`MEDICALKA_PARTNER_USERNAME` / `MEDICALKA_PARTNER_PASSWORD` va eski
+`MEDICALKA_USERNAME` / `MEDICALKA_PASSWORD` nomlari faqat bootstrap yoki
+orqaga mos fallback sifatida ishlaydi. Encrypted profil mavjud bo'lgach env
+login/parolini olib tashlash mumkin.
 
-Birinchi yoqish faqat approval oqimi:
+Admin paneldan avval staging profil saqlanadi va observe rejimida tekshiriladi.
+Keyin production profil alohida saqlanadi. Aktiv profilni almashtirishdan oldin
+yangi profil bilan login va pharmacies read tekshiruvi o'tadi. Jarayonda action
+bor bo'lsa switch `medicalka_runtime_busy` bilan rad qilinadi. Staging doim
+observe; production observe yoki live bo'lishi mumkin.
+
+Approval oqimi:
 
 1. channel-hub Medicalka'dan pending zayavkalarni o'qiydi.
 2. Zayavka mavjud `Orders` panelidagi `Medicalka` bo'limida ko'rinadi.
-3. Har bir hozirgi `users.role=admin` foydalanuvchiga botdan shaxsiy xabar
-   boradi. Kanal yoki alohida Telegram allow-list ishlatilmaydi.
+3. Tasdiqlash kartasi operations kanaliga va bot bilan bog'langan har bir
+   hozirgi `users.role=admin` foydalanuvchiga shaxsiy xabar bo'lib boradi.
+   Callback bosilganda admin roli qayta tekshiriladi; kanal a'zoligi o'zi huquq
+   bermaydi.
 4. Panel va Telegram bir xil atomik accept/reject servisidan foydalanadi.
 5. Medicalka kabinetida qilingan qaror history sync orqali lokal holatga tushadi.
 6. Telegram yuborish Medicalka poll'dan ajratilgan durable worker orqali yuradi.
    Telegram sekin yoki o'chiq bo'lsa ham yangi zayavkalar DB/admin panelga tushadi.
-   Har bir xabar retry/backoff va finalization holatini saqlaydi. Mustaqil
+   Bir joyda qabul/rad qilinganda barcha Telegram kartalaridagi tugmalar olib
+   tashlanadi. Har bir xabar retry/backoff va finalization holatini saqlaydi. Mustaqil
    `MEDICALKA_NOTIFICATION_POLL_MS` timer Medicalka API ishlamasa ham retry qiladi.
 
-Approve Billz ostatokni kamaytirmaydi. Faqat Medicalka `paid` sub-order berganda
-sotuv chegarasi boshlanadi. Shu sabab birinchi deployda
-`MEDICALKA_SUBORDERS_ENABLED=false` qoladi.
+Approve Billz ostatokni kamaytirmaydi. Medicalka `paid` yoki
+`payment_confirmed` sub-order berganda sotuv chegarasi boshlanadi. Observe
+rejimida payment/courier/refund holati admin va bitta Telegram lifecycle kartasida
+yangilanadi, lekin mapping yoki Billz write bajarilmaydi. Production profil
+`live` va global `BILLZ_WRITE_ENABLED=true` bo'lgandagina sotuv yoziladi. Shu
+ikki gate'dan bittasi o'chiq bo'lsa Billz'ga yozish imkonsiz.
 
-Approval oqimini read/decision darajasida tekshirgandan keyin paid orderlarni
-alohida yoqing:
-
-```
-BILLZ_WRITE_ENABLED=true
-MEDICALKA_LEGACY_ORDERS_ENABLED=false
-MEDICALKA_SUBORDERS_ENABLED=true
-```
-
-Server `MEDICALKA_SUBORDERS_ENABLED=true` holatini inbound yoki Billz write
-o'chiq bo'lsa yoki `MEDICALKA_LEGACY_ORDERS_ENABLED=true` bo'lsa rad etadi.
-Bu ikkita sotuv manbasi bir orderni turli external ID bilan ikki marta Billz'ga
-yozishini qat'iy to'xtatadi. `false` qilishdan oldin Medicalka legacy order
-senderni o'chirganini tasdiqlashi shart. Eski key revoke/rotate qilinmaydi:
-katalog va ostatka tokeni ishlayveradi; mavjud secret autentifikatsiyadan o'tadi,
-lekin legacy order write partner flow faol vaqtda `503 mk_legacy_orders_disabled`
-oladi.
+Legacy `POST /medicalka/v1/orders` ochiq qolishi mumkin: u faqat order receipt
+qayd qiladi. Legacy callback va partner sub-order bir Medicalka parent order ID
+bo'yicha bitta `ChannelOrder`ga birlashadi. Idempotency va atomik sale claim
+retry yoki ikki manbadan takroriy Billz savdosini to'xtatadi. Eski key
+revoke/rotate qilinmaydi va katalog/ostatek oqimi o'zgarmaydi.
 
 Paid orderdagi har bir product ID aniq Medicalka mappingga ega bo'lishi shart;
 nom bo'yicha taxmin qilinmaydi. Mapping yo'q yoki Billz natijasi noaniq bo'lsa
 avtomatik retry/spisanie to'xtaydi va panelda `reconciliation required` chiqadi.
 
 Delivery order: markirovka talab qilingan barcha qatorga fiscal label kiritiladi,
-keyin faqat `shipped`; `delivered` Medicalka/kuryer tomoni. Pickup order:
-`shipped`, `delivered`, `completed` ruxsat. Sotilgan order bekor qilinsa Billz
-qaytarish avtomatik qilinmaydi — manual reconciliation talab qilinadi.
+status esa Medicalka/kuryer tomonidan boshqariladi; panel delivery orderni
+qo'lda shipped/delivered/completed qilmaydi. Pickup orderni paneldan
+`delivered`, keyin `completed` qilish mumkin. Sotilgan order bekor yoki refund
+bo'lsa Billz qaytarish avtomatik qilinmaydi — manual reconciliation talab qilinadi.
 Sub-order poll contractdagi takroriy `pharmacy_ids` parametrini ishlatadi.
 Active statuslar 15 soniyada, terminal/refund history 5 daqiqada va oxirgi
 180 kun bilan chegaralangan holda tekshiriladi. Medicalka return policy uzunroq
@@ -356,8 +366,9 @@ bo'lsa `MEDICALKA_SUBORDER_HISTORY_DAYS` shu policyga mos oshiriladi. Kechikkan
 lekin projection update crash bo'lgan bo'lsa authoritative `ChannelOrder`
 holati keyingi poll'da projectionni tiklaydi.
 
-**Orqaga qaytarish:** avval `MEDICALKA_SUBORDERS_ENABLED=false`, keyin eski
-senderga qaytilsa `MEDICALKA_LEGACY_ORDERS_ENABLED=true`; kerak bo'lsa
+**Orqaga qaytarish:** production profilni observe rejimiga o'tkazing yoki
+`BILLZ_WRITE_ENABLED=false` qiling. Pollni ham to'xtatish kerak bo'lsa
+`MEDICALKA_SUBORDERS_ENABLED=false`; to'liq inbound rollback uchun
 `MEDICALKA_INBOUND_ENABLED=false`, so'ng `pm2 restart channel-hub`. Bu eski
 `/medicalka/v1` token/secretni o'chirmaydi.
 
@@ -427,10 +438,10 @@ Hammasi **o'chirilgan holatda** keladi. Har birini alohida, tekshirib yoqing.
 
 | Bayroq | Nima qiladi | Yoqishdan oldin |
 |---|---|---|
-| `BILLZ_WRITE_ENABLED` | Billz'ga yozishga ruxsat | Oqim jonli tekshirilgan (01.08.2026) — Medicalka ulangach yoqiladi |
-| `MEDICALKA_INBOUND_ENABLED` | Medicalka approvallarni o'qish va accept/reject | Partner login/parol, admin roli, panel tekshirilsin |
-| `MEDICALKA_LEGACY_ORDERS_ENABLED` | Eski Medicalka order write endpointini ochadi | Partner paid sub-order oqimi bilan bir vaqtda yoqmang; eski keyning o'zini o'zgartirmaydi |
-| `MEDICALKA_SUBORDERS_ENABLED` | Paid Medicalka sub-orderni Billz sotuviga o'tkazish | Inbound va Billz write yoqilgan, product mapping to'liq |
+| `BILLZ_WRITE_ENABLED` | Billz'ga global yozishga ruxsat | Production profil live, mapping to'liq va operator tayyor bo'lsin |
+| `MEDICALKA_INBOUND_ENABLED` | Medicalka approval va lifecycle pollini ishga tushiradi | Encryption key, kamida bitta valid profil, admin roli va panel tekshirilsin |
+| `MEDICALKA_LEGACY_ORDERS_ENABLED` | Eski Medicalka order receipt endpointini ochadi | Eski key ishlashi kerak bo'lsa ochiq qolsin; sale parent order ID bilan dedupe qilinadi |
+| `MEDICALKA_SUBORDERS_ENABLED` | Paid/courier/refund lifecycle polli | Avval observe + Billz write off; production live alohida yoqiladi |
 | `BILLZ_BRIDGE_ENABLED` | Bot zakazlari Billz'ga | `BILLZ_BRIDGE_SINCE` qo'yilsin |
 | `UZUM_ENABLED` | Uzum endpointlari | Store ID, signing key, rasm domeni |
 | `STOCK_RECONCILE_ENABLED` | Ostatokni avtomatik boshqarish | `reconcile-stock.js` hisoboti ko'rilsin |

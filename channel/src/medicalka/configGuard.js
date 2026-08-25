@@ -4,8 +4,10 @@ function checkMedicalkaPartnerConfig(config) {
   }
   if (!config.medicalkaPartner.enabled) return;
   const missing = [];
-  if (!config.medicalkaPartner.username) missing.push('MEDICALKA_PARTNER_USERNAME');
-  if (!config.medicalkaPartner.password) missing.push('MEDICALKA_PARTNER_PASSWORD');
+  if (!config.medicalkaPartner.credentialsEncryptionKey) {
+    if (!config.medicalkaPartner.username) missing.push('MEDICALKA_PARTNER_USERNAME');
+    if (!config.medicalkaPartner.password) missing.push('MEDICALKA_PARTNER_PASSWORD');
+  }
   if (!/^https:\/\//i.test(config.medicalkaPartner.baseUrl) && config.env === 'production') {
     missing.push('MEDICALKA_PARTNER_BASE_URL (HTTPS)');
   }
