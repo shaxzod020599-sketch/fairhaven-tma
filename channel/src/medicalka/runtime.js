@@ -61,6 +61,9 @@ function cleanSubOrder(row) {
     paymentMethod: row.paymentMethod,
     status: row.status,
     deliveryType: row.deliveryType,
+    deliveryProvider: row.deliveryProvider,
+    courierStatus: row.courierStatus,
+    deliveryServiceStatus: row.deliveryServiceStatus,
     subtotal: row.subtotal,
     sourceCreatedAt: row.sourceCreatedAt,
     customer: row.customer,
@@ -137,6 +140,9 @@ function createRuntimeContext({ profile, credentials }) {
         Model: SubOrderModel,
         historyPollMs: config.medicalkaPartner.subOrderHistoryPollMs,
         historyWindowDays: config.medicalkaPartner.subOrderHistoryDays,
+        environment,
+        processingMode: profile.processingMode,
+        billzWriteEnabled: () => config.billzWriteEnabled,
       });
     }
   }

@@ -1,4 +1,5 @@
 const { createHash, randomUUID } = require('node:crypto');
+const config = require('../config');
 const BillzProduct = require('../models/BillzProduct');
 const ChannelOrder = require('../models/ChannelOrder');
 const MedicalkaSubOrder = require('../models/MedicalkaSubOrder');
@@ -51,6 +52,11 @@ function normalizeSubOrder(raw, seenAt = new Date()) {
     paymentMethod: text(raw?.payment_method),
     status: text(raw?.status),
     deliveryType: text(raw?.delivery_type),
+    deliveryProvider: text(raw?.delivery_provider || raw?.delivery?.provider),
+    courierStatus: text(raw?.courier_status || raw?.delivery?.courier_status),
+    deliveryServiceStatus: text(
+      raw?.delivery_service_status || raw?.delivery_service?.status || raw?.delivery?.status
+    ),
     subtotal: number(raw?.subtotal),
     sourceCreatedAt: Number.isNaN(created.getTime()) ? seenAt : created,
     customer: {
@@ -153,11 +159,20 @@ function createSubOrderService({
   now = () => new Date(),
   historyPollMs = 5 * 60 * 1000,
   historyWindowDays = 180,
+  environment = 'production',
+  processingMode = 'observe',
+  billzWriteEnabled = () => config.billzWriteEnabled,
 } = {}) {
   let polling = false;
   let nextHistoryPollAt = 0;
   const historyInterval = Math.max(60000, Number(historyPollMs) || 300000);
   const historyDays = Math.max(1, Number(historyWindowDays) || 180);
+
+  function salesEnabled() {
+    return environment === 'production'
+      && processingMode === 'live'
+      && billzWriteEnabled() === true;
+  }
 
   async function settleAppliedOperation(row, operation) {
     const actedAt = now();
@@ -241,10 +256,14 @@ function createSubOrderService({
 
   async function reconcileSaleProjection(stored) {
     if (stored.paymentStatus !== 'paid') return stored;
+    const canonicalExternalId = stored.orderId || stored.externalId;
     const channelOrder = await ChannelOrderModel.findOne(
       stored.sale?.channelOrderId
         ? { internalOrderId: stored.sale.channelOrderId, channel: 'medicalka' }
-        : { channel: 'medicalka', externalId: stored.externalId }
+        : {
+          channel: 'medicalka',
+          externalId: { $in: [...new Set([canonicalExternalId, stored.externalId])] },
+        }
     ).lean();
     if (!channelOrder) return stored;
 
@@ -275,19 +294,23 @@ function createSubOrderService({
     stored = await reconcileSaleProjection(stored);
     if (stored.sale?.state === 'sold') return stored;
     if (stored.sale?.reconciliationRequired || stored.operation?.reconciliationRequired) return stored;
-    if (!ACTIVE_STATUSES.includes(stored.status)) {
-      if (stored.paymentStatus !== 'paid') {
-        return Model.findOneAndUpdate({ _id: stored._id }, {
-          $set: { 'sale.state': 'waiting_payment', 'sale.lastError': '' },
-        }, { new: true }).lean();
-      }
-      return stored;
-    }
     if (stored.paymentStatus !== 'paid') {
       return Model.findOneAndUpdate({ _id: stored._id }, {
         $set: { 'sale.state': 'waiting_payment', 'sale.lastError': '' },
       }, { new: true }).lean();
     }
+    if (!salesEnabled()) {
+      return Model.findOneAndUpdate({ _id: stored._id }, {
+        $set: {
+          'mapping.state': 'not_evaluated',
+          'mapping.missingProductIds': [],
+          'sale.state': 'observed',
+          'sale.lastError': '',
+          'sale.reconciliationRequired': false,
+        },
+      }, { new: true }).lean();
+    }
+    if (!ACTIVE_STATUSES.includes(stored.status)) return stored;
 
     const wanted = [...new Set(stored.items.map((item) => item.productExternalId).filter(Boolean))];
     const mirrors = wanted.length
@@ -328,7 +351,7 @@ function createSubOrderService({
 
     try {
       const accepted = await orderService.acceptOrder('medicalka', {
-        externalId: stored.externalId,
+        externalId: stored.orderId || stored.externalId,
         items: mappedItems,
         totalAmount: stored.subtotal,
         customer: {
@@ -541,26 +564,16 @@ function createSubOrderService({
     const stored = await refreshStored(externalId);
     if (!stored) throw subOrderError('medicalka_suborder_not_found', 404);
     if (stored.status === status) return stored;
-    if (stored.deliveryType === 'delivery' && status === 'delivered') {
-      throw subOrderError('medicalka_delivery_delivered_forbidden');
+    if (stored.deliveryType === 'delivery') {
+      throw subOrderError('medicalka_delivery_status_managed_by_courier');
     }
-    const allowed = stored.deliveryType === 'pickup'
-      ? {
-        processing: ['shipped', 'delivered', 'completed'],
-        shipped: ['delivered', 'completed'],
-        delivered: ['completed'],
-      }
-      : { processing: ['shipped'] };
+    const allowed = {
+      processing: ['delivered', 'completed'],
+      delivered: ['completed'],
+    };
     if (!(allowed[stored.status] || []).includes(status)) {
       throw subOrderError('medicalka_invalid_suborder_transition');
     }
-    if (
-      stored.deliveryType === 'delivery' && status === 'shipped'
-      && stored.items.some((item) => (
-        item.markingRequired && (item.labels?.length || 0) < Number(item.quantity)
-      ))
-    ) throw subOrderError('medicalka_labels_incomplete', 409);
-
     const operation = { kind: 'status', value: status };
     const { claimed, token } = await claimAction(stored, operation, actor);
     try {

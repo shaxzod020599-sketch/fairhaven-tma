@@ -220,7 +220,7 @@ function requireLegacyOrders(_req, res, next) {
  * Their status vocabulary, mapped to what it means for stock.
  *
  * `received` and `accepted` are acknowledgements that change nothing on our
- * side — the sale is already complete when the order arrives.
+ * side. A paid status is the sale boundary.
  */
 const STATUS_ACTIONS = {
   paid: 'sell',
@@ -335,21 +335,7 @@ router.post('/orders', write, requireLegacyOrders, async (req, res, next) => {
     // Allocated once and stored, so a resend answers with the same number
     // rather than burning a fresh one each time.
     const publicId = await orders.ensurePublicOrderId(order.internalOrderId);
-    const outcome = await orders.completeIncomingSale(order.internalOrderId);
-
-    if (outcome.kind === 'sold') {
-      return res.json({ wc_order_id: publicId, status: 'accepted' });
-    }
-    if (outcome.kind === 'upstream_failure') {
-      return res.status(502).json({
-        code: 'mk_upstream_error',
-        detail: 'order could not be completed',
-      });
-    }
-    return res.status(503).json({
-      code: 'mk_unavailable',
-      detail: 'order processing is temporarily unavailable',
-    });
+    return res.json({ wc_order_id: publicId, status: 'accepted' });
   } catch (err) { next(err); }
 });
 
@@ -365,7 +351,19 @@ router.post('/orders/:orderId/status', write, requireLegacyOrders, async (req, r
     if (!order) return notFound(res, `Order ${req.params.orderId} not found`);
 
     try {
-      if (action === 'sell') await orders.completeOrder(order.internalOrderId);
+      if (action === 'sell') {
+        const outcome = await orders.completeIncomingSale(order.internalOrderId);
+        if (outcome.kind === 'upstream_failure') {
+          return res.status(502).json({
+            code: 'mk_upstream_error', detail: 'order could not be completed',
+          });
+        }
+        if (outcome.kind !== 'sold') {
+          return res.status(503).json({
+            code: 'mk_unavailable', detail: 'order processing is temporarily unavailable',
+          });
+        }
+      }
       if (action === 'cancel') await orders.cancelOrder(order.internalOrderId, { reason: status });
     } catch (err) {
       // A refused transition is a client error — telling them 200 would leave

@@ -24,6 +24,9 @@ const schema = new mongoose.Schema({
   paymentMethod: { type: String, default: '' },
   status: { type: String, default: '', index: true },
   deliveryType: { type: String, default: '' },
+  deliveryProvider: { type: String, default: '' },
+  courierStatus: { type: String, default: '' },
+  deliveryServiceStatus: { type: String, default: '' },
   subtotal: { type: Number, default: 0 },
   sourceCreatedAt: { type: Date, default: null },
   customer: {

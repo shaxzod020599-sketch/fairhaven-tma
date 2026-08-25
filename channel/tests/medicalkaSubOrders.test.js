@@ -19,6 +19,7 @@ const paid = (over = {}) => ({
   customer_last_name: 'Valiyev', customer_phone: '+998901234567',
   payment_status: 'paid', payment_method: 'click', subtotal: '30000.00',
   status: 'processing', delivery_type: 'pickup',
+  delivery_provider: 'noor', courier_status: 'searching',
   created_at: '2026-08-22T03:10:00.000Z',
   items: [{
     id: 'line-a', product_external_id: 501, product_name: 'OvaBoost',
@@ -71,11 +72,14 @@ test('normalizes documented paid sub-order without losing lifecycle fields', () 
     paymentStatus: row.paymentStatus,
     status: row.status,
     deliveryType: row.deliveryType,
+    deliveryProvider: row.deliveryProvider,
+    courierStatus: row.courierStatus,
     subtotal: row.subtotal,
     productExternalId: row.items[0].productExternalId,
   }, {
     externalId: 'sub-a', orderId: 'order-a', paymentStatus: 'paid',
-    status: 'processing', deliveryType: 'pickup', subtotal: 30000,
+    status: 'processing', deliveryType: 'pickup', deliveryProvider: 'noor',
+    courierStatus: 'searching', subtotal: 30000,
     productExternalId: 501,
   });
 });
@@ -93,6 +97,7 @@ test('paid sub-order maps stable external product id and enters sale pipeline on
   };
   const service = createSubOrderService({
     client: {}, ProductModel: products(), orderService,
+    environment: 'production', processingMode: 'live', billzWriteEnabled: () => true,
   });
 
   await service.ingest(paid());
@@ -122,7 +127,7 @@ test('unpaid row is mirrored but cannot enter Billz', async () => {
   assert.equal(stored.sale.state, 'waiting_payment');
 });
 
-test('unknown external product blocks sale and exposes reconciliation', async () => {
+test('observe mode stores paid lifecycle without mapping or Billz calls', async () => {
   let writes = 0;
   const service = createSubOrderService({
     client: {}, ProductModel: products([]),
@@ -130,6 +135,67 @@ test('unknown external product blocks sale and exposes reconciliation', async ()
       acceptOrder: async () => { writes += 1; },
       completeIncomingSale: async () => { writes += 1; },
     },
+    environment: 'production', processingMode: 'observe', billzWriteEnabled: () => true,
+  });
+
+  await service.ingest(paid());
+
+  const stored = await MedicalkaSubOrder().findOne({ externalId: 'sub-a' }).lean();
+  assert.equal(writes, 0);
+  assert.equal(stored.mapping.state, 'not_evaluated');
+  assert.equal(stored.sale.state, 'observed');
+  assert.equal(stored.sale.reconciliationRequired, false);
+});
+
+test('staging and global Billz gate both block a live-mode sale', async () => {
+  for (const options of [
+    { environment: 'staging', processingMode: 'live', billzWriteEnabled: () => true },
+    { environment: 'production', processingMode: 'live', billzWriteEnabled: () => false },
+  ]) {
+    await MedicalkaSubOrder().deleteMany({});
+    let writes = 0;
+    const service = createSubOrderService({
+      client: {}, ProductModel: products(),
+      orderService: {
+        acceptOrder: async () => { writes += 1; },
+        completeIncomingSale: async () => { writes += 1; },
+      },
+      ...options,
+    });
+    await service.ingest(paid());
+    assert.equal(writes, 0);
+    assert.equal(
+      (await MedicalkaSubOrder().findOne({ externalId: 'sub-a' }).lean()).sale.state,
+      'observed'
+    );
+  }
+});
+
+test('detail payment state wins when list row disagrees', async () => {
+  const service = createSubOrderService({
+    client: {
+      getSubOrder: async () => paid({ status: 'cancelled', payment_status: 'paid' }),
+    },
+    ProductModel: products(), orderService: {},
+    environment: 'production', processingMode: 'observe', billzWriteEnabled: () => false,
+  });
+
+  await service.ingest(paid({ status: 'cancelled', payment_status: 'cancelled' }));
+
+  const stored = await MedicalkaSubOrder().findOne({ externalId: 'sub-a' }).lean();
+  assert.equal(stored.paymentStatus, 'paid');
+  assert.equal(stored.status, 'cancelled');
+  assert.equal(stored.sale.state, 'observed');
+});
+
+test('unknown external product blocks sale and exposes reconciliation', async () => {
+  let writes = 0;
+  const service = createSubOrderService({
+    client: {}, ProductModel: products([]),
+    orderService: {
+      acceptOrder: async () => { writes += 1; },
+      completeIncomingSale: async () => { writes += 1; },
+    }, environment: 'production', processingMode: 'live', billzWriteEnabled: () => true,
   });
 
   await service.ingest(paid());
@@ -160,7 +226,7 @@ test('uncertain Billz result is never retried blindly on next poll', async () =>
   assert.equal(writes, 0);
 });
 
-test('status actions enforce pickup and delivery rules before Medicalka write', async () => {
+test('delivery status belongs to courier while pickup completion stays available', async () => {
   const calls = [];
   let remote = paid({
     delivery_type: 'delivery',
@@ -185,11 +251,11 @@ test('status actions enforce pickup and delivery rules before Medicalka write', 
 
   await assert.rejects(
     () => service.transition('sub-a', 'delivered'),
-    (err) => err.code === 'medicalka_delivery_delivered_forbidden'
+    (err) => err.code === 'medicalka_delivery_status_managed_by_courier'
   );
   await assert.rejects(
     () => service.transition('sub-a', 'shipped'),
-    (err) => err.code === 'medicalka_labels_incomplete'
+    (err) => err.code === 'medicalka_delivery_status_managed_by_courier'
   );
   await service.addLabel('sub-a', { itemId: 'line-a', label: 'x'.repeat(21) });
   assert.equal(calls[0][0], 'label');
@@ -278,7 +344,7 @@ test('poll loads full detail and never trusts partial marking data from list row
   assert.equal(stored.items[0].markingRequired, true);
   await assert.rejects(
     () => service.transition('sub-a', 'shipped'),
-    (err) => err.code === 'medicalka_labels_incomplete'
+    (err) => err.code === 'medicalka_delivery_status_managed_by_courier'
   );
 });
 
