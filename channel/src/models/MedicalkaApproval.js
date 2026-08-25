@@ -64,7 +64,10 @@ const approvalSchema = new mongoose.Schema({
     lastError: { type: String, default: '' },
     messages: {
       type: [{
-        telegramId: { type: Number, required: true },
+        recipientKey: { type: String, default: '' },
+        recipientType: { type: String, enum: ['admin', 'channel'], default: 'admin' },
+        chatId: { type: String, default: '' },
+        telegramId: { type: Number, default: null },
         messageId: { type: Number, required: true },
         sentAt: { type: Date, required: true },
         finalizedAt: { type: Date, default: null },

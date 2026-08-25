@@ -69,6 +69,18 @@ const schema = new mongoose.Schema({
     actorName: { type: String, default: '' },
     at: { type: Date, default: null },
   },
+  notification: {
+    claimToken: { type: String, default: '' },
+    claimedAt: { type: Date, default: null },
+    chatId: { type: String, default: '' },
+    messageId: { type: Number, default: null },
+    fingerprint: { type: String, default: '' },
+    sentAt: { type: Date, default: null },
+    updatedAt: { type: Date, default: null },
+    retryAt: { type: Date, default: null },
+    attempts: { type: Number, default: 0 },
+    lastError: { type: String, default: '' },
+  },
 }, { timestamps: true });
 
 schema.index({ paymentStatus: 1, status: 1, sourceCreatedAt: -1 });

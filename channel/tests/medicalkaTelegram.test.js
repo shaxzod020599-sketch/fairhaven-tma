@@ -6,6 +6,7 @@ process.env.BILLZ_SHOP_ID = 'shop-a';
 process.env.MONGO_DB_NAME = 'medicalka-telegram-test';
 process.env.CHANNEL_TELEGRAM_ENABLED = 'true';
 process.env.TELEGRAM_BOT_TOKEN = '123:test';
+process.env.ORDERS_CHANNEL_ID = '-100777';
 
 let mongod;
 let db;
@@ -62,7 +63,7 @@ async function seed() {
   return approval.toObject();
 }
 
-test('new approval is sent directly to current admins only and once', async () => {
+test('new approval is sent to current admins and operations channel only once', async () => {
   const approval = await seed();
   const calls = [];
   const notifier = createMedicalkaNotifier({
@@ -77,7 +78,10 @@ test('new approval is sent directly to current admins only and once', async () =
   await notifier.announce(approval);
   await notifier.announce(approval);
 
-  assert.deepEqual(calls.map((row) => row.payload.chat_id).sort(), [11, 22]);
+  assert.deepEqual(
+    calls.map((row) => String(row.payload.chat_id)).sort(),
+    ['-100777', '11', '22']
+  );
   assert.ok(calls.every((row) => row.method === 'sendMessage'));
   assert.ok(calls.every((row) => row.payload.reply_markup.inline_keyboard.length === 2));
   const callbackData = calls.flatMap((row) => row.payload.reply_markup.inline_keyboard.flat())
@@ -86,18 +90,24 @@ test('new approval is sent directly to current admins only and once', async () =
   assert.doesNotMatch(callbackData.join(' '), /Ali|99890|checkout/);
 
   const stored = await MedicalkaApproval().findById(approval._id).lean();
-  assert.equal(stored.notification.messages.length, 2);
+  assert.equal(stored.notification.messages.length, 3);
+  assert.deepEqual(
+    stored.notification.messages.map((row) => row.recipientType).sort(),
+    ['admin', 'admin', 'channel']
+  );
 });
 
 test('a failed admin retries without duplicating successful delivery', async () => {
   const approval = await seed();
   const attempts = [];
   let fail22 = true;
+  let nextMessageId = 200;
   const notifier = createMedicalkaNotifier({
     send: async (_method, payload) => {
       attempts.push(payload.chat_id);
       if (payload.chat_id === 22 && fail22) return null;
-      return { message_id: 200 + payload.chat_id };
+      nextMessageId += 1;
+      return { message_id: nextMessageId };
     },
     AdminModel: AdminView(),
     ApprovalModel: MedicalkaApproval(),
@@ -107,7 +117,7 @@ test('a failed admin retries without duplicating successful delivery', async () 
   fail22 = false;
   await notifier.announce(approval);
 
-  assert.deepEqual(attempts, [11, 22, 22]);
+  assert.deepEqual(attempts, [11, 22, '-100777', 22]);
 });
 
 test('inactive checkout never receives live approval buttons', async () => {
@@ -135,9 +145,16 @@ test('final decision edits every delivered card and removes buttons', async () =
       'decision.actorName': 'Operator', 'decision.actorType': 'telegram',
     },
     $push: {
-      'notification.messages': {
-        telegramId: 11, messageId: 301, sentAt: new Date(),
-      },
+      'notification.messages': { $each: [
+        {
+          recipientKey: 'admin:11', recipientType: 'admin', chatId: '11',
+          telegramId: 11, messageId: 301, sentAt: new Date(),
+        },
+        {
+          recipientKey: 'channel:-100777', recipientType: 'channel', chatId: '-100777',
+          messageId: 302, sentAt: new Date(),
+        },
+      ] },
     },
   });
   const calls = [];
@@ -149,13 +166,15 @@ test('final decision edits every delivered card and removes buttons', async () =
 
   await notifier.finalize(String(approval._id));
 
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].method, 'editMessageText');
-  assert.equal(calls[0].payload.chat_id, 11);
-  assert.deepEqual(calls[0].payload.reply_markup, { inline_keyboard: [] });
-  assert.match(calls[0].payload.text, /Operator/);
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every((row) => row.method === 'editMessageText'));
+  assert.deepEqual(calls.map((row) => String(row.payload.chat_id)).sort(), ['-100777', '11']);
+  assert.ok(calls.every((row) => (
+    JSON.stringify(row.payload.reply_markup) === JSON.stringify({ inline_keyboard: [] })
+  )));
+  assert.ok(calls.every((row) => /Operator/.test(row.payload.text)));
   const stored = await MedicalkaApproval().findById(approval._id).lean();
-  assert.ok(stored.notification.messages[0].finalizedAt);
+  assert.ok(stored.notification.messages.every((row) => row.finalizedAt));
 });
 
 test('failed final edit remains pending and only unfinished cards retry', async () => {

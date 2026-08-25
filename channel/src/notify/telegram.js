@@ -1,8 +1,10 @@
+const { createHash, randomUUID } = require('node:crypto');
 const config = require('../config');
 const logger = require('../logger');
 const ChannelOrder = require('../models/ChannelOrder');
 const AdminView = require('../models/AdminView');
 const MedicalkaApproval = require('../models/MedicalkaApproval');
+const MedicalkaSubOrder = require('../models/MedicalkaSubOrder');
 
 /**
  * Order cards in the Telegram operations channel.
@@ -237,6 +239,7 @@ function createMedicalkaNotifier({
   send = call,
   AdminModel = AdminView(),
   ApprovalModel = MedicalkaApproval(),
+  channelId = config.telegram.ordersChannelId,
   now = () => new Date(),
 } = {}) {
   async function announce(input) {
@@ -249,15 +252,31 @@ function createMedicalkaNotifier({
     const admins = await AdminModel.find({
       role: 'admin', telegramId: { $gt: 0 }, botBlocked: { $ne: true },
     }).sort({ telegramId: 1 }).lean();
+    const recipients = [
+      ...admins.map((admin) => ({
+        key: `admin:${admin.telegramId}`,
+        type: 'admin',
+        chatId: admin.telegramId,
+        telegramId: admin.telegramId,
+      })),
+      ...(channelId ? [{
+        key: `channel:${channelId}`,
+        type: 'channel',
+        chatId: String(channelId),
+        telegramId: null,
+      }] : []),
+    ];
     const delivered = new Set(
-      (approval.notification?.messages || []).map((row) => Number(row.telegramId))
+      (approval.notification?.messages || []).map((row) => (
+        row.recipientKey || (row.telegramId ? `admin:${row.telegramId}` : '')
+      ))
     );
     let failed = false;
 
-    for (const admin of admins) {
-      if (delivered.has(Number(admin.telegramId))) continue;
+    for (const recipient of recipients) {
+      if (delivered.has(recipient.key)) continue;
       const sent = await send('sendMessage', {
-        chat_id: admin.telegramId,
+        chat_id: recipient.chatId,
         text: renderMedicalkaApproval(approval),
         parse_mode: 'HTML',
         disable_web_page_preview: true,
@@ -269,11 +288,14 @@ function createMedicalkaNotifier({
       }
       await ApprovalModel.updateOne({
         _id: approval._id,
-        'notification.messages.telegramId': { $ne: admin.telegramId },
+        'notification.messages': { $not: { $elemMatch: { recipientKey: recipient.key } } },
       }, {
         $push: {
           'notification.messages': {
-            telegramId: admin.telegramId,
+            recipientKey: recipient.key,
+            recipientType: recipient.type,
+            chatId: String(recipient.chatId),
+            telegramId: recipient.telegramId,
             messageId: sent.message_id,
             sentAt: now(),
           },
@@ -298,7 +320,7 @@ function createMedicalkaNotifier({
       let edited = null;
       try {
         edited = await send('editMessageText', {
-          chat_id: message.telegramId,
+          chat_id: message.chatId || message.telegramId,
           message_id: message.messageId,
           text: renderMedicalkaApproval(approval),
           parse_mode: 'HTML',
@@ -310,7 +332,6 @@ function createMedicalkaNotifier({
         _id: approval._id,
         'notification.messages': {
           $elemMatch: {
-            telegramId: message.telegramId,
             messageId: message.messageId,
             finalizedAt: null,
           },
@@ -349,31 +370,198 @@ function createMedicalkaNotifier({
   return { announce, finalize };
 }
 
-let medicalkaNotifier = null;
-
-function getMedicalkaNotifier() {
-  if (!medicalkaNotifier) medicalkaNotifier = createMedicalkaNotifier();
-  return medicalkaNotifier;
+function renderMedicalkaSubOrder(order) {
+  const itemLines = (order.items || []).map((item) => (
+    `• ${escapeHtml(item.name || item.productId || item.productExternalId)}`
+      + ` × ${Number(item.quantity) || 0} — ${formatUZS(item.lineTotal)}`
+  ));
+  const customerName = [order.customer?.firstName, order.customer?.lastName]
+    .filter(Boolean).join(' ');
+  const number = order.orderNumber || order.subOrderNumber || order.externalId;
+  const delivery = [order.deliveryProvider, order.courierStatus, order.deliveryServiceStatus]
+    .filter(Boolean).map(escapeHtml).join(' · ');
+  const billzState = order.sale?.reconciliationRequired
+    ? `${order.sale?.state || 'pending'} · reconciliation_required`
+    : (order.sale?.state || 'pending');
+  return [
+    `🏥 <b>Medicalka buyurtma / Заказ</b> · <code>${escapeHtml(number)}</code>`,
+    order.subOrderNumber && order.subOrderNumber !== number
+      ? `Suborder: <code>${escapeHtml(order.subOrderNumber)}</code>` : '',
+    '',
+    itemLines.join('\n'),
+    '',
+    `💰 <b>${formatUZS(order.subtotal)}</b>`,
+    `💳 ${escapeHtml(order.paymentStatus || 'unknown')} · ${escapeHtml(order.paymentMethod || 'unknown')}`,
+    `📦 ${escapeHtml(order.status || 'unknown')}`,
+    delivery ? `🚚 ${delivery}` : '',
+    `🧾 Billz: ${escapeHtml(billzState)}`,
+    customerName ? `👤 ${escapeHtml(customerName)}` : '',
+    order.customer?.phone ? `📞 ${escapeHtml(order.customer.phone)}` : '',
+  ].filter((part) => part !== '').join('\n');
 }
 
-async function announceMedicalkaApproval(approval) {
-  if (!isMedicalkaConfigured()) return null;
-  return getMedicalkaNotifier().announce(approval);
+function subOrderFingerprint(order) {
+  const data = {
+    orderNumber: order.orderNumber,
+    subOrderNumber: order.subOrderNumber,
+    paymentStatus: order.paymentStatus,
+    paymentMethod: order.paymentMethod,
+    status: order.status,
+    deliveryType: order.deliveryType,
+    deliveryProvider: order.deliveryProvider,
+    courierStatus: order.courierStatus,
+    deliveryServiceStatus: order.deliveryServiceStatus,
+    subtotal: order.subtotal,
+    customer: order.customer,
+    items: order.items,
+    mapping: order.mapping,
+    sale: order.sale,
+    operation: {
+      reconciliationRequired: order.operation?.reconciliationRequired,
+      lastError: order.operation?.lastError,
+    },
+    lastAction: order.lastAction,
+  };
+  return createHash('sha256').update(JSON.stringify(data)).digest('hex');
 }
 
-async function finalizeMedicalkaApproval(id) {
+function createMedicalkaSubOrderNotifier({
+  send = call,
+  Model = MedicalkaSubOrder(),
+  channelId = config.telegram.ordersChannelId,
+  now = () => new Date(),
+} = {}) {
+  async function announce(input) {
+    if (!channelId || !input?._id) return null;
+    const current = await Model.findById(input._id).lean();
+    if (!current) return null;
+    const fingerprint = subOrderFingerprint(current);
+    if (
+      current.notification?.messageId
+      && current.notification?.fingerprint === fingerprint
+    ) return current.notification.messageId;
+
+    const attemptedAt = now();
+    const token = randomUUID();
+    const staleAt = new Date(attemptedAt.getTime() - 60000);
+    const claimed = await Model.findOneAndUpdate({
+      _id: current._id,
+      $and: [
+        { $or: [
+          { 'notification.fingerprint': { $ne: fingerprint } },
+          { 'notification.messageId': { $in: [null, 0] } },
+        ] },
+        { $or: [
+          { 'notification.claimToken': { $in: ['', null] } },
+          { 'notification.claimedAt': { $lte: staleAt } },
+        ] },
+      ],
+    }, {
+      $set: {
+        'notification.claimToken': token,
+        'notification.claimedAt': attemptedAt,
+      },
+    }, { new: true }).lean();
+    if (!claimed) return null;
+
+    let delivered = null;
+    try {
+      if (claimed.notification?.messageId) {
+        delivered = await send('editMessageText', {
+          chat_id: claimed.notification.chatId || String(channelId),
+          message_id: claimed.notification.messageId,
+          text: renderMedicalkaSubOrder(claimed),
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+        });
+      } else {
+        delivered = await send('sendMessage', {
+          chat_id: String(channelId),
+          text: renderMedicalkaSubOrder(claimed),
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+        });
+      }
+    } catch (_) { /* durable retry state is stored below */ }
+
+    const messageId = claimed.notification?.messageId || delivered?.message_id;
+    if (!delivered || !messageId) {
+      const attempts = Number(claimed.notification?.attempts || 0) + 1;
+      const retryDelay = Math.min(30000 * (2 ** Math.min(attempts - 1, 4)), 600000);
+      await Model.updateOne({ _id: claimed._id, 'notification.claimToken': token }, {
+        $inc: { 'notification.attempts': 1 },
+        $set: {
+          'notification.claimToken': '',
+          'notification.claimedAt': null,
+          'notification.retryAt': new Date(attemptedAt.getTime() + retryDelay),
+          'notification.lastError': 'medicalka_suborder_telegram_failed',
+        },
+      });
+      throw new Error('medicalka_suborder_telegram_failed');
+    }
+
+    await Model.updateOne({ _id: claimed._id, 'notification.claimToken': token }, {
+      $set: {
+        'notification.claimToken': '',
+        'notification.claimedAt': null,
+        'notification.chatId': String(channelId),
+        'notification.messageId': messageId,
+        'notification.fingerprint': fingerprint,
+        'notification.sentAt': claimed.notification?.sentAt || attemptedAt,
+        'notification.updatedAt': attemptedAt,
+        'notification.retryAt': null,
+        'notification.lastError': '',
+      },
+    });
+    return messageId;
+  }
+
+  async function drainOnce() {
+    const rows = await Model.find({
+      'notification.lastError': { $ne: '' },
+      'notification.retryAt': { $lte: now() },
+    }).sort({ 'notification.retryAt': 1 }).limit(20).select({ _id: 1 }).lean();
+    for (const row of rows) {
+      try { await announce(row); } catch (_) { /* next retry is already stored */ }
+    }
+    return rows.length;
+  }
+
+  return { announce, drainOnce };
+}
+
+async function announceMedicalkaApproval(approval, options = {}) {
   if (!isMedicalkaConfigured()) return null;
-  return getMedicalkaNotifier().finalize(id);
+  return createMedicalkaNotifier(options).announce(approval);
+}
+
+async function finalizeMedicalkaApproval(id, options = {}) {
+  if (!isMedicalkaConfigured()) return null;
+  return createMedicalkaNotifier(options).finalize(id);
+}
+
+async function announceMedicalkaSubOrder(order, options = {}) {
+  if (!isConfigured()) return null;
+  return createMedicalkaSubOrderNotifier(options).announce(order);
+}
+
+async function drainMedicalkaSubOrderNotifications(options = {}) {
+  if (!isConfigured()) return null;
+  return createMedicalkaSubOrderNotifier(options).drainOnce();
 }
 
 module.exports = {
   announceMedicalkaApproval,
+  announceMedicalkaSubOrder,
   announceOrder,
   createMedicalkaNotifier,
+  createMedicalkaSubOrderNotifier,
+  drainMedicalkaSubOrderNotifications,
   escapeHtml,
   finalizeMedicalkaApproval,
   isConfigured,
   isMedicalkaConfigured,
   renderCard,
   renderMedicalkaApproval,
+  renderMedicalkaSubOrder,
 };

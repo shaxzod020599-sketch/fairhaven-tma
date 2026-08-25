@@ -124,7 +124,7 @@ function createRuntimeContext({ profile, credentials }) {
         Model: ApprovalModel,
         onNew: async (approval) => {
           if (typeof notify.announceMedicalkaApproval === 'function') {
-            await notify.announceMedicalkaApproval(approval);
+            await notify.announceMedicalkaApproval(approval, { ApprovalModel });
           }
         },
         onDecision: async (approval) => {
@@ -143,6 +143,11 @@ function createRuntimeContext({ profile, credentials }) {
         environment,
         processingMode: profile.processingMode,
         billzWriteEnabled: () => config.billzWriteEnabled,
+        onChanged: async (subOrder) => {
+          if (typeof notify.announceMedicalkaSubOrder === 'function') {
+            await notify.announceMedicalkaSubOrder(subOrder, { Model: SubOrderModel });
+          }
+        },
       });
     }
   }
@@ -337,7 +342,12 @@ function createRuntimeContext({ profile, credentials }) {
     );
     historyTimer.unref?.();
     notificationTimer = startNotificationWorker({
-      drain: () => approvalService.drainNotificationsOnce(),
+      drain: () => Promise.all([
+        approvalService.drainNotificationsOnce(),
+        typeof notify.drainMedicalkaSubOrderNotifications === 'function'
+          ? notify.drainMedicalkaSubOrderNotifications({ Model: SubOrderModel })
+          : null,
+      ]),
       intervalMs: config.medicalkaPartner.notificationPollMs,
     });
     if (config.medicalkaPartner.subOrdersEnabled) {

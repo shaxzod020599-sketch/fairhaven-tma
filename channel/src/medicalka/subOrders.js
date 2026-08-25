@@ -162,6 +162,7 @@ function createSubOrderService({
   environment = 'production',
   processingMode = 'observe',
   billzWriteEnabled = () => config.billzWriteEnabled,
+  onChanged = async () => {},
 } = {}) {
   let polling = false;
   let nextHistoryPollAt = 0;
@@ -288,7 +289,7 @@ function createSubOrderService({
     }, { new: true }).lean();
   }
 
-  async function ingest(input) {
+  async function ingestStored(input) {
     const raw = await fullPayload(input);
     let stored = await storeSnapshot(raw);
     stored = await reconcileSaleProjection(stored);
@@ -388,6 +389,16 @@ function createSubOrderService({
         },
       }, { new: true }).lean();
     }
+  }
+
+  async function notifyChanged(row) {
+    if (!row) return row;
+    try { await onChanged(row); } catch (_) { /* notification retry is independent */ }
+    return row;
+  }
+
+  async function ingest(input) {
+    return notifyChanged(await ingestStored(input));
   }
 
   async function pollOnce() {
@@ -647,7 +658,13 @@ function createSubOrderService({
     }
   }
 
-  return { addLabel, cancel, ingest, pollOnce, transition };
+  return {
+    addLabel: (...args) => Promise.resolve(addLabel(...args)).then(notifyChanged),
+    cancel: (...args) => Promise.resolve(cancel(...args)).then(notifyChanged),
+    ingest,
+    pollOnce,
+    transition: (...args) => Promise.resolve(transition(...args)).then(notifyChanged),
+  };
 }
 
 module.exports = { createSubOrderService, normalizeSubOrder, sourceProductId };

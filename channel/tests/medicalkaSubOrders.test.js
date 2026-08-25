@@ -147,6 +147,28 @@ test('observe mode stores paid lifecycle without mapping or Billz calls', async 
   assert.equal(stored.sale.reconciliationRequired, false);
 });
 
+test('stored lifecycle changes notify after final state without affecting ingestion', async () => {
+  const changes = [];
+  const service = createSubOrderService({
+    client: {}, ProductModel: products([]), orderService: {},
+    environment: 'staging', processingMode: 'observe',
+    onChanged: async (row) => {
+      changes.push({ status: row.status, sale: row.sale.state });
+      if (changes.length === 2) throw new Error('telegram unavailable');
+    },
+  });
+
+  const first = await service.ingest(paid());
+  const second = await service.ingest(paid({ courier_status: 'courier_assigned' }));
+
+  assert.equal(first.sale.state, 'observed');
+  assert.equal(second.courierStatus, 'courier_assigned');
+  assert.deepEqual(changes, [
+    { status: 'processing', sale: 'observed' },
+    { status: 'processing', sale: 'observed' },
+  ]);
+});
+
 test('staging and global Billz gate both block a live-mode sale', async () => {
   for (const options of [
     { environment: 'staging', processingMode: 'live', billzWriteEnabled: () => true },
