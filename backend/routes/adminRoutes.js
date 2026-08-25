@@ -142,6 +142,10 @@ router.get('/channels/sync', channels.syncStatus);
 router.post('/channels/sync', channels.triggerSync);
 router.get('/channels/settings', channels.getSettings);
 router.put('/channels/settings', channels.updateSettings);
+router.get('/channels/medicalka/partner', medicalka.partnerSummary);
+router.put('/channels/medicalka/partner/profiles/:environment', medicalka.updatePartnerProfile);
+router.post('/channels/medicalka/partner/activate', medicalka.activatePartnerProfile);
+router.post('/channels/medicalka/partner/mode', medicalka.setPartnerMode);
 // Marketplace credentials. The secret is returned once, by the POST that
 // creates it, and is not stored on this side at all.
 router.get('/channels/keys', channels.listKeys);

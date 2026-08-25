@@ -1,8 +1,11 @@
 const channelHub = require('../utils/channelHub');
+const audit = require('../services/adminAudit');
 
 const BUCKETS = new Set(['active', 'history', 'all']);
 const SUBORDER_BUCKETS = new Set(['active', 'history', 'reconciliation', 'all']);
 const ID = /^[a-f\d]{24}$/i;
+const PARTNER_ENVIRONMENTS = new Set(['staging', 'production']);
+const PARTNER_MODES = new Set(['observe', 'live']);
 
 function readQuery(raw = {}, buckets = BUCKETS) {
   const bucket = String(raw.bucket || 'active');
@@ -41,6 +44,155 @@ function adminActor(admin) {
   if (!Number.isSafeInteger(telegramId) || telegramId <= 0) return null;
   return { type: 'admin-panel', telegramId, name: adminName(admin) };
 }
+
+function safePartnerProfile(row = {}) {
+  return {
+    environment: String(row.environment || ''),
+    baseUrl: String(row.baseUrl || ''),
+    username: String(row.username || ''),
+    passwordConfigured: Boolean(row.passwordConfigured),
+    processingMode: row.processingMode === 'live' ? 'live' : 'observe',
+    active: Boolean(row.active),
+    pharmacyCount: Math.max(0, Number(row.pharmacyCount) || 0),
+    pharmacies: (Array.isArray(row.pharmacies) ? row.pharmacies : []).map((pharmacy) => ({
+      id: String(pharmacy?.id || ''), name: String(pharmacy?.name || ''),
+    })).filter((pharmacy) => pharmacy.id),
+    lastValidatedAt: row.lastValidatedAt || null,
+    health: {
+      lastSuccessAt: row.health?.lastSuccessAt || null,
+      lastErrorCode: String(row.health?.lastErrorCode || ''),
+    },
+    source: String(row.source || ''),
+  };
+}
+
+function safePartnerSummary(body = {}) {
+  if (Array.isArray(body.profiles)) {
+    return {
+      activeEnvironment: PARTNER_ENVIRONMENTS.has(body.activeEnvironment)
+        ? body.activeEnvironment : '',
+      profiles: body.profiles.map(safePartnerProfile),
+    };
+  }
+  return safePartnerProfile(body);
+}
+
+function readPartnerProfile(req) {
+  const environment = String(req.params?.environment || '');
+  const body = req.body;
+  if (!PARTNER_ENVIRONMENTS.has(environment) || !body || Array.isArray(body)) return null;
+  const allowed = new Set(['username', 'password', 'processingMode']);
+  if (Object.keys(body).some((key) => !allowed.has(key))) return null;
+  const username = String(body.username || '').trim();
+  const password = String(body.password || '');
+  const requestedMode = String(body.processingMode || 'observe');
+  if (
+    username.length > 200 || password.length > 500
+    || !PARTNER_MODES.has(requestedMode)
+  ) return null;
+  return {
+    username,
+    password,
+    processingMode: environment === 'staging' ? 'observe' : requestedMode,
+  };
+}
+
+function pharmacyCount(body, environment) {
+  if (Array.isArray(body?.profiles)) {
+    return Number(body.profiles.find((row) => row.environment === environment)?.pharmacyCount) || 0;
+  }
+  return Number(body?.pharmacyCount) || 0;
+}
+
+async function auditPartner(req, action, environment, outcome, result) {
+  await audit.record({
+    admin: req.admin,
+    action,
+    entityType: 'medicalka-partner-profile',
+    entityId: environment,
+    summary: {
+      environment,
+      outcome,
+      pharmacyCount: pharmacyCount(result, environment),
+    },
+  });
+}
+
+exports.partnerSummary = async (_req, res) => {
+  try {
+    const result = await channelHub.requestInternal(
+      'GET', ['internal', 'medicalka', 'partner']
+    );
+    if (!result.ok) return safeUpstream(res, result);
+    return res.json({ success: true, data: safePartnerSummary(result.body) });
+  } catch (err) {
+    return unavailable(res, err);
+  }
+};
+
+exports.updatePartnerProfile = async (req, res) => {
+  const environment = String(req.params?.environment || '');
+  const body = readPartnerProfile(req);
+  if (!body) return res.status(400).json({ success: false, error: 'medicalka_invalid_profile' });
+  try {
+    const result = await channelHub.requestInternal(
+      'PUT', ['internal', 'medicalka', 'partner', 'profiles', environment], { body }
+    );
+    if (!result.ok) return safeUpstream(res, result);
+    const data = safePartnerSummary(result.body);
+    await auditPartner(req, 'medicalka.partner.profile.update', environment, 'validated', data);
+    return res.json({ success: true, data });
+  } catch (err) {
+    return unavailable(res, err);
+  }
+};
+
+exports.activatePartnerProfile = async (req, res) => {
+  const environment = String(req.body?.environment || '');
+  if (!PARTNER_ENVIRONMENTS.has(environment)) {
+    return res.status(400).json({ success: false, error: 'medicalka_invalid_environment' });
+  }
+  try {
+    const result = await channelHub.requestInternal(
+      'POST', ['internal', 'medicalka', 'partner', 'activate'], { body: { environment } }
+    );
+    if (!result.ok) return safeUpstream(res, result);
+    const data = safePartnerSummary(result.body);
+    await auditPartner(req, 'medicalka.partner.profile.activate', environment, 'activated', data);
+    return res.json({ success: true, data });
+  } catch (err) {
+    return unavailable(res, err);
+  }
+};
+
+exports.setPartnerMode = async (req, res) => {
+  const environment = String(req.body?.environment || '');
+  const processingMode = String(req.body?.processingMode || '');
+  if (
+    !PARTNER_ENVIRONMENTS.has(environment)
+    || !PARTNER_MODES.has(processingMode)
+    || (environment === 'staging' && processingMode !== 'observe')
+  ) {
+    return res.status(400).json({
+      success: false, error: 'medicalka_invalid_processing_mode',
+    });
+  }
+  try {
+    const result = await channelHub.requestInternal(
+      'POST', ['internal', 'medicalka', 'partner', 'mode'], {
+        body: { environment, processingMode },
+      }
+    );
+    if (!result.ok) return safeUpstream(res, result);
+    const data = safePartnerSummary(result.body);
+    await auditPartner(
+      req, 'medicalka.partner.profile.mode', environment, processingMode, data
+    );
+    return res.json({ success: true, data });
+  } catch (err) {
+    return unavailable(res, err);
+  }
+};
 
 exports.list = async (req, res) => {
   const query = readQuery(req.query);
