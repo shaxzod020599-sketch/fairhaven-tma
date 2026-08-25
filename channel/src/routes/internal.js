@@ -148,6 +148,8 @@ router.get('/analytics/billz/capability', async (req, res) => {
 const MEDICALKA_BUCKETS = new Set(['active', 'history', 'all']);
 const MEDICALKA_SUBORDER_BUCKETS = new Set(['active', 'history', 'reconciliation', 'all']);
 const MEDICALKA_ACTORS = new Set(['admin-panel', 'telegram']);
+const MEDICALKA_ENVIRONMENTS = new Set(['staging', 'production']);
+const MEDICALKA_PROCESSING_MODES = new Set(['observe', 'live']);
 
 function medicalkaError(res, err) {
   const code = String(err?.code || 'medicalka_internal_error');
@@ -195,6 +197,63 @@ function readMedicalkaDecision(body) {
   ) return null;
   return { action, comment, actor };
 }
+
+function readPartnerProfile(environment, body) {
+  if (!MEDICALKA_ENVIRONMENTS.has(environment) || !body || Array.isArray(body)) return null;
+  const allowed = new Set(['username', 'password', 'processingMode']);
+  if (Object.keys(body).some((key) => !allowed.has(key))) return null;
+  const username = String(body.username || '').trim();
+  const password = String(body.password || '');
+  const processingMode = String(body.processingMode || 'observe');
+  if (
+    username.length > 200 || password.length > 500
+    || !MEDICALKA_PROCESSING_MODES.has(processingMode)
+  ) return null;
+  return { environment, username, password, processingMode };
+}
+
+router.get('/medicalka/partner', async (_req, res) => {
+  try {
+    return res.json(await medicalka.connectionSummary());
+  } catch (err) {
+    return medicalkaError(res, err);
+  }
+});
+
+router.put('/medicalka/partner/profiles/:environment', async (req, res) => {
+  const input = readPartnerProfile(String(req.params.environment || ''), req.body);
+  if (!input) return res.status(422).json({ error: 'medicalka_invalid_profile' });
+  try {
+    return res.json(await medicalka.updatePartnerProfile(input));
+  } catch (err) {
+    return medicalkaError(res, err);
+  }
+});
+
+router.post('/medicalka/partner/activate', async (req, res) => {
+  const environment = String(req.body?.environment || '');
+  if (!MEDICALKA_ENVIRONMENTS.has(environment)) {
+    return res.status(422).json({ error: 'medicalka_invalid_environment' });
+  }
+  try {
+    return res.json(await medicalka.activatePartnerProfile(environment));
+  } catch (err) {
+    return medicalkaError(res, err);
+  }
+});
+
+router.post('/medicalka/partner/mode', async (req, res) => {
+  const environment = String(req.body?.environment || '');
+  const mode = String(req.body?.processingMode || '');
+  if (!MEDICALKA_ENVIRONMENTS.has(environment) || !MEDICALKA_PROCESSING_MODES.has(mode)) {
+    return res.status(422).json({ error: 'medicalka_invalid_processing_mode' });
+  }
+  try {
+    return res.json(await medicalka.setPartnerProcessingMode(environment, mode));
+  } catch (err) {
+    return medicalkaError(res, err);
+  }
+});
 
 router.get('/medicalka/approvals', async (req, res) => {
   const query = readMedicalkaQuery(req.query);

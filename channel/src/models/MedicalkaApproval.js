@@ -83,9 +83,32 @@ const approvalSchema = new mongoose.Schema({
 
 approvalSchema.index({ status: 1, deadlineAt: 1 });
 
-let model = null;
+const SCOPES = Object.freeze({
+  production: { modelName: 'MedicalkaApproval', collection: 'medicalkaapprovals' },
+  staging: { modelName: 'MedicalkaApprovalStaging', collection: 'medicalkaapprovals_staging' },
+});
+const models = new Map();
 
-module.exports = function MedicalkaApproval() {
-  if (!model) model = defineModel('MedicalkaApproval', approvalSchema, 'medicalkaapprovals');
-  return model;
-};
+function scope(environment = 'production') {
+  const selected = SCOPES[environment];
+  if (!selected) {
+    const err = new Error('medicalka_invalid_environment');
+    err.code = 'medicalka_invalid_environment';
+    throw err;
+  }
+  return selected;
+}
+
+function MedicalkaApproval(environment = 'production') {
+  const selected = scope(environment);
+  if (!models.has(environment)) {
+    models.set(environment, defineModel(
+      selected.modelName, approvalSchema, selected.collection
+    ));
+  }
+  return models.get(environment);
+}
+
+MedicalkaApproval.collectionFor = (environment) => scope(environment).collection;
+
+module.exports = MedicalkaApproval;

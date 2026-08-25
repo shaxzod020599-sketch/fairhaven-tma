@@ -171,7 +171,7 @@ async function start() {
   // Releases local holds on bot orders nobody acted on, so a forgotten order
   // stops keeping stock out of the marketplaces.
   const holdTimer = botOrders.startHoldSweeper();
-  medicalka.start();
+  await medicalka.start();
 
   if (!notify.isConfigured()) {
     logger.warn('telegram announcements are off — marketplace orders will not appear in the channel');

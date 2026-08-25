@@ -70,9 +70,32 @@ const schema = new mongoose.Schema({
 
 schema.index({ paymentStatus: 1, status: 1, sourceCreatedAt: -1 });
 
-let model = null;
+const SCOPES = Object.freeze({
+  production: { modelName: 'MedicalkaSubOrder', collection: 'medicalkasuborders' },
+  staging: { modelName: 'MedicalkaSubOrderStaging', collection: 'medicalkasuborders_staging' },
+});
+const models = new Map();
 
-module.exports = function MedicalkaSubOrder() {
-  if (!model) model = defineModel('MedicalkaSubOrder', schema, 'medicalkasuborders');
-  return model;
-};
+function scope(environment = 'production') {
+  const selected = SCOPES[environment];
+  if (!selected) {
+    const err = new Error('medicalka_invalid_environment');
+    err.code = 'medicalka_invalid_environment';
+    throw err;
+  }
+  return selected;
+}
+
+function MedicalkaSubOrder(environment = 'production') {
+  const selected = scope(environment);
+  if (!models.has(environment)) {
+    models.set(environment, defineModel(
+      selected.modelName, schema, selected.collection
+    ));
+  }
+  return models.get(environment);
+}
+
+MedicalkaSubOrder.collectionFor = (environment) => scope(environment).collection;
+
+module.exports = MedicalkaSubOrder;

@@ -155,3 +155,92 @@ test('known decision errors keep their safe status and code', async () => {
     runtime.respondToApproval = original;
   }
 });
+
+test('partner connection summary stays authenticated and contains no credential fields', async () => {
+  const original = runtime.connectionSummary;
+  runtime.connectionSummary = async () => ({
+    activeEnvironment: 'staging',
+    profiles: [{
+      environment: 'staging', username: 'fa••••ng', passwordConfigured: true,
+    }],
+  });
+  try {
+    const unauthorized = await call('GET', '/internal/medicalka/partner', { token: null });
+    assert.equal(unauthorized.status, 401);
+
+    const result = await call('GET', '/internal/medicalka/partner');
+    assert.equal(result.status, 200);
+    assert.equal(result.body.activeEnvironment, 'staging');
+    assert.equal(JSON.stringify(result.body).includes('passwordCipher'), false);
+    assert.equal(JSON.stringify(result.body).includes('usernameCipher'), false);
+  } finally {
+    runtime.connectionSummary = original;
+  }
+});
+
+test('partner profile update accepts bounded credential fields and rejects host injection', async () => {
+  const original = runtime.updatePartnerProfile;
+  let received;
+  runtime.updatePartnerProfile = async (input) => {
+    received = input;
+    return { environment: input.environment, username: 'fa••••ng' };
+  };
+  try {
+    const invalid = await call('PUT', '/internal/medicalka/partner/profiles/staging', {
+      body: {
+        username: 'staging-user', password: 'staging-password', processingMode: 'observe',
+        baseUrl: 'https://attacker.invalid',
+      },
+    });
+    assert.equal(invalid.status, 422);
+
+    const result = await call('PUT', '/internal/medicalka/partner/profiles/production', {
+      body: {
+        username: ' production-user ', password: 'production-password',
+        processingMode: 'observe',
+      },
+    });
+    assert.equal(result.status, 200);
+    assert.deepEqual(received, {
+      environment: 'production', username: 'production-user',
+      password: 'production-password', processingMode: 'observe',
+    });
+  } finally {
+    runtime.updatePartnerProfile = original;
+  }
+});
+
+test('partner activation and mode routes accept only fixed enums', async () => {
+  const activate = runtime.activatePartnerProfile;
+  const setMode = runtime.setPartnerProcessingMode;
+  const received = [];
+  runtime.activatePartnerProfile = async (environment) => {
+    received.push(['activate', environment]);
+    return { activeEnvironment: environment };
+  };
+  runtime.setPartnerProcessingMode = async (environment, mode) => {
+    received.push(['mode', environment, mode]);
+    return { environment, processingMode: mode };
+  };
+  try {
+    assert.equal((await call('POST', '/internal/medicalka/partner/activate', {
+      body: { environment: 'local' },
+    })).status, 422);
+    assert.equal((await call('POST', '/internal/medicalka/partner/mode', {
+      body: { environment: 'production', processingMode: 'unsafe' },
+    })).status, 422);
+
+    assert.equal((await call('POST', '/internal/medicalka/partner/activate', {
+      body: { environment: 'staging' },
+    })).status, 200);
+    assert.equal((await call('POST', '/internal/medicalka/partner/mode', {
+      body: { environment: 'production', processingMode: 'live' },
+    })).status, 200);
+    assert.deepEqual(received, [
+      ['activate', 'staging'], ['mode', 'production', 'live'],
+    ]);
+  } finally {
+    runtime.activatePartnerProfile = activate;
+    runtime.setPartnerProcessingMode = setMode;
+  }
+});

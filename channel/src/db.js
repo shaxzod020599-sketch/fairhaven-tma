@@ -28,8 +28,10 @@ const OWNED_COLLECTIONS = new Set([
   'channelcounters',
   'channelorders',
   'medicalkaapprovals',
+  'medicalkaapprovals_staging',
   'medicalkapartnerprofiles',
   'medicalkasuborders',
+  'medicalkasuborders_staging',
 ]);
 
 /**

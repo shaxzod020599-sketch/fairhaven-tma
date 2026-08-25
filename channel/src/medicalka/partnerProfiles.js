@@ -128,12 +128,52 @@ function createPartnerProfileService({
     return Model.findOne({ environment: selected.name }).lean();
   }
 
+  async function getActive() {
+    return Model.findOne({ active: true }).lean();
+  }
+
+  async function setActive(environment) {
+    const selected = environmentConfig(environment);
+    const target = await Model.findOne({ environment: selected.name }).lean();
+    if (!target) throw profileError('medicalka_profile_not_configured', 404);
+    await Model.updateMany(
+      { environment: { $ne: selected.name }, active: true },
+      { $set: { active: false } }
+    );
+    const saved = await Model.findOneAndUpdate(
+      { environment: selected.name }, { $set: { active: true } }, { new: true }
+    ).lean();
+    return summarize(saved);
+  }
+
+  async function setProcessingMode(environment, mode) {
+    const selected = environmentConfig(environment);
+    if (!['observe', 'live'].includes(mode)) {
+      throw profileError('medicalka_invalid_processing_mode');
+    }
+    const processingMode = selected.name === 'staging' ? 'observe' : mode;
+    const saved = await Model.findOneAndUpdate(
+      { environment: selected.name }, { $set: { processingMode } }, { new: true }
+    ).lean();
+    if (!saved) throw profileError('medicalka_profile_not_configured', 404);
+    return summarize(saved);
+  }
+
   async function listSummaries() {
     const rows = await Model.find({}).sort({ environment: 1 }).lean();
     return rows.map(summarize);
   }
 
-  return Object.freeze({ credentials, get, listSummaries, summarize, validateAndSave });
+  return Object.freeze({
+    credentials,
+    get,
+    getActive,
+    listSummaries,
+    setActive,
+    setProcessingMode,
+    summarize,
+    validateAndSave,
+  });
 }
 
 module.exports = {
