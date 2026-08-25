@@ -26,7 +26,7 @@ test('the writable-collection list stays limited to this service', () => {
     [...db.OWNED_COLLECTIONS].sort(),
     [
       'billzproducts', 'billztokens', 'channelcounters', 'channelkeys', 'channelorders',
-      'medicalkaapprovals', 'medicalkasuborders', 'synclogs',
+      'medicalkaapprovals', 'medicalkapartnerprofiles', 'medicalkasuborders', 'synclogs',
     ]
   );
 });

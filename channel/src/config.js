@@ -99,6 +99,7 @@ const config = {
     subOrderHistoryDays: number('MEDICALKA_SUBORDER_HISTORY_DAYS', 180),
     timeoutMs: number('MEDICALKA_PARTNER_TIMEOUT_MS', 8000),
     maxResponseBytes: number('MEDICALKA_PARTNER_MAX_RESPONSE_BYTES', 1024 * 1024),
+    credentialsEncryptionKey: process.env.MEDICALKA_CREDENTIALS_ENCRYPTION_KEY || '',
   },
 
   // Uzum Tezkor (Yandex Eats family). We are the provider: they authenticate
