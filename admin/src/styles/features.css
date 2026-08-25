@@ -178,6 +178,8 @@
 .fh-connection-mark.is-idle i { background: var(--fh-warning); }
 .fh-connection-card > p { min-height: 60px; margin: 24px 0; color: var(--fh-muted); line-height: 1.5; }
 .fh-connection-card > .fh-button { margin-top: auto; }
+.fh-connection-actions { width: 100%; display: flex; align-items: center; gap: 10px; margin-top: auto; }
+.fh-connection-actions .fh-button:first-child { flex: 1; }
 .fh-connection-card--billz p, .fh-connection-card--billz .fh-connection-mark { color: var(--fh-muted); }
 .fh-sync-ledger { width: 100%; display: grid; gap: 10px; margin: 22px 0; }
 .fh-sync-ledger > div { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 9px; border-bottom: 1px solid #373138; font-size: 12px; }.fh-sync-ledger span { color: #aaa2a7; }
@@ -203,6 +205,17 @@
 .fh-check { display: flex; align-items: flex-start; gap: 10px; }.fh-check--ack { padding: 14px; border-radius: 12px; background: var(--fh-warning-wash); }
 .fh-key-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }.fh-key-box { position: relative; padding: 16px; border: 1px solid var(--fh-line); border-radius: 12px; }.fh-key-box span, .fh-key-box code { display: block; }.fh-key-box span { margin-bottom: 9px; color: var(--fh-muted); font-size: 11px; font-weight: 800; }.fh-key-box code { overflow-wrap: anywhere; font: 12px/1.5 var(--fh-font-mono); }.fh-key-box button { margin-top: 12px; }
 .fh-secret-warning { padding: 14px; border: 1px solid #e7c789; border-radius: 12px; background: var(--fh-warning-wash); color: #67430b; font-size: 13px; font-weight: 700; }
+.fh-partner-dialog { display: grid; gap: 18px; }
+.fh-partner-envs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fh-partner-envs label { min-height: 70px; display: flex; align-items: center; gap: 11px; padding: 12px 14px; border: 1px solid var(--fh-line); border-radius: 12px; cursor: pointer; }
+.fh-partner-envs label.is-selected { border-color: var(--fh-burgundy); background: var(--fh-burgundy-wash); }
+.fh-partner-envs span { display: grid; gap: 3px; flex: 1; }.fh-partner-envs small { color: var(--fh-muted); }
+.fh-partner-fixed-url { display: grid; gap: 6px; padding: 13px 15px; border-radius: 10px; background: var(--fh-canvas); }
+.fh-partner-fixed-url span { color: var(--fh-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }.fh-partner-fixed-url code { overflow-wrap: anywhere; font: 12px/1.45 var(--fh-font-mono); }
+.fh-partner-summary { display: grid; grid-template-columns: repeat(4, 1fr); border-block: 1px solid var(--fh-line); }
+.fh-partner-summary > div { min-width: 0; display: grid; gap: 5px; padding: 13px; border-right: 1px solid var(--fh-line); }.fh-partner-summary > div:last-child { border-right: 0; }
+.fh-partner-summary span { color: var(--fh-muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }.fh-partner-summary b { overflow-wrap: anywhere; font-size: 13px; }
+.fh-partner-fields { align-items: start; }.fh-partner-actions { padding-top: 2px; }
 
 /* Customers, admins, promos, collections, settings, gallery */
 .fh-person-grid, .fh-promo-grid, .fh-collection-grid, .fh-gallery-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
@@ -246,6 +259,10 @@
   .fh-workbench__lead { flex-direction: column; }.fh-workbench__total { text-align: left; }
   .fh-product-card__identity { padding: 18px; }.fh-billz, .fh-channel-matrix { padding-inline: 18px; }.fh-billz--empty { grid-template-columns: 1fr; }.fh-billz__link { align-items: stretch; flex-direction: column; gap: 12px; }.fh-billz__numbers { gap: 13px; grid-template-columns: 1fr; }.fh-billz__numbers > div, .fh-billz__numbers > div + div { padding: 0 0 10px; border-right: 0; border-bottom: 1px solid var(--fh-burgundy-line); }.fh-channel-matrix__head { flex-direction: column; }.fh-channel-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .fh-form-grid, .fh-key-grid, .fh-person-grid, .fh-promo-grid, .fh-collection-grid, .fh-gallery-grid { grid-template-columns: 1fr; }
+  .fh-connection-actions { align-items: stretch; flex-direction: column; }
+  .fh-connection-actions .fh-button { width: 100%; }
+  .fh-partner-envs, .fh-partner-summary { grid-template-columns: 1fr; }
+  .fh-partner-summary > div { border-right: 0; border-bottom: 1px solid var(--fh-line); }.fh-partner-summary > div:last-child { border-bottom: 0; }
   .fh-search-row { flex-direction: column; }
   .fh-excel > section { grid-template-columns: 1fr; }.fh-excel-report > div { grid-template-columns: 1fr 1fr; }
   .fh-dialog-layer { align-items: end; padding: 0; }.fh-dialog { max-height: 92vh; border-radius: 22px 22px 0 0; }.fh-dialog__head, .fh-dialog__body { padding: 19px; }
@@ -307,6 +324,8 @@
 .fh-medicalka-comment > span { font-size: 13px; font-weight: 800; }
 .fh-medicalka-comment > small { justify-self: end; color: var(--fh-muted); }
 .fh-medicalka-reconcile { padding: 11px 13px; border: 1px solid var(--fh-danger); border-radius: var(--fh-radius-sm); background: var(--fh-danger-wash); color: var(--fh-danger); font-size: 13px; font-weight: 700; }
+.fh-medicalka-lifecycle { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; overflow: hidden; border: 1px solid var(--fh-line-soft); border-radius: var(--fh-radius-sm); background: var(--fh-line-soft); }
+.fh-medicalka-lifecycle > span { display: grid; gap: 4px; padding: 11px 12px; background: var(--fh-canvas); }.fh-medicalka-lifecycle small { font-size: 10px; text-transform: uppercase; }.fh-medicalka-lifecycle b { overflow-wrap: anywhere; font-size: 12px; }
 .fh-medicalka-marking { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0 11px; }
 .fh-medicalka-suborders { display: grid; gap: 14px; }
 
@@ -317,6 +336,7 @@
   .fh-medicalka-items > div > strong { grid-column: 1 / -1; text-align: left; }
   .fh-medicalka-card > footer .fh-order-actions { width: 100%; }
   .fh-medicalka-card > footer .fh-button { flex: 1; }
+  .fh-medicalka-lifecycle { grid-template-columns: 1fr; }
 }
 
 /* ── Operator workbench additions: timeline, notes, claim, undo ─────────── */

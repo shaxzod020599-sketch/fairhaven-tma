@@ -28,9 +28,6 @@ function statusLabel(status) {
 }
 
 function nextStatusAction(order) {
-  if (order.deliveryType === 'delivery' && order.status === 'processing') {
-    return { value: 'shipped', label: 'Kuryerga berildi' };
-  }
   if (order.deliveryType === 'pickup' && ['processing', 'shipped'].includes(order.status)) {
     return { value: 'delivered', label: 'Mijozga berildi' };
   }
@@ -61,7 +58,7 @@ export function MedicalkaSubOrders({ api }) {
       setSync(response.sync || { stale: false });
       setError('');
     } catch (err) {
-      setError(err.message || 'Paid orderlar yuklanmadi');
+      setError(err.message || 'Medicalka lifecycle yuklanmadi');
     } finally {
       if (!silent) setLoading(false);
     }
@@ -114,18 +111,18 @@ export function MedicalkaSubOrders({ api }) {
       </div>
 
       {(error || sync.stale) && rows.length > 0 && (
-        <div className="fh-stale-note">Oldingi paid orderlar ko‘rsatilmoqda. Sync vaqtincha ishlamayapti.</div>
+        <div className="fh-stale-note">Oldingi lifecycle ko‘rsatilmoqda. Sync vaqtincha ishlamayapti.</div>
       )}
       {sync.enabled === false && (
-        <div className="fh-stale-note">Paid sub-order sync alohida prod flag bilan yoqiladi.</div>
+        <div className="fh-stale-note">Medicalka lifecycle sync alohida prod flag bilan yoqiladi.</div>
       )}
 
       {loading && rows.length === 0 ? (
         <div className="fh-page-skeleton"><span /><span /><span /></div>
       ) : error && rows.length === 0 ? (
-        <DataState tone="error" title="Paid orderlar mavjud emas" message={error} actionLabel="Qayta urinish" onAction={load} />
+        <DataState tone="error" title="Medicalka lifecycle mavjud emas" message={error} actionLabel="Qayta urinish" onAction={load} />
       ) : rows.length === 0 ? (
-        <DataState title="Paid orderlar yo‘q" message="Mijoz to‘laganidan keyin sub-order shu yerda chiqadi." />
+        <DataState title="Medicalka buyurtmalari yo‘q" message="Mijoz to‘laganidan keyin payment, courier va Billz holati shu yerda chiqadi." />
       ) : (
         <div className="fh-medicalka-list">
           {rows.map((order) => {
@@ -154,6 +151,14 @@ export function MedicalkaSubOrders({ api }) {
                   </div>
                 )}
 
+                {order.deliveryType === 'delivery' && (
+                  <div className="fh-medicalka-lifecycle">
+                    <span><small>Yetkazuvchi</small><b>{order.deliveryProvider || '—'}</b></span>
+                    <span><small>Kuryer</small><b>{order.courierStatus || '—'}</b></span>
+                    <span><small>Delivery status</small><b>{order.deliveryServiceStatus || '—'}</b></span>
+                  </div>
+                )}
+
                 <div className="fh-medicalka-items">
                   {(order.items || []).map((item) => (
                     <div key={item.itemId || item.productId}>
@@ -172,7 +177,7 @@ export function MedicalkaSubOrders({ api }) {
 
                 <footer>
                   <div>
-                    <span>To‘lov: {order.paymentStatus}</span>
+                    <span>To‘lov: {order.paymentStatus} · {order.paymentMethod || 'usul noma’lum'}</span>
                     <span>Billz: {order.sale?.state === 'sold' ? 'sotildi' : order.sale?.state}</span>
                   </div>
                   <strong>{formatMoney(order.subtotal)}</strong>

@@ -7,6 +7,7 @@ import { Card } from '../../ui/Card';
 import { Dialog } from '../../ui/Dialog';
 import { Field } from '../../ui/Field';
 import { useToast } from '../../ui/ToastProvider';
+import { MedicalkaPartnerDialog } from './MedicalkaPartnerDialog';
 import { MedicalkaWizard } from './MedicalkaWizard';
 
 /**
@@ -56,14 +57,16 @@ export function ConnectionsPage({ api = connectionsApi }) {
   const [defaultPackageCode, setDefaultPackageCode] = useState('');
   const [errors, setErrors] = useState({});
   const [medicalka, setMedicalka] = useState(false);
+  const [medicalkaPartner, setMedicalkaPartner] = useState(false);
+  const [partnerSummary, setPartnerSummary] = useState({ activeEnvironment: '', profiles: [] });
   const [uzum, setUzum] = useState(false);
   const [revoking, setRevoking] = useState(null);
   const [busy, setBusy] = useState(false);
   const [uzumForm, setUzumForm] = useState({ clientId: '', clientSecret: '', label: 'Основное подключение Uzum' });
 
   const load = useCallback(async () => {
-    const [syncResult, settingsResult, keysResult] = await Promise.allSettled([
-      api.syncStatus(), api.settings(), api.keys(),
+    const [syncResult, settingsResult, keysResult, partnerResult] = await Promise.allSettled([
+      api.syncStatus(), api.settings(), api.keys(), api.medicalkaPartner(),
     ]);
     if (syncResult.status === 'fulfilled') {
       setSync(syncResult.value.data);
@@ -77,6 +80,10 @@ export function ConnectionsPage({ api = connectionsApi }) {
       setKeys(keysResult.value.data || []);
       setErrors((e) => ({ ...e, keys: '' }));
     } else setErrors((e) => ({ ...e, keys: keysResult.reason.message }));
+    if (partnerResult.status === 'fulfilled') {
+      setPartnerSummary(partnerResult.value.data || { activeEnvironment: '', profiles: [] });
+      setErrors((e) => ({ ...e, partner: '' }));
+    } else setErrors((e) => ({ ...e, partner: partnerResult.reason.message }));
   }, [api]);
   useEffect(() => { load(); }, [load]);
 
@@ -119,6 +126,7 @@ export function ConnectionsPage({ api = connectionsApi }) {
   const medicalkaKeys = keys.filter((key) => key.channel === 'medicalka');
   const uzumKeys = keys.filter((key) => key.channel === 'uzum');
   const medicalkaReady = active('medicalka').length >= 2;
+  const activePartner = partnerSummary.profiles?.find((profile) => profile.active);
   const uzumReady = active('uzum').length > 0;
   const mirrorTotal = sync?.mirrorTotal || 0;
 
@@ -139,15 +147,18 @@ export function ConnectionsPage({ api = connectionsApi }) {
             <div className="fh-service-logo">M</div>
             <div>
               <h2>Medicalka</h2>
-              <ConnectionMark tone={medicalkaReady ? 'ok' : 'idle'}>
-                {medicalkaReady ? 'Подключено' : 'Пока не подключено'}
+              <ConnectionMark tone={medicalkaReady && activePartner ? 'ok' : 'idle'}>
+                {medicalkaReady && activePartner ? 'Каталог и заявки подключены' : 'Нужна настройка'}
               </ConnectionMark>
             </div>
           </div>
-          <p>Аптечный маркетплейс. Он сам забирает у нас каталог и присылает заказы — для этого ему нужны два наших ключа.</p>
-          <Button variant="primary" onClick={() => setMedicalka(true)}>
-            {medicalkaKeys.length ? 'Выпустить новые ключи' : 'Подключить Medicalka'}
-          </Button>
+          <p>Medicalka читает наш каталог по ключам, а FairHaven входит в их API и получает заявки, оплату и статусы.</p>
+          <div className="fh-connection-actions">
+            <Button variant="primary" onClick={() => setMedicalkaPartner(true)}>Настроить заявки</Button>
+            <Button size="sm" variant="ghost" onClick={() => setMedicalka(true)}>
+              {medicalkaKeys.length ? 'Ключи каталога' : 'Выпустить API-ключи'}
+            </Button>
+          </div>
         </Card>
 
         <Card className="fh-connection-card">
@@ -260,6 +271,13 @@ export function ConnectionsPage({ api = connectionsApi }) {
       </Card>
 
       <MedicalkaWizard open={medicalka} api={api} onClose={() => setMedicalka(false)} onDone={() => load()} />
+      <MedicalkaPartnerDialog
+        open={medicalkaPartner}
+        api={api}
+        summary={partnerSummary}
+        onClose={() => setMedicalkaPartner(false)}
+        onSaved={load}
+      />
 
       <Dialog
         open={uzum}

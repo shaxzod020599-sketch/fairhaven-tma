@@ -77,6 +77,25 @@ describe('MedicalkaSubOrders', () => {
     });
   });
 
+  it('shows courier-owned delivery lifecycle without manual completion action', async () => {
+    const delivery = {
+      ...pickup,
+      deliveryType: 'delivery',
+      paymentMethod: 'card',
+      deliveryProvider: 'Yandex',
+      courierStatus: 'courier_assigned',
+      deliveryServiceStatus: 'courier_found',
+    };
+    const api = makeApi(delivery);
+    renderPage(api);
+
+    expect(await screen.findByText(/card/)).toBeInTheDocument();
+    expect(screen.getByText(/Yandex/)).toBeInTheDocument();
+    expect(screen.getByText(/courier_assigned/)).toBeInTheDocument();
+    expect(screen.getByText(/courier_found/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Kuryerga berildi' })).not.toBeInTheDocument();
+  });
+
   it('reconciliation warning stays visible and blocks lifecycle actions', async () => {
     const api = makeApi({
       ...pickup,
