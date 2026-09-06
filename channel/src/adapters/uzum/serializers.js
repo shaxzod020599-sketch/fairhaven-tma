@@ -3,18 +3,8 @@ const catalog = require('../../core/catalog');
 const images = require('../../media/images');
 const statuses = require('./statuses');
 
-/**
- * Response shapes for the Uzum Tezkor Retail API.
- *
- * Uzum inherits the Yandex Eats contract, so this file is also the template for
- * the Yandex integration later. Two things about it are easy to get wrong and
- * expensive to get wrong:
- *
- *   - **Errors are an array**, `[{code, description}]`, not an object. Their
- *     client indexes into it.
- *   - **Content types are versioned and specific.** A correct body under
- *     `application/json` is rejected as firmly as a malformed one.
- */
+const crypto = require('node:crypto');
+const contract = require('./contract');
 
 const CHANNEL = 'uzum';
 
@@ -54,11 +44,17 @@ function serviceCodes(card, defaults) {
  * Measurement. Every Billz product in this catalogue is sold by the piece —
  * none are weighed — so `isCatchWeight` is false and the unit is a count.
  */
-function measure(mirror) {
-  return {
-    value: 1,
-    unit: String(mirror.measurementUnit || '').toLowerCase().startsWith('kg') ? 'GRM' : 'PCS',
-  };
+function measure() {
+  return { value: 1 };
+}
+
+// Only piece units can be sold truthfully by the current reservation adapter.
+function supportedEntry({ mirror, card }) {
+  const unit = String(mirror.measurementUnit || '').trim().toLowerCase();
+  const price = catalog.priceFor(card, CHANNEL);
+  return ['', 'шт', 'шт.', 'pcs', 'pc', 'piece', 'pieces', 'dona'].includes(unit)
+    && typeof mirror.billzProductId === 'string' && mirror.billzProductId.length > 0
+    && mirror.billzProductId.length <= 64 && Number.isFinite(price) && price > 0;
 }
 
 /** One product in the nomenclature payload. */
@@ -70,17 +66,16 @@ function compositionItem({ card, mirror }, defaults) {
     id: mirror.billzProductId,
     categoryId: categoryIdFor(card),
     name: card.nameUz || card.name || mirror.name || '',
-    description: card.descriptionUz || card.description || '',
+    description: { general: String(card.descriptionUz || card.description || '') },
     price,
     // Only sent when it is genuinely higher: an "old price" equal to the price
     // renders as a struck-through identical number.
     ...(oldPrice > price ? { oldPrice } : {}),
     vendorCode: card.sku || mirror.sku || '',
-    barcodes: [card.barcode || mirror.barcode].filter(Boolean),
+    barcode: { value: String(card.barcode || mirror.barcode || ''), weightEncoding: 'none' },
     measure: measure(mirror),
     isCatchWeight: false,
     images: images.imagesFor(card),
-    inStock: catalog.publishedQuantity(card, mirror, CHANNEL),
     ...(serviceCodes(card, defaults) ? { serviceCodesUz: serviceCodes(card, defaults) } : {}),
   };
 }
@@ -94,7 +89,9 @@ function compositionItem({ card, mirror }, defaults) {
  */
 function categoryIdFor(card) {
   const raw = String(card.category || 'other').trim().toLowerCase();
-  return raw.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'other';
+  const slug = raw.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'other';
+  if (slug.length <= 64 && slug === raw) return slug;
+  return `${slug.slice(0, 47)}-${crypto.createHash('sha256').update(raw).digest('hex').slice(0, 16)}`;
 }
 
 function categoriesFrom(entries) {
@@ -106,7 +103,6 @@ function categoriesFrom(entries) {
     sortOrder += 1;
     byId.set(id, {
       id,
-      parentId: null,
       name: String(card.category || 'Boshqa'),
       sortOrder,
     });
@@ -127,42 +123,35 @@ function availability(entries) {
   return {
     items: entries.map(({ card, mirror }) => ({
       id: mirror.billzProductId,
-      stock: catalog.publishedQuantity(card, mirror, CHANNEL),
-      available: catalog.isAvailable(card, mirror, CHANNEL),
+      stock: catalog.isAvailable(card, mirror, CHANNEL)
+        ? catalog.publishedQuantity(card, mirror, CHANNEL) : 0,
     })),
   };
 }
 
 /** `GET /order/{orderId}` */
 function order(record) {
+  if (record.rawIn && !contract.validate(record.rawIn)) return contract.snapshot(record.rawIn);
   return {
-    orderId: record.internalOrderId,
-    eatsId: record.externalId,
-    status: statuses.toUzum(record.status),
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-    total: record.totalAmount,
+    eatsId: String(record.externalId),
+    comment: typeof record.rawIn?.comment === 'string' ? record.rawIn.comment : '',
+    promos: [],
     items: record.items.map((item) => ({
       id: item.billzProductId,
-      name: item.name,
+      name: item.name || '',
       quantity: item.quantity,
       price: item.unitPrice,
-      total: item.quantity * item.unitPrice,
+      modifications: [],
+      promos: [],
     })),
-    customer: {
-      name: record.customer?.name || '',
-      phone: record.customer?.phone || '',
-      address: record.customer?.address || '',
-    },
   };
 }
 
-/** `GET /order/{orderId}/status` */
+/** GET status exposes business progress, never upstream diagnostic text. */
 function orderStatus(record) {
   return {
-    status: statuses.toUzum(record.status),
-    comment: record.billz?.lastError || '',
-    updatedAt: record.updatedAt,
+    status: statuses.toUzum(record.status, record.billz),
+    ...(record.updatedAt ? { updatedAt: new Date(record.updatedAt).toISOString() } : {}),
   };
 }
 
@@ -209,4 +198,5 @@ module.exports = {
   order,
   orderStatus,
   serviceCodes,
+  supportedEntry,
 };

@@ -9,7 +9,8 @@ const ChannelOrder = require('../../models/ChannelOrder');
 const { readSettings } = require('../../models/SettingView');
 const { channelLimiter, authFailureLimiter } = require('../../middleware/rateLimit');
 const { issueToken, requireBearer, CHANNEL } = require('./oauth');
-const statuses = require('./statuses');
+const contract = require('./contract');
+const { isDeepStrictEqual } = require('node:util');
 const S = require('./serializers');
 
 /**
@@ -31,6 +32,7 @@ const S = require('./serializers');
  */
 const router = express.Router();
 
+router.use(express.json({ type: ['application/json', 'application/vnd.eats.order.v2+json'], limit: '256kb' }));
 router.use(authFailureLimiter);
 
 // Uzum posts the token request as a form, everything else as JSON.
@@ -43,7 +45,7 @@ router.use(express.urlencoded({ extended: false, limit: '16kb' }));
 const SETTING_KEYS = ['channels.defaultMxikCode', 'channels.defaultPackageCode'];
 
 function fail(res, status, description, code = status) {
-  return res.status(status).type(S.CONTENT_TYPES.order).json(S.errors({ code, description }));
+  return res.status(status).type('application/json').json(S.errors({ code, description }));
 }
 
 /** Every nomenclature call names the store; a mismatch is a misconfiguration. */
@@ -70,7 +72,7 @@ function checkStore(req, res) {
  */
 async function publishable() {
   const page = await catalog.listForChannel(CHANNEL, { skip: 0, limit: Number.MAX_SAFE_INTEGER });
-  return page.items.filter(({ card }) => images.hasUsableImage(card));
+  return page.items.filter((entry) => S.supportedEntry(entry) && images.hasUsableImage(entry.card));
 }
 
 // ── OAuth2 ──────────────────────────────────────────────────────────────────
@@ -108,59 +110,44 @@ router.get('/restaurants', (_req, res) => {
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 
-const MAX_LINES = 200;
-
-/**
- * Validates an incoming order and prices it from our own catalogue.
- *
- * Their `price` is read and ignored. A marketplace that decides what we are paid
- * is a marketplace that can be wrong — or stale — in the direction that costs
- * us money, and a price mismatch is better resolved by them re-reading the
- * catalogue than by us honouring a number we never set.
- */
+/** Prices supported piece orders from the same listing used by composition. */
 async function readOrder(body) {
-  const externalId = String(body?.eatsId || body?.eats_id || '').trim();
-  if (!externalId) return { error: 'eatsId is required', code: 400 };
-
-  const rawItems = Array.isArray(body?.items) ? body.items : [];
-  if (!rawItems.length) return { error: 'items must contain at least one product', code: 400 };
-  if (rawItems.length > MAX_LINES) {
-    return { error: `an order may not exceed ${MAX_LINES} lines`, code: 400 };
-  }
-
   const items = [];
-  for (const raw of rawItems) {
-    const billzProductId = String(raw?.id || raw?.productId || '').trim();
-    const quantity = Number(raw?.quantity);
-    if (!billzProductId) return { error: 'each item needs an id', code: 400 };
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      return { error: `invalid quantity for item ${billzProductId}`, code: 400 };
-    }
-
-    const entry = await catalog.findForChannel(CHANNEL, billzProductId);
-    if (!entry) return { error: `Item ${billzProductId} is not available`, code: 404 };
-
-    items.push({
-      billzProductId,
-      name: entry.card.nameUz || entry.card.name || entry.mirror.name || '',
-      quantity,
-      unitPrice: catalog.priceFor(entry.card, CHANNEL),
-    });
+  const quantities = new Map();
+  for (const raw of body.items) {
+    const entry = await catalog.findForChannel(CHANNEL, raw.id);
+    if (!entry || !S.supportedEntry(entry) || !images.hasUsableImage(entry.card)) return { error: `Item ${raw.id} is not available`, code: 422 };
+    const price = catalog.priceFor(entry.card, CHANNEL);
+    if (raw.price !== price) return { error: `Price mismatch for item ${raw.id}`, code: 422 };
+    const quantity = (quantities.get(raw.id) || 0) + raw.quantity;
+    quantities.set(raw.id, quantity);
+    if (!Number.isSafeInteger(quantity) || quantity > catalog.publishedQuantity(entry.card, entry.mirror, CHANNEL)
+      || !catalog.isAvailable(entry.card, entry.mirror, CHANNEL)) return { error: `Insufficient stock for item ${raw.id}`, code: 422 };
+    items.push({ billzProductId: raw.id, name: entry.card.nameUz || entry.card.name || entry.mirror.name || '', quantity: raw.quantity, unitPrice: price });
   }
-
   return {
-    externalId,
+    externalId: body.eatsId,
     items,
     customer: {
-      name: String(body?.customer?.name || body?.customerName || '').slice(0, 200),
-      phone: String(body?.customer?.phone || body?.phoneNumber || '').slice(0, 40),
-      address: String(body?.deliveryAddress || body?.address || '').slice(0, 500),
+      name: (body.deliveryInfo?.clientName || '').slice(0, 200),
+      phone: (body.deliveryInfo?.clientPhoneNumber || '').slice(0, 40),
+      address: '',
     },
   };
 }
 
 router.post('/order', async (req, res, next) => {
   try {
+    if (!config.uzum.storeId) return fail(res, 503, 'UZUM_STORE_ID is not configured');
+    const invalid = contract.validate(req.body);
+    if (invalid) return fail(res, invalid.code, invalid.error);
+    if (req.body.restaurantId !== undefined && req.body.restaurantId !== config.uzum.storeId) return fail(res, 422, 'restaurantId does not match this store');
+    const snapshot = contract.snapshot(req.body);
+    const existing = await ChannelOrder().findOne({ channel: CHANNEL, externalId: req.body.eatsId }).lean();
+    if (existing) {
+      if (!isDeepStrictEqual(S.order(existing), snapshot)) return fail(res, 422, 'eatsId already exists with a different order');
+      return res.json({ orderId: existing.internalOrderId, result: 'OK' });
+    }
     const parsed = await readOrder(req.body);
     if (parsed.error) return fail(res, parsed.code, parsed.error);
 
@@ -168,12 +155,13 @@ router.post('/order', async (req, res, next) => {
       externalId: parsed.externalId,
       items: parsed.items,
       customer: parsed.customer,
-      raw: req.body,
+      raw: snapshot,
     });
+    if (!created && !isDeepStrictEqual(S.order(order), snapshot)) return fail(res, 422, 'eatsId already exists with a different order');
 
     // Answered before Billz is touched. Their fifteen-minute deadline is on the
     // acknowledgement, and a resend must produce this same body.
-    res.type(S.CONTENT_TYPES.order).json({ orderId: order.internalOrderId, result: 'OK' });
+    res.json({ orderId: order.internalOrderId, result: 'OK' });
 
     if (created) {
       orders.reserveOrder(order.internalOrderId)
@@ -207,55 +195,29 @@ router.get('/order/:orderId/status', async (req, res, next) => {
   try {
     const record = await findOrder(req.params.orderId);
     if (!record) return fail(res, 404, `Order ${req.params.orderId} not found`, 404);
-    res.type(S.CONTENT_TYPES.order).json(S.orderStatus(record));
+    res.json(S.orderStatus(record));
   } catch (err) { next(err); }
 });
 
-/**
- * Status changes driven by Uzum.
- *
- * Only two of their states mean anything for stock — delivered and cancelled.
- * The rest are acknowledgements of a courier flow we do not run, and they are
- * accepted without changing anything. An unrecognised status is refused rather
- * than treated as one of those: silently ignoring an unknown state would hide a
- * real change behind a 200.
- */
+/** PUT replaces order composition; this optional operation is unsupported. */
 router.put('/order/:orderId', async (req, res, next) => {
   try {
     const record = await findOrder(req.params.orderId);
-    if (!record) return fail(res, 404, `Order ${req.params.orderId} not found`, 404);
-
-    const { action, error } = statuses.actionFor(req.body?.status);
-    if (error) return fail(res, 400, error);
-
-    if (action) {
-      try {
-        if (action === 'sell') await orders.completeOrder(record.internalOrderId);
-        if (action === 'cancel') {
-          await orders.cancelOrder(record.internalOrderId, { reason: 'cancelled by uzum' });
-        }
-      } catch (err) {
-        logger.warn('uzum status change refused', {
-          orderId: record.internalOrderId, status: req.body?.status, err,
-        });
-        return fail(res, 409, err.message, 409);
-      }
-    }
-
-    const fresh = await findOrder(record.internalOrderId);
-    res.type(S.CONTENT_TYPES.order).json(S.orderStatus(fresh));
-
-    if (action) {
-      notify.announceOrder(CHANNEL, fresh.externalId)
-        .catch((err) => logger.warn('order announcement failed', { err }));
-    }
+    if (!record) return fail(res, 404, `Order ${req.params.orderId} not found`);
+    return fail(res, 422, 'Order composition updates are unsupported');
   } catch (err) { next(err); }
 });
 
 router.delete('/order/:orderId', async (req, res, next) => {
   try {
+    if (!req.body || typeof req.body.eatsId !== 'string' || !req.body.eatsId.trim()
+      || (req.body.comment !== undefined && typeof req.body.comment !== 'string')
+      || Object.keys(req.body).some((key) => !['eatsId', 'comment'].includes(key))) return fail(res, 400, 'eatsId and optional comment are required');
     const record = await findOrder(req.params.orderId);
     if (!record) return fail(res, 404, `Order ${req.params.orderId} not found`, 404);
+
+    if (req.body.eatsId !== record.externalId) return fail(res, 400, 'eatsId does not match the loaded order');
+    if (record.status === 'cancelled') return res.status(200).end();
 
     try {
       await orders.cancelOrder(record.internalOrderId, {
@@ -268,7 +230,7 @@ router.delete('/order/:orderId', async (req, res, next) => {
     }
 
     const fresh = await findOrder(record.internalOrderId);
-    res.type(S.CONTENT_TYPES.order).json({ orderId: fresh.internalOrderId, result: 'OK' });
+    res.status(200).end();
 
     notify.announceOrder(CHANNEL, fresh.externalId)
       .catch((err) => logger.warn('order announcement failed', { err }));
@@ -278,15 +240,17 @@ router.delete('/order/:orderId', async (req, res, next) => {
 // Their client reads `description`, so a bare status would tell an integrator
 // nothing about which of several paths they got wrong.
 router.use((req, res) => {
-  res.status(404).type(S.CONTENT_TYPES.order).json(S.errors({
+  res.status(404).type('application/json').json(S.errors({
     code: 404,
     description: `Unknown endpoint ${req.method} ${req.baseUrl}${req.path}`,
   }));
 });
 
 router.use((err, _req, res, _next) => {
+  if (err.type === 'entity.parse.failed') return fail(res, 400, 'Malformed JSON');
+  if (err.type === 'entity.too.large') return fail(res, 413, 'Request body is too large');
   logger.error('uzum request failed', { err });
-  res.status(500).type(S.CONTENT_TYPES.order).json(S.errors({
+  res.status(500).type('application/json').json(S.errors({
     code: 500, description: 'internal error',
   }));
 });

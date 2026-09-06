@@ -4,6 +4,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { response, schema } = require('./uzumSchema');
+let reserveCalls = 0;
+let saleCalls = 0;
+let deleteCalls = 0;
 
 const UPLOADS = fs.mkdtempSync(path.join(os.tmpdir(), 'fh-uploads-'));
 
@@ -47,7 +51,7 @@ let clientSecret;
  */
 test.before(async () => {
   const { MongoMemoryServer } = require(
-    '/Users/tm/Projects/project vitamin delivery/backend/node_modules/mongodb-memory-server'
+    '../../backend/node_modules/mongodb-memory-server'
   );
   mongod = await MongoMemoryServer.create();
   process.env.MONGO_URI = mongod.getUri();
@@ -64,9 +68,11 @@ test.before(async () => {
 
   // Billz order methods are not enabled on the integration key yet, so the
   // reserve/sell calls are recorded rather than made.
-  sale.reserveOrder = async () => ({ orderId: 'draft-uz', orderNumber: '77' });
-  sale.completeSale = async () => ({});
+  sale.reserveOrder = async () => { reserveCalls++; return { orderId: 'draft-uz', orderNumber: '77' }; };
+  sale.completeSale = async () => { saleCalls++; return {}; };
+  require('../src/notify/telegram').announceOrder = async () => {};
   sale.releaseReservation = async () => ({});
+  sale.deleteDraft = async () => { deleteCalls++; return {}; };
 
   const { app } = require('../src/server');
   server = app.listen(0, '127.0.0.1');
@@ -91,7 +97,7 @@ test.before(async () => {
 
 test.after(async () => {
   server?.close();
-  await db.disconnect();
+  await db?.disconnect();
   await mongod?.stop();
   fs.rmSync(UPLOADS, { recursive: true, force: true });
 });
@@ -145,7 +151,9 @@ async function tokenRequest(body, headers = {}) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers },
     body: new URLSearchParams(body).toString(),
   });
-  return { status: res.status, body: await res.json().catch(() => null) };
+  const result = { status: res.status, type: res.headers.get('content-type'), body: await res.json().catch(() => null) };
+  response('/security/oauth/token', 'post', result);
+  return result;
 }
 
 let bearer = null;
@@ -158,19 +166,24 @@ async function token() {
   return bearer;
 }
 
-async function api(method, pathname, { body, prefix = '/uzum/v1', auth = true } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+async function api(method, pathname, { body, prefix = '/uzum/v1', auth = true, contentType = 'application/json', raw } = {}) {
+  const headers = { 'Content-Type': contentType };
   if (auth) headers.Authorization = `Bearer ${await token()}`;
   const res = await fetch(`${base}${prefix}${pathname}`, {
     method,
     headers,
-    ...(body ? { body: JSON.stringify(body) } : {}),
+    ...(raw !== undefined ? { body: raw } : body ? { body: JSON.stringify(body) } : {}),
   });
-  return {
+  const responseText = await res.text();
+  const result = {
     status: res.status,
     type: res.headers.get('content-type') || '',
-    body: await res.json().catch(() => null),
+    body: responseText === '' ? null : JSON.parse(responseText),
+    raw: responseText,
   };
+  const route = pathname.startsWith('/nomenclature/') ? pathname.replace(/^\/nomenclature\/[^/]+/, '/v1/nomenclature/{storeId}') : pathname.replace(/^\/order\/[^/]+/, '/order/{orderId}');
+  if (route.startsWith('/order') || route.startsWith('/v1/nomenclature')) response(route, method, result);
+  return result;
 }
 
 /* ── OAuth ───────────────────────────────────────────────────────────────── */
@@ -182,6 +195,7 @@ test('valid client credentials produce a bearer token', async () => {
 
   assert.equal(res.status, 200);
   assert.equal(res.body.token_type, 'bearer');
+  assert.equal(res.body.scope, 'read write');
   assert.ok(res.body.expires_in > 0);
   assert.match(res.body.access_token, /^[\w-]+\.[\w-]+$/);
 });
@@ -211,7 +225,7 @@ test('a wrong secret and an unknown client id fail identically', async () => {
   assert.equal(wrongSecret.status, 401);
   assert.equal(unknownClient.status, 401);
   assert.deepEqual(wrongSecret.body, unknownClient.body);
-  assert.equal(wrongSecret.body.error, 'invalid_client');
+  schema('ErrorListV1', wrongSecret.body);
 });
 
 test('another grant type is refused', async () => {
@@ -219,7 +233,7 @@ test('another grant type is refused', async () => {
     grant_type: 'password', client_id: clientId, client_secret: clientSecret,
   });
   assert.equal(res.status, 400);
-  assert.equal(res.body.error, 'unsupported_grant_type');
+  schema('ErrorListV1', res.body);
 });
 
 test('catalogue endpoints refuse an unauthenticated caller', async () => {
@@ -353,7 +367,7 @@ test('availability publishes stock minus the cushion held back', async () => {
   const row = res.body.items.find((i) => i.id === 'bp-2');
   // 4 in Billz, minStock 1 → 3 sellable.
   assert.equal(row.stock, 3);
-  assert.equal(row.available, true);
+  assert.equal(Object.hasOwn(row, 'available'), false);
 });
 
 test('another store id is refused rather than served our catalogue', async () => {
@@ -362,130 +376,123 @@ test('another store id is refused rather than served our catalogue', async () =>
   assert.ok(Array.isArray(res.body));
 });
 
+test('weighted listings are excluded consistently from both catalogue feeds', async () => {
+  await BillzProduct().updateOne({ billzProductId: 'bp-2' }, { $set: { measurementUnit: 'kg' } });
+  try {
+    for (const endpoint of ['composition', 'availability']) {
+      const res = await api('GET', `/nomenclature/store-uz-1/${endpoint}`);
+      assert.equal(res.status, 200);
+      assert.ok(!res.body.items.some((item) => item.id === 'bp-2'));
+    }
+  } finally { await BillzProduct().updateOne({ billzProductId: 'bp-2' }, { $set: { measurementUnit: 'шт' } }); }
+});
+
 /* ── Orders ──────────────────────────────────────────────────────────────── */
 
 const ORDER = {
-  eatsId: 'UZ-1001',
-  items: [{ id: 'bp-1', quantity: 2, price: 1 }],
-  customer: { name: 'Ali', phone: '+998900000000' },
-  deliveryAddress: 'Toshkent',
+  eatsId: 'UZ-1001', comment: 'Leave sealed', promos: [], restaurantId: 'store-uz-1',
+  items: [{ id: 'bp-1', quantity: 2, price: 300000, modifications: [], promos: [], labelCodes: [] }],
+  paymentInfo: { paymentType: 'CARD', itemsCost: 600000 },
+  deliveryInfo: { clientName: 'Ali', clientPhoneNumber: '+998900000000', phoneNumber: '+998911111111', courierArrivementDate: '2026-09-06T10:00:00.000Z' },
 };
+const settle = () => new Promise((r) => setTimeout(r, 150));
 
-test('an order is accepted and answered before Billz is touched', async () => {
-  // Uzum cancels an order it has not seen acknowledged within fifteen minutes.
-  const res = await api('POST', '/order', { body: ORDER });
-
-  assert.equal(res.status, 200);
-  assert.equal(res.body.result, 'OK');
-  assert.ok(res.body.orderId);
-  assert.match(res.type, /application\/vnd\.eats\.order\.v2\+json/);
+test('vendor JSON works on both mounts; GET preserves documented snapshot and buyer phone', async () => {
+  for (const prefix of ['/uzum', '/uzum/v1']) {
+    const res = await api('POST', '/order', { prefix, body: ORDER, contentType: 'application/vnd.eats.order.v2+json' });
+    assert.equal(res.status, 200);
+    assert.match(res.type, /^application\/json/);
+    const read = await api('GET', `/order/${res.body.orderId}`, { prefix });
+    assert.equal(read.status, 200);
+    schema('YGroceryOrderV2', read.body);
+    assert.deepEqual(read.body, ORDER);
+  }
+  await settle();
+  const stored = await ChannelOrder().findOne({ externalId: ORDER.eatsId }).lean();
+  assert.equal(stored.customer.phone, ORDER.deliveryInfo.clientPhoneNumber);
+  assert.equal(stored.customer.name, 'Ali');
+  assert.equal(reserveCalls, 1);
 });
 
-test('the price comes from our catalogue, never from their payload', async () => {
-  await new Promise((r) => setTimeout(r, 200));
-  const stored = await ChannelOrder().findOne({ externalId: 'UZ-1001' }).lean();
-
-  assert.equal(stored.items[0].unitPrice, 300000);
-  assert.notEqual(stored.items[0].unitPrice, 1);
-});
-
-test('a resent order returns the same id and does not reserve twice', async () => {
+test('duplicate after delisting keeps original id without another reservation', async () => {
   const first = await api('POST', '/order', { body: ORDER });
-  const second = await api('POST', '/order', { body: { ...ORDER } });
-
-  assert.equal(second.status, 200);
-  assert.equal(second.body.orderId, first.body.orderId);
-  assert.equal(await ChannelOrder().countDocuments({ externalId: 'UZ-1001' }), 1);
+  const cards = db.getConnection().collection('products');
+  await cards.updateOne({ billzProductId: 'bp-1' }, { $set: { 'channels.uzum.enabled': false } });
+  try {
+    const again = await api('POST', '/order', { body: ORDER });
+    assert.equal(again.status, 200);
+    assert.equal(again.body.orderId, first.body.orderId);
+    assert.equal(reserveCalls, 1);
+  } finally { await cards.updateOne({ billzProductId: 'bp-1' }, { $set: { 'channels.uzum.enabled': true } }); }
 });
 
-test('an order for an unavailable product is refused with a reason', async () => {
-  const res = await api('POST', '/order', {
-    body: { ...ORDER, eatsId: 'UZ-404', items: [{ id: 'bp-nope', quantity: 1 }] },
-  });
-
-  assert.equal(res.status, 404);
-  assert.ok(Array.isArray(res.body));
-  assert.match(res.body[0].description, /bp-nope/);
+test('bad order bodies leave stock and orders untouched', async () => {
+  const before = await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean();
+  const count = await ChannelOrder().countDocuments();
+  const invalid = [
+    { ...ORDER, restaurantId: 'other' },
+    { ...ORDER, eatsId: { $ne: null } },
+    { ...ORDER, eatsId: 'bad-shape', promos: undefined },
+    { ...ORDER, eatsId: 'bad-price', items: [{ ...ORDER.items[0], price: 1 }] },
+    { ...ORDER, eatsId: 'bad-qty', items: [{ ...ORDER.items[0], quantity: 0.5 }] },
+    { ...ORDER, eatsId: 'bad-total', paymentInfo: { paymentType: 'CARD', itemsCost: 1 } },
+    { ...ORDER, eatsId: 'bad-promo', promos: [{ type: 'FIXED', discount: 1 }] },
+    { ...ORDER, eatsId: 'bad-modifier', items: [{ ...ORDER.items[0], modifications: [{ id: 'extra', price: 1, quantity: 1 }] }] },
+    { ...ORDER, eatsId: 'bad-fields', internalOrderId: 'injected' },
+  ];
+  for (const body of invalid) {
+    const res = await api('POST', '/order', { body });
+    assert.ok([400, 422].includes(res.status), JSON.stringify(res));
+  }
+  const malformed = await api('POST', '/order', { raw: '{"eatsId":', contentType: 'application/vnd.eats.order.v2+json' });
+  assert.equal(malformed.status, 400);
+  assert.equal(await ChannelOrder().countDocuments(), count);
+  const after = await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean();
+  assert.equal(after.stock, before.stock);
+  assert.equal(after.reservedQty, before.reservedQty);
+  const config = require('../src/config');
+  const store = config.uzum.storeId;
+  config.uzum.storeId = '';
+  try { assert.equal((await api('POST', '/order', { body: ORDER })).status, 503); }
+  finally { config.uzum.storeId = store; }
 });
 
-test('an order with no items is refused', async () => {
-  const res = await api('POST', '/order', { body: { eatsId: 'UZ-EMPTY', items: [] } });
-  assert.equal(res.status, 400);
+test('order auth uses reason object; catalogue auth uses array', async () => {
+  for (const [method, pathname] of [['POST', '/order'], ['GET', '/order/id'], ['GET', '/order/id/status'], ['PUT', '/order/id'], ['DELETE', '/order/id']]) {
+    const res = await api(method, pathname, { auth: false, body: method === 'GET' ? undefined : ORDER });
+    assert.equal(res.status, 401);
+    assert.equal(typeof res.body.reason, 'string');
+  }
 });
 
-test('an order with no eatsId is refused — it is the idempotency key', async () => {
-  const res = await api('POST', '/order', { body: { items: ORDER.items } });
-  assert.equal(res.status, 400);
-  assert.match(res.body[0].description, /eatsId/);
+test('PUT rejects both composition and fake status callbacks without stock effects', async () => {
+  const before = await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean();
+  for (const body of [ORDER, { status: 'DELIVERED' }, { status: 'CANCELLED' }, { status: 'TAKEN_BY_COURIER' }]) {
+    assert.equal((await api('PUT', '/order/UZ-1001', { body })).status, 422);
+  }
+  assert.equal(saleCalls, 0);
+  assert.equal(reserveCalls, 1);
+  const after = await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean();
+  assert.equal(after.reservedQty, before.reservedQty);
+  assert.equal((await api('GET', '/order/UZ-1001/status')).body.status, 'ACCEPTED_BY_RESTAURANT');
 });
 
-test('the status reported is the furthest one our record can justify', async () => {
-  await new Promise((r) => setTimeout(r, 200));
-  const res = await api('GET', '/order/UZ-1001/status');
-
-  assert.equal(res.status, 200);
-  // Reserved in Billz — this is the acknowledgement their deadline waits for.
-  assert.equal(res.body.status, 'ACCEPTED_BY_RESTAURANT');
-});
-
-test('an order can be read back by either id', async () => {
-  const byExternal = await api('GET', '/order/UZ-1001');
-  const byInternal = await api('GET', `/order/${byExternal.body.orderId}`);
-
-  assert.equal(byExternal.status, 200);
-  assert.equal(byInternal.body.eatsId, 'UZ-1001');
-  assert.equal(byInternal.body.items[0].id, 'bp-1');
-});
-
-test('an unknown status is refused rather than treated as an acknowledgement', async () => {
-  // Silently accepting it would swallow a real state change.
-  const res = await api('PUT', '/order/UZ-1001', { body: { status: 'ON_FIRE' } });
-  assert.equal(res.status, 400);
-  assert.match(res.body[0].description, /ON_FIRE/);
-});
-
-test('courier states are acknowledged without touching stock', async () => {
+test('DELETE requires matching eatsId and cancels idempotently', async () => {
   const before = (await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean()).reservedQty;
-  const res = await api('PUT', '/order/UZ-1001', { body: { status: 'TAKEN_BY_COURIER' } });
-  const after = (await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean()).reservedQty;
-
-  assert.equal(res.status, 200);
-  assert.equal(after, before);
-});
-
-test('DELIVERED completes the sale and hands the reservation back', async () => {
-  const held = (await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean()).reservedQty;
-  assert.equal(held, 2);
-
-  const res = await api('PUT', '/order/UZ-1001', { body: { status: 'DELIVERED' } });
-
-  assert.equal(res.status, 200);
-  assert.equal(res.body.status, 'DELIVERED');
-  const after = (await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean()).reservedQty;
-  assert.equal(after, 0, 'Billz takes the stock at payment — holding it too would double-count');
-});
-
-test('cancelling a delivered order is refused, not silently accepted', async () => {
-  const res = await api('DELETE', '/order/UZ-1001', { body: { comment: 'changed mind' } });
-  assert.equal(res.status, 409);
-  assert.match(res.body[0].description, /already sold/i);
-});
-
-test('DELETE cancels an open order and returns its units', async () => {
-  await api('POST', '/order', { body: { ...ORDER, eatsId: 'UZ-1002' } });
-  await new Promise((r) => setTimeout(r, 200));
-  assert.equal((await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean()).reservedQty, 2);
-
-  const res = await api('DELETE', '/order/UZ-1002', { body: { comment: 'out of area' } });
-
-  assert.equal(res.status, 200);
-  assert.equal(res.body.result, 'OK');
+  for (const body of [{}, { eatsId: 'wrong' }, { eatsId: { $ne: null } }]) {
+    assert.equal((await api('DELETE', '/order/UZ-1001', { body })).status, 400);
+  }
+  assert.equal((await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean()).reservedQty, before);
+  for (let i = 0; i < 2; i++) {
+    const res = await api('DELETE', '/order/UZ-1001', { body: { eatsId: ORDER.eatsId, comment: 'out of area' } });
+    assert.equal(res.status, 200);
+    assert.equal(res.raw, '');
+    assert.equal(res.body, null);
+    assert.equal(res.type, '');
+  }
+  assert.equal(deleteCalls, 1);
   assert.equal((await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean()).reservedQty, 0);
-});
-
-test('a cancelled order reports CANCELLED', async () => {
-  const res = await api('GET', '/order/UZ-1002/status');
-  assert.equal(res.body.status, 'CANCELLED');
+  assert.equal((await api('GET', '/order/UZ-1001/status')).body.status, 'CANCELLED');
 });
 
 test('an unknown endpoint answers in their error shape, not an HTML page', async () => {
@@ -542,4 +549,44 @@ test('medicalka credentials cannot be imported — we issue those', async () => 
     channel: 'medicalka', clientId: 'x-client', clientSecret: 'x-secret-value',
   });
   assert.equal(res.status, 422);
+});
+
+test('concurrent exact and conflicting retries recheck the core acceptance winner', async () => {
+  const orders = require('../src/core/orders');
+  const originalAccept = orders.acceptOrder;
+  for (const conflicting of [false, true]) {
+    const eatsId = `UZ-RACE-${conflicting}`;
+    const body = { ...ORDER, eatsId, items: [{ ...ORDER.items[0], quantity: 1 }], paymentInfo: { ...ORDER.paymentInfo, itemsCost: 300000 } };
+    const before = reserveCalls;
+    let arrivals = 0;
+    let release;
+    const ready = new Promise((resolve) => { release = resolve; });
+    const outcomes = [];
+    // Both HTTP handlers must pass their initial lookup before core acceptance.
+    orders.acceptOrder = async (channel, input) => {
+      if (input.externalId !== eatsId) return originalAccept(channel, input);
+      arrivals++;
+      if (arrivals === 2) release();
+      await ready;
+      const result = await originalAccept(channel, input);
+      outcomes.push(result.created);
+      return result;
+    };
+    try {
+      const responses = await Promise.all([
+        api('POST', '/order', { body }),
+        api('POST', '/order', { body: conflicting ? { ...body, comment: 'different instructions' } : body }),
+      ]);
+      assert.deepEqual(outcomes.sort(), [false, true]);
+      assert.deepEqual(responses.map((res) => res.status).sort(), conflicting ? [200, 422] : [200, 200]);
+      if (!conflicting) assert.equal(responses[0].body.orderId, responses[1].body.orderId);
+      await settle();
+      assert.equal(reserveCalls, before + 1);
+      assert.equal(await ChannelOrder().countDocuments({ channel: 'uzum', externalId: eatsId }), 1);
+      await api('DELETE', `/order/${eatsId}`, { body: { eatsId } });
+    } finally {
+      release();
+      orders.acceptOrder = originalAccept;
+    }
+  }
 });

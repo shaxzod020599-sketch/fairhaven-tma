@@ -25,7 +25,12 @@ const app = express();
 
 app.disable('x-powered-by');
 app.set('trust proxy', process.env.TRUST_PROXY || 'loopback');
-app.use(express.json({ limit: '256kb' }));
+const jsonParser = express.json({ limit: '256kb' });
+// Enabled Uzum owns JSON parsing so both media types use its contract errors.
+app.use(config.uzum.enabled
+  ? (req, res, next) => /^\/uzum(?:\/|$)/i.test(req.path)
+    ? next() : jsonParser(req, res, next)
+  : jsonParser);
 
 app.use((req, _res, next) => {
   logger.debug('request', { method: req.method, path: req.path });
