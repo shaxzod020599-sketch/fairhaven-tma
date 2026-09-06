@@ -113,9 +113,9 @@ function readCredentials(req) {
   };
 }
 
-/** OAuth2's own error shape, which is not the Uzum error array. */
+/** Authentication failures use the documented ErrorListV1 envelope. */
 function oauthError(res, status, error, description) {
-  return res.status(status).json({ error, error_description: description });
+  return res.status(status).json([{ code: status, description: `${error}: ${description}` }]);
 }
 
 /** `POST /security/oauth/token` */
@@ -175,8 +175,13 @@ async function issueToken(req, res) {
     access_token: token,
     token_type: 'bearer',
     expires_in: TOKEN_TTL_SECONDS,
-    scope: 'nomenclature orders',
+    scope: 'read write',
   });
+}
+
+function bearerError(req, res, reason) {
+  const isOrder = /^\/order(?:\/|$)/.test(req.path);
+  return res.status(401).json(isOrder ? { reason } : [{ code: 401, description: reason }]);
 }
 
 /** Guards every endpoint other than the token endpoint itself. */
@@ -184,7 +189,7 @@ async function requireBearer(req, res, next) {
   const header = req.get('authorization') || '';
   if (!/^bearer /i.test(header)) {
     res.set('WWW-Authenticate', 'Bearer realm="fairhaven"');
-    return res.status(401).json([{ code: 401, description: 'A bearer token is required' }]);
+    return bearerError(req, res, 'A bearer token is required');
   }
 
   let record;
@@ -197,7 +202,7 @@ async function requireBearer(req, res, next) {
 
   if (!record) {
     res.set('WWW-Authenticate', 'Bearer error="invalid_token"');
-    return res.status(401).json([{ code: 401, description: 'The token is invalid or expired' }]);
+    return bearerError(req, res, 'The token is invalid or expired');
   }
 
   req.channelKey = { id: record._id, kind: record.kind, label: record.label };
