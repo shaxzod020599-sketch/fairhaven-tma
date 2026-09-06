@@ -124,12 +124,13 @@ function createRuntimeContext({ profile, credentials }) {
         Model: ApprovalModel,
         onNew: async (approval) => {
           if (typeof notify.announceMedicalkaApproval === 'function') {
-            await notify.announceMedicalkaApproval(approval, { ApprovalModel });
+            return notify.announceMedicalkaApproval(approval, { ApprovalModel });
           }
+          return false;
         },
         onDecision: async (approval) => {
           if (typeof notify.finalizeMedicalkaApproval === 'function') {
-            await notify.finalizeMedicalkaApproval(String(approval._id), { Model: ApprovalModel });
+            await notify.finalizeMedicalkaApproval(String(approval._id), { ApprovalModel });
           }
         },
       });

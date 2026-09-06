@@ -103,6 +103,78 @@ test('normalises the complete documented approval fixture', () => {
   });
 });
 
+for (const unavailable of ['disabled', 'missing-token', 'no-recipients', 'partial']) {
+  test(`announcement retries ${unavailable} delivery without duplicating successful recipients`, async () => {
+    const config = require('../src/config');
+    const { announceMedicalkaApproval } = require('../src/notify/telegram');
+    const previous = { ...config.telegram };
+    let current = new Date();
+    const calls = [];
+    let fail = unavailable === 'partial';
+    const options = {
+      channelId: '',
+      send: async (_method, payload) => {
+        calls.push(payload.chat_id);
+        if (fail && payload.chat_id === 22) return null;
+        return { message_id: 1 };
+      },
+    };
+    const service = createApprovalService({
+      client: {}, schedule: () => {}, now: () => current,
+      onNew: (row) => announceMedicalkaApproval(row, options),
+    });
+    try {
+      Object.assign(config.telegram, { enabled: unavailable !== 'disabled', botToken: unavailable === 'missing-token' ? '' : '123:test' });
+      await db.getConnection().collection('users').deleteMany({});
+      if (unavailable !== 'no-recipients') {
+        await db.getConnection().collection('users').insertMany([
+          { telegramId: 11, role: 'admin' }, { telegramId: 22, role: 'admin' },
+        ]);
+      }
+      await MedicalkaApproval().create(normalizeApproval(pending(), current));
+      await service.drainNotificationsOnce();
+      let stored = await MedicalkaApproval().findOne({ externalId: 'approval-a' }).lean();
+      assert.equal(stored.notification.notifiedAt, null);
+      assert.ok(stored.notification.retryAt);
+      Object.assign(config.telegram, { enabled: true, botToken: '123:test' });
+      if (unavailable === 'no-recipients') {
+        await db.getConnection().collection('users').insertMany([
+          { telegramId: 11, role: 'admin' }, { telegramId: 22, role: 'admin' },
+        ]);
+      }
+      fail = false;
+      current = new Date(current.getTime() + 30000);
+      await service.drainNotificationsOnce();
+      await service.drainNotificationsOnce();
+      stored = await MedicalkaApproval().findOne({ externalId: 'approval-a' }).lean();
+      assert.ok(stored.notification.notifiedAt);
+      assert.deepEqual(calls, unavailable === 'partial' ? [11, 22, 22] : [11, 22]);
+    } finally {
+      Object.assign(config.telegram, previous);
+    }
+  });
+}
+
+test('lost actionability during undelivered callback releases claim without retry or notified stamp', async () => {
+  const approval = await MedicalkaApproval().create(normalizeApproval(pending()));
+  let calls = 0;
+  const service = createApprovalService({
+    schedule: () => {},
+    onNew: async () => {
+      calls += 1;
+      await MedicalkaApproval().updateOne({ _id: approval._id }, { $set: { requiresAction: false } });
+      return null;
+    },
+  });
+  await service.drainNotificationsOnce();
+  await service.drainNotificationsOnce();
+  const stored = await MedicalkaApproval().findById(approval._id).lean();
+  assert.equal(stored.notification.notifiedAt, null);
+  assert.equal(stored.notification.retryAt, null);
+  assert.equal(stored.notification.claimToken, '');
+  assert.equal(calls, 1);
+});
+
 test('poll upserts duplicates and announces a new approval once across restarts', async () => {
   const announced = [];
   const client = {

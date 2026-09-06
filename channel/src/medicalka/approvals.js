@@ -163,7 +163,11 @@ function createApprovalService({
     if (!claimed) return false;
 
     try {
-      await onNew(claimed);
+      const delivered = await onNew(claimed);
+      // Legacy callbacks return undefined (or their own result) on success.
+      if (delivered === false || delivered === null) {
+        throw new Error('medicalka_telegram_not_delivered');
+      }
       await Model.updateOne({
         externalId,
         'notification.claimToken': claimToken,
@@ -178,6 +182,9 @@ function createApprovalService({
       });
       return true;
     } catch (err) {
+      const current = await Model.findById(claimed._id).lean();
+      const actionable = current?.status === 'pending'
+        && current.requiresAction && current.checkoutActive;
       const attempts = Number(claimed.notification?.attempts || 0) + 1;
       await Model.updateOne({
         externalId,
@@ -186,11 +193,12 @@ function createApprovalService({
         $set: {
           'notification.claimToken': '',
           'notification.claimedAt': null,
-          'notification.retryAt': retryAt(now(), attempts),
-          'notification.lastError': 'medicalka_telegram_announce_failed',
+          'notification.retryAt': actionable ? retryAt(now(), attempts) : null,
+          'notification.lastError': actionable ? 'medicalka_telegram_announce_failed' : '',
         },
-        $inc: { 'notification.attempts': 1 },
+        $inc: { 'notification.attempts': actionable ? 1 : 0 },
       });
+      if (!actionable) return false;
       throw err;
     }
   }

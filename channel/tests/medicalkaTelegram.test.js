@@ -217,3 +217,90 @@ test('failed final edit remains pending and only unfinished cards retry', async 
   assert.equal(attempts, 2);
   assert.ok(stored.notification.messages[0].finalizedAt);
 });
+
+test('no recipients reports no delivery and can retry when an admin appears', async () => {
+  const approval = await seed();
+  await db.getConnection().collection('users').deleteMany({});
+  const calls = [];
+  const notifier = createMedicalkaNotifier({
+    channelId: '',
+    send: async (_method, payload) => { calls.push(payload); return { message_id: 1 }; },
+  });
+  assert.equal(await notifier.announce(approval), false);
+  await db.getConnection().collection('users').insertOne({ telegramId: 11, role: 'admin' });
+  assert.equal(await notifier.announce(approval), true);
+  await notifier.announce(approval);
+  assert.equal(calls.length, 1);
+});
+
+test('finalize leaves still-actionable cards untouched', async () => {
+  const approval = await seed();
+  const calls = [];
+  const notifier = createMedicalkaNotifier({
+    send: async (method) => { calls.push(method); return { message_id: calls.length }; },
+  });
+  await notifier.announce(approval);
+  calls.length = 0;
+  await notifier.finalize(approval._id);
+  assert.deepEqual(calls, []);
+  const stored = await MedicalkaApproval().findById(approval._id).lean();
+  assert.ok(stored.notification.messages.every((row) => !row.finalizedAt));
+});
+
+test('identical message IDs in different chats finalize and retry independently', async () => {
+  const approval = await seed();
+  await MedicalkaApproval().updateOne({ _id: approval._id }, { $set: {
+    status: 'rejected', requiresAction: false,
+    'notification.messages': [
+      { telegramId: 11, messageId: 7, sentAt: new Date() },
+      { recipientKey: 'admin:22', chatId: '22', telegramId: 22, messageId: 7, sentAt: new Date() },
+      { recipientKey: 'channel:-100777', chatId: '-100777', messageId: 7, sentAt: new Date() },
+    ],
+  } });
+  const calls = [];
+  let current = new Date();
+  let fail = true;
+  const notifier = createMedicalkaNotifier({
+    now: () => current,
+    send: async (_method, payload) => {
+      calls.push(String(payload.chat_id));
+      if (String(payload.chat_id) === '22' && fail) return null;
+      return {};
+    },
+  });
+  await assert.rejects(() => notifier.finalize(approval._id), /finalize_partial_failure/);
+  let stored = await MedicalkaApproval().findById(approval._id).lean();
+  assert.deepEqual(stored.notification.messages.map((row) => Boolean(row.finalizedAt)), [true, false, true]);
+  assert.deepEqual(stored.notification.messages.map((row) => row.finalizeAttempts), [1, 1, 1]);
+  fail = false;
+  current = new Date(current.getTime() + 30000);
+  await notifier.finalize(approval._id);
+  await notifier.finalize(approval._id);
+  assert.deepEqual(calls, ['11', '22', '-100777', '22']);
+});
+
+test('closure during send cleans the delivered card and stops further announcements', async () => {
+  const approval = await seed();
+  const calls = [];
+  const notifier = createMedicalkaNotifier({
+    send: async (method, payload) => {
+      calls.push({ method, payload });
+      if (method === 'sendMessage') {
+        await MedicalkaApproval().updateOne({ _id: approval._id }, { $set: {
+          status: 'rejected', requiresAction: false,
+          comment: 'Auto-rejected: no response within the time limit',
+        } });
+        // A concurrent finalizer sees no stored message until send returns.
+        await notifier.finalize(approval._id);
+        return { message_id: 9 };
+      }
+      return {};
+    },
+  });
+  await notifier.announce(approval);
+  assert.deepEqual(calls.map((row) => row.method), ['sendMessage', 'editMessageText']);
+  assert.deepEqual(calls[1].payload.reply_markup, { inline_keyboard: [] });
+  assert.match(calls[1].payload.text, /Автоматически отклонено/);
+  const stored = await MedicalkaApproval().findById(approval._id).lean();
+  assert.ok(stored.notification.messages[0].finalizedAt);
+});

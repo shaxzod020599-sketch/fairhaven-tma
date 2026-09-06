@@ -203,26 +203,88 @@ function approvalStatus(status) {
   }[status] || escapeHtml(status);
 }
 
-function renderMedicalkaApproval(approval) {
+function isApprovalActionable(approval) {
+  return approval?.status === 'pending' && approval.requiresAction && approval.checkoutActive;
+}
+
+function renderMedicalkaApproval(approval, at = new Date()) {
+  // Budget plain UTF-16 text conservatively, leaving room for labels and notice.
+  // Never cut escaped HTML or split a Unicode code point.
+  let remaining = 3800;
+  let truncated = false;
+  function bounded(value, limit = remaining) {
+    const text = String(value ?? '').toWellFormed();
+    const available = Math.max(0, Math.min(limit, remaining));
+    let result = text;
+    if (text.length > available) {
+      truncated = true;
+      result = '';
+      if (available > 0) {
+        for (const point of text) {
+          if (result.length + point.length > available - 1) break;
+          result += point;
+        }
+        result += '…';
+      }
+    }
+    remaining -= result.length + 1;
+    return result;
+  }
   const customerName = [approval.customer?.firstName, approval.customer?.lastName]
     .filter(Boolean).join(' ');
-  const lines = (approval.items || []).map((item) => (
-    `• ${escapeHtml(item.name || item.externalName || item.productId)}`
-      + ` × ${Number(item.quantity) || 0} — ${formatUZS(item.lineTotal)}`
-  ));
+  const deadline = approval.deadlineAt ? new Date(approval.deadlineAt) : null;
+  const validDeadline = deadline && Number.isFinite(deadline.getTime());
+  const deadlineText = validDeadline
+    ? `⏰ Javob muddati / Ответить до: ${deadline.toLocaleString('ru-RU', {
+      timeZone: 'Asia/Tashkent',
+    })} (UTC+05:00)` : '';
+  let reason = '';
+  if (!isApprovalActionable(approval)) {
+    if (approval.status === 'rejected'
+      && approval.comment === 'Auto-rejected: no response within the time limit') {
+      reason = 'Avtomatik rad etildi / Автоматически отклонено: javob muddati tugagan / время ответа истекло';
+    } else if (approval.comment) {
+      reason = String(approval.comment);
+    } else if (approval.status === 'pending' && validDeadline && deadline <= at) {
+      reason = 'Javob muddati tugagan / Время ответа истекло';
+    }
+  }
+  // Reserve operational context before allocating the remaining space to items.
+  const checkout = escapeHtml(bounded(approval.checkoutId, 160));
+  const status = approvalStatus(bounded(approval.status, 100));
+  const deadlineLine = escapeHtml(bounded(deadlineText));
+  const reasonLine = reason ? `ℹ️ ${escapeHtml(bounded(reason, 300))}` : '';
   const actor = approval.decision?.actorName
-    ? `\n👮 ${escapeHtml(approval.decision.actorName)}` : '';
+    ? `\n👮 ${escapeHtml(bounded(approval.decision.actorName, 100))}` : '';
+  const total = escapeHtml(bounded(formatUZS(approval.subtotal)));
+  const customer = customerName ? `👤 ${escapeHtml(bounded(customerName, 200))}` : '';
+  const phone = approval.customer?.phone ? `📞 ${escapeHtml(bounded(approval.customer.phone, 80))}` : '';
+  const delivery = approval.deliveryType ? `🚚 ${escapeHtml(bounded(approval.deliveryType, 80))}` : '';
+  const lines = [];
+  for (const item of approval.items || []) {
+    if (remaining <= 1) {
+      truncated = true;
+      break;
+    }
+    lines.push(escapeHtml(bounded(
+      `• ${item.name || item.externalName || item.productId || ''}`
+        + ` × ${Number(item.quantity) || 0} — ${formatUZS(item.lineTotal)}`
+    )));
+  }
   return [
-    `🏥 <b>Medicalka zayavka / Заявка</b> · <code>${escapeHtml(approval.checkoutId)}</code>`,
+    `🏥 <b>Medicalka zayavka / Заявка</b> · <code>${checkout}</code>`,
     '',
     lines.join('\n'),
     '',
-    `💰 <b>${formatUZS(approval.subtotal)}</b>`,
-    customerName ? `👤 ${escapeHtml(customerName)}` : '',
-    approval.customer?.phone ? `📞 ${escapeHtml(approval.customer.phone)}` : '',
-    approval.deliveryType ? `🚚 ${escapeHtml(approval.deliveryType)}` : '',
+    `💰 <b>${total}</b>`,
+    customer,
+    phone,
+    delivery,
     '',
-    `${approvalStatus(approval.status)}${actor}`,
+    `${status}${actor}`,
+    deadlineLine,
+    reasonLine,
+    truncated ? '… Qisqartirildi / Сокращено. Полные данные — в админ-панели.' : '',
   ].filter((part) => part !== '').join('\n');
 }
 
@@ -243,11 +305,8 @@ function createMedicalkaNotifier({
   now = () => new Date(),
 } = {}) {
   async function announce(input) {
-    const approval = await ApprovalModel.findById(input._id).lean();
-    if (
-      !approval || approval.status !== 'pending'
-      || !approval.requiresAction || !approval.checkoutActive
-    ) return null;
+    let approval = await ApprovalModel.findById(input._id).lean();
+    if (!isApprovalActionable(approval)) return null;
 
     const admins = await AdminModel.find({
       role: 'admin', telegramId: { $gt: 0 }, botBlocked: { $ne: true },
@@ -266,6 +325,7 @@ function createMedicalkaNotifier({
         telegramId: null,
       }] : []),
     ];
+    if (!recipients.length) return false;
     const delivered = new Set(
       (approval.notification?.messages || []).map((row) => (
         row.recipientKey || (row.telegramId ? `admin:${row.telegramId}` : '')
@@ -273,43 +333,52 @@ function createMedicalkaNotifier({
     );
     let failed = false;
 
-    for (const recipient of recipients) {
-      if (delivered.has(recipient.key)) continue;
-      const sent = await send('sendMessage', {
-        chat_id: recipient.chatId,
-        text: renderMedicalkaApproval(approval),
-        parse_mode: 'HTML',
-        disable_web_page_preview: true,
-        reply_markup: approvalKeyboard(String(approval._id)),
-      });
-      if (!sent?.message_id) {
-        failed = true;
-        continue;
-      }
-      await ApprovalModel.updateOne({
-        _id: approval._id,
-        'notification.messages': { $not: { $elemMatch: { recipientKey: recipient.key } } },
-      }, {
-        $push: {
-          'notification.messages': {
-            recipientKey: recipient.key,
-            recipientType: recipient.type,
-            chatId: String(recipient.chatId),
-            telegramId: recipient.telegramId,
-            messageId: sent.message_id,
-            sentAt: now(),
+    try {
+      for (const recipient of recipients) {
+        if (delivered.has(recipient.key)) continue;
+        approval = await ApprovalModel.findById(input._id).lean();
+        if (!isApprovalActionable(approval)) break;
+        const sent = await send('sendMessage', {
+          chat_id: recipient.chatId,
+          text: renderMedicalkaApproval(approval, now()),
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: approvalKeyboard(String(approval._id)),
+        });
+        if (!sent?.message_id) {
+          failed = true;
+          continue;
+        }
+        await ApprovalModel.updateOne({
+          _id: approval._id,
+          'notification.messages': { $not: { $elemMatch: { recipientKey: recipient.key } } },
+        }, {
+          $push: {
+            'notification.messages': {
+              recipientKey: recipient.key,
+              recipientType: recipient.type,
+              chatId: String(recipient.chatId),
+              telegramId: recipient.telegramId,
+              messageId: sent.message_id,
+              sentAt: now(),
+            },
           },
-        },
-      });
+        });
+        delivered.add(recipient.key);
+      }
+    } finally {
+      // Closure can race an in-flight send before its message ID is persisted.
+      // Re-read after delivery so that late cards enter the durable cleanup path.
+      await finalize(input._id);
     }
 
     if (failed) throw new Error('medicalka_telegram_partial_failure');
-    return true;
+    return delivered.size > 0;
   }
 
   async function finalize(id) {
     const approval = await ApprovalModel.findById(id).lean();
-    if (!approval) return null;
+    if (!approval || isApprovalActionable(approval)) return null;
     const attemptedAt = now();
     const messages = (approval.notification?.messages || [])
       .filter((message) => (
@@ -322,7 +391,7 @@ function createMedicalkaNotifier({
         edited = await send('editMessageText', {
           chat_id: message.chatId || message.telegramId,
           message_id: message.messageId,
-          text: renderMedicalkaApproval(approval),
+          text: renderMedicalkaApproval(approval, attemptedAt),
           parse_mode: 'HTML',
           disable_web_page_preview: true,
           reply_markup: { inline_keyboard: [] },
@@ -333,6 +402,8 @@ function createMedicalkaNotifier({
         'notification.messages': {
           $elemMatch: {
             messageId: message.messageId,
+            ...(message.chatId ? { chatId: message.chatId } : { telegramId: message.telegramId }),
+            ...(message.recipientKey ? { recipientKey: message.recipientKey } : {}),
             finalizedAt: null,
           },
         },
@@ -531,7 +602,7 @@ function createMedicalkaSubOrderNotifier({
 }
 
 async function announceMedicalkaApproval(approval, options = {}) {
-  if (!isMedicalkaConfigured()) return null;
+  if (!isMedicalkaConfigured()) return false;
   return createMedicalkaNotifier(options).announce(approval);
 }
 
