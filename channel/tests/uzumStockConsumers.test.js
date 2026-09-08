@@ -94,7 +94,8 @@ test('a repeated missing snapshot advances the tombstone and rejects an older pr
     '../billz/client': { listProducts: async () => ({ total: products.length, products }) },
     '../models/BillzProduct': () => model,
     '../models/SyncLog': () => ({ create: async () => ({}) }),
-    '../uzum/stock': stock,
+    // Durable-order cleanup is covered by the real Mongo accounting suite.
+    '../uzum/stock': { ...stock, cleanupSoldHolds: async () => {} },
   }, { Date: Clock });
   const first = await runCatalogSync({ force: true });
   assert.equal(first.ok, true);

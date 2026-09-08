@@ -118,6 +118,7 @@ async function applyToMirror(products, shopId, startedAt) {
   // Even existing tombstones need the newest watermark: an older overlapping
   // snapshot must not resurrect a product absent from this newer catalogue.
   await Model.updateMany(missing, tombstone);
+  await require('../uzum/stock').cleanupSoldHolds(Model);
 
   return {
     created: operations.length - knownIds.size,
