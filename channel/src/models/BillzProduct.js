@@ -37,6 +37,8 @@ const billzProductSchema = new mongoose.Schema({
   pendingQty: { type: Number, default: 0, min: 0 },
   // Proven Uzum sales awaiting a stock snapshot fetched after their payment.
   // Kept apart from reservation counters so repair cannot erase this hold.
+  // Covering snapshots zero quantities; replay markers remain until the order
+  // is durably sold/unreserved and catalogue cleanup can safely remove them.
   uzumSoldHolds: { type: [{ orderId: String, quantity: Number, soldAt: Date, _id: false }], default: [] },
   snapshotStartedAt: { type: Date, default: null },
 

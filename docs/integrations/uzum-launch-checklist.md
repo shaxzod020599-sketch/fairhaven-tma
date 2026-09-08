@@ -2,6 +2,19 @@
 
 Updated: 2026-09-08. Launch is not complete. This checklist records sequence, evidence and gates; it is not approval to enable production or make live test transactions.
 
+## Latest verified state — 2026-09-08, after permissions were restored
+
+This section supersedes earlier environment-blocked observations below; those remain historical evidence, not current blockers.
+
+- SSH now succeeds. Production was inspected at `394f4f7` with Medicalka enabled and Uzum disabled. Existing root/channel environment files, Medicalka key metadata and the dirty production admin lockfile were fingerprinted for preservation.
+- The production candidate is based on `394f4f7` and selects the Uzum commits while excluding the separate `65ddd24` Medicalka notification repair. Medicalka-specific modules, configuration and the channel-key model are unchanged in that candidate.
+- Root independently ran the final stock-patch integration checkout against isolated MongoDB **7.0.34**, matching production: **426/426 channel tests passed**, zero skipped. No `.env` files or live credentials were present; outbound fetches were restricted to loopback. The worker's smaller run and reviewer runs below are separate evidence.
+- The candidate before the final stock/restart corrections passed **225/225 backend tests**, **102/102 admin tests** across 27 files, and the admin production build. Final candidate reruns remain required after all corrections are integrated.
+- Independent stock review found no blocking defect. The race is corrected; the tombstone regression was a native-Date test-fixture issue, not a production tombstone defect. Existing cross-channel counter-repair races and partner stock-read consistency are not proven solved.
+- No production deployment, Uzum activation, live test order, inventory write or Telegram test send has occurred at this checkpoint.
+- Activation is blocked by missing confirmed Uzum store ID, signing configuration, dedicated active OAuth credentials, selected assortment and partner acceptance. The shared Billz write flag is currently false and must not be silently enabled. Shipping disabled code is not a completed launch.
+- Browser inspection of `admin.fairhaven.uz` remains blocked by a saved site permission; do not circumvent it. SSH deployment/artifact checks are independently available.
+
 ## Current evidence
 
 - Contract foundation: `d69f5e0`; Medicalka Telegram repair: `65ddd24`.
@@ -113,6 +126,51 @@ Admin panel and Telegram are the chosen operator surfaces. The user authorized i
 - Independent review reproduced a temporary stock-understatement race: if a post-sale snapshot applies before the first sold-hold transfer, the transfer skips releasing the reservation, but the order clears `reservationApplied`. Further catalogue snapshots do not repair that counter; the periodic counter-repair path can. A correction must distinguish first settlement from replay after marker pruning, and must not introduce a second decrement or an unsafe payment retry.
 - Validate all Uzum settings before enablement: missing store ID, signing key or public image base URL prevents the shared hub from starting and can therefore interrupt Medicalka. The Billz write flag is shared, not Uzum-specific. Preserve existing values until their production state and cross-channel effects are established.
 - Partner production store mapping, accepted assortment scope, current OAuth credentials and acceptance results remain unknown to this task. Do not infer missing real-world values from empty defaults or from an unchecked documentation checklist.
+
+### Commissioned stock-settlement implementation evidence — 2026-09-08
+
+- Baseline: `a67efdbb841bb6cef442eace2bcb6508fb0be6c7`, branch `codex/medicalka-telegram-uzum-contract`. This is an uncommitted implementation diff; root still owns acceptance, commit/push and release. No production, partner, vault or live credential access occurred.
+- Confirmed first-transfer cause: the snapshot watermark suppressed both sold-stock protection and reservation release. A fresh snapshot before the first transfer left `reservedQty=1` after the order durably cleared `reservationApplied`.
+- The correction claims a single `complete` → `settle_stock` phase using the current persisted Uzum order, Billz operation token and reconciliation fence. It uses persisted quantities, refreshes ownership between products, and atomically releases the reservation while adding an order marker. A covering snapshot makes the marker quantity zero; it does not erase the replay guard. Delayed/repeated transfers fail ownership checks without touching another order's reservation. Payment ordering and shared order code are unchanged; no payment retry was added.
+- Catalogue cleanup streams products with zero markers, then removes only markers whose persisted orders are Uzum, sold, unreserved, without an active Billz owner or reconciliation requirement. Cleanup repeats on subsequent successful catalogue runs after interruption. This one catalogue call is necessary to reclaim markers when a process crashes after durable order finalization; incomplete or uncertain settlements retain evidence for reconciliation.
+- The tombstone regression was a VM test-clock defect, not a production tombstone query defect. Mongoose's clone helper preserved native `Date` literals but converted the `Clock extends Date` subclass through `valueOf()` into numbers. Mongo's date/number comparison then prevented the tombstone update; timestamp maintenance still produced `modifiedCount=1`. The clock now returns native dates. Existing repeated-absence and stale-presence assertions remain, with stronger first-tombstone assertions.
+- Production files changed: `channel/src/uzum/stock.js`, one cleanup call in `channel/src/sync/catalog.js`, and explanatory comments in `channel/src/models/BillzProduct.js`. Focused changes: `uzumAccountingIntegration.test.js`, `uzumStock.test.js`, `uzumStockConsumers.test.js`, `uzumStockMongo.test.js`, and `tests/helpers/isolatedChannelEnv.js`. No Medicalka-specific production, authentication, delivery, UI, manifest or deployment edits.
+- Tests ran under `env -i`. The helper asserts Billz/Telegram/Mongo configuration is absent before fixtures, disables dotenv loading and Mongo binary downloads, and permits fetch only to loopback with redirects rejected. Mongo servers and test databases were isolated and stopped by teardown; Billz operations were fake. Application schedulers were not started.
+- RED: the original Mongo suite reached all 3 tests: 2 passed, repeated absence failed with `markedDeleted` actual 1, expected 0. After correcting the test clock, 3/3 passed. Four new real-Mongo accounting cases all failed before the production correction: first-transfer reservation actual 1/expected 0; erased replay marker actual 0/expected 1; stale caller quantity consumed another reservation; lost ownership was not rejected.
+- Final GREEN: 76/76 focused Mongo/stock/accounting/counter tests and 421/421 applicable channel regressions passed, zero test-runner skips or failures. The broad selection excluded two files before invocation: `serverImport.test.js` spawns a child outside the dotenv guard; `medicalkaRuntimeIntegration.test.js` starts application schedulers. This is not a claim that the entire unfiltered suite ran. No channel lint, typecheck or build scripts are defined. All 8 changed/new JavaScript files passed `node --check`; `git diff --check` passed.
+- Covered cases include fresh/equal/stale snapshots; a snapshot between transfer and finalization; repeated and delayed transfers after marker cleanup; another order reserving the same product; persisted versus stale quantities; partial multi-product failure and ownership loss between products; missing first mirror; explicit payment refusal and uncertain payment; interrupted catalogue cleanup/retry; and each durable cleanup gate independently. Expectations are hand-derived reservation, hold and availability values.
+- Independent read-only code review found no issues in the source or final test/helper additions. Root release review remains pending. Residual limits: settlement remains atomic per product, not across all products; partial/uncertain operations require reconciliation. Cleanup requires a subsequent successful catalogue run and intentionally retains unresolved-order markers. Existing shared counter-repair and cross-channel allocation races remain outside this patch. Backend/admin/staging/production checks were not performed for this stock-only scope.
+
+Exact commands, run from the repository root (the broad selection uses zsh):
+
+```sh
+# Original Mongo RED: 2 passed, 1 failed.
+env -i PATH=/usr/local/bin:/usr/bin:/bin MONGOMS_RUNTIME_DOWNLOAD=false node --require ./channel/tests/helpers/isolatedChannelEnv.js --test channel/tests/uzumStockMongo.test.js
+
+# After correcting the native-Date clock: 3 passed.
+env -i PATH=/usr/local/bin:/usr/bin:/bin MONGOMS_RUNTIME_DOWNLOAD=false node --test channel/tests/uzumStockMongo.test.js
+
+# Stock RED before the production correction: 0 passed, 4 failed.
+env -i PATH=/usr/local/bin:/usr/bin:/bin MONGOMS_RUNTIME_DOWNLOAD=false node --test --test-name-pattern='fresh snapshot before first transfer|snapshot between transfer|persisted ownership rejects|lost persisted operation' channel/tests/uzumAccountingIntegration.test.js
+
+# Final focused GREEN: 76 passed, 0 failed, 0 skipped.
+env -i PATH=/usr/local/bin:/usr/bin:/bin MONGOMS_RUNTIME_DOWNLOAD=false node --require ./channel/tests/helpers/isolatedChannelEnv.js --test channel/tests/uzumStockMongo.test.js channel/tests/uzumStock.test.js channel/tests/uzumStockConsumers.test.js channel/tests/uzumAccountingIntegration.test.js channel/tests/orders.test.js channel/tests/counters.test.js > /tmp/uzum-stock-focused-20260908.log 2>&1
+
+# Final applicable channel GREEN: 421 passed, 0 failed, 0 skipped.
+test_files=()
+for file in channel/tests/*.test.js; do
+  case "$file" in
+    channel/tests/serverImport.test.js|channel/tests/medicalkaRuntimeIntegration.test.js) ;;
+    *) test_files+=("$file") ;;
+  esac
+done
+env -i PATH=/usr/local/bin:/usr/bin:/bin MONGOMS_RUNTIME_DOWNLOAD=false node --require ./channel/tests/helpers/isolatedChannelEnv.js --test --test-concurrency=4 "${test_files[@]}" > /tmp/uzum-channel-regressions-20260908.log 2>&1
+
+git diff --check
+for file in channel/src/uzum/stock.js channel/src/sync/catalog.js channel/src/models/BillzProduct.js channel/tests/uzumAccountingIntegration.test.js channel/tests/uzumStockMongo.test.js channel/tests/uzumStock.test.js channel/tests/uzumStockConsumers.test.js channel/tests/helpers/isolatedChannelEnv.js; do
+  node --check "$file" || exit 1
+done
+```
 
 ## Sources
 

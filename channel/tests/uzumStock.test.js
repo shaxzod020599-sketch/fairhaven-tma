@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { transferSoldHold, soldHoldQuantity, snapshotUpdate } = require('../src/uzum/stock');
+const { memoryModel } = require('./helpers/uzumMemoryModel');
 const at = new Date('2026-09-08T10:00:00Z');
 // Evaluate the small Mongo aggregation expression subset used by the real
 // atomic updates, so assertions exercise their branch/ordering semantics.
@@ -33,12 +34,17 @@ function model(rows) {
     apply(row, pipeline); return { matchedCount: 1 };
   } };
 }
+function owned(items) {
+  const order = { internalOrderId: 'order', channel: 'uzum', status: 'reserved', items,
+    billz: { reservationApplied: true, operationAction: 'complete', operationToken: 'owner' } };
+  return { order, Orders: memoryModel([structuredClone(order)]) };
+}
 test('sale atomically converts reservation to a unique hold; duplicate transfer never consumes another reservation', async () => {
   const row = { billzProductId: 'p', stock: 5, reservedQty: 4, uzumSoldHolds: [] };
-  const order = { internalOrderId: 'order', items: [{ billzProductId: 'p', quantity: 1 }, { billzProductId: 'p', quantity: 1 }] };
-  await transferSoldHold(order, at, model([row]));
+  const { order, Orders } = owned([{ billzProductId: 'p', quantity: 1 }, { billzProductId: 'p', quantity: 1 }]);
+  await transferSoldHold(order, at, model([row]), Orders);
   assert.equal(row.reservedQty, 2); assert.equal(soldHoldQuantity(row), 2);
-  await transferSoldHold(order, at, model([row]));
+  await assert.rejects(transferSoldHold(order, at, model([row]), Orders), { code: 'BILLZ_OPERATION_OWNERSHIP_LOST' });
   assert.equal(row.reservedQty, 2); assert.equal(row.uzumSoldHolds.length, 1);
   assert.equal(row.stock - row.reservedQty - soldHoldQuantity(row), 1);
 });
@@ -51,13 +57,16 @@ test('only a snapshot started strictly after sale settles holds; stale overlappi
   assert.equal(row.stock, 3); assert.equal(soldHoldQuantity(row), 0);
   apply(row, snapshotUpdate({ stock: 5 }, at, new Date(fresh.getTime() + 1)));
   assert.equal(row.stock, 3); assert.equal(row.snapshotStartedAt.getTime(), fresh.getTime());
-  await transferSoldHold({ internalOrderId: 'order', items: [{ billzProductId: 'p', quantity: 2 }] }, at, model([row]));
-  assert.equal(row.reservedQty, 2, 'pruned marker is not permission for a replay');
+  const { order, Orders } = owned([{ billzProductId: 'p', quantity: 2 }]);
+  await transferSoldHold(order, at, model([row]), Orders);
+  assert.equal(row.reservedQty, 2, 'zero quantity marker still guards against replay');
   assert.equal(soldHoldQuantity(row), 0);
+  assert.equal(row.uzumSoldHolds.length, 1);
 });
 test('partial transfer throws; completed products retain protection without negative counters', async () => {
   const row = { billzProductId: 'p', stock: 2, reservedQty: 0 };
-  await assert.rejects(transferSoldHold({ internalOrderId: 'order', items: [{ billzProductId: 'p', quantity: 2 }, { billzProductId: 'missing', quantity: 1 }] }, at, model([row])));
+  const { order, Orders } = owned([{ billzProductId: 'p', quantity: 2 }, { billzProductId: 'missing', quantity: 1 }]);
+  await assert.rejects(transferSoldHold(order, at, model([row]), Orders));
   assert.equal(row.reservedQty, 0); assert.equal(soldHoldQuantity(row), 2);
 });
 module.exports = { apply };

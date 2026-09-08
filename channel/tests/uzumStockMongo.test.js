@@ -1,3 +1,4 @@
+require('./helpers/isolatedChannelEnv');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -61,7 +62,7 @@ test('Mongo pipeline upsert keeps product identity and initializes local counter
   assert.equal(row.snapshotStartedAt.getTime(), at.getTime());
 });
 
-test('Mongo snapshot filters only older sold holds and preserves local reservations', async () => {
+test('Mongo snapshot zeros only older sold holds and preserves local reservations and replay guards', async () => {
   const sale = new Date('2026-09-08T10:00:00Z');
   const fresh = new Date(sale.getTime() + 1);
   await Model.create({ billzProductId: 'held', stock: 8, reservedQty: 2, pendingQty: 1, uzumSoldHolds: [
@@ -74,7 +75,7 @@ test('Mongo snapshot filters only older sold holds and preserves local reservati
   assert.equal(row.stock, 6);
   assert.equal(row.reservedQty, 2);
   assert.equal(row.pendingQty, 1);
-  assert.deepEqual(row.uzumSoldHolds.map((hold) => hold.orderId), ['concurrent']);
+  assert.deepEqual(row.uzumSoldHolds.map((hold) => [hold.orderId, hold.quantity]), [['settled', 0], ['concurrent', 1]]);
   assert.equal(row.snapshotStartedAt.getTime(), fresh.getTime());
 });
 
@@ -82,10 +83,10 @@ test('Mongo catalogue tombstones advance on repeated absence and resist delayed 
   await Model.create({ billzProductId: 'missing', stock: 2 });
   let timestamp = Date.parse('2026-09-08T10:00:00Z');
   let products = [];
-  class Clock extends Date {
-    constructor(...args) { super(...(args.length ? args : [timestamp])); }
-    static now() { return timestamp; }
-  }
+  // Return real Dates: Mongoose clones Date subclasses through valueOf(),
+  // turning their aggregation literals into numbers rather than BSON dates.
+  function Clock(...args) { return new Date(...(args.length ? args : [timestamp])); }
+  Clock.now = () => timestamp;
   const { runCatalogSync } = loadSource('../src/sync/catalog.js', {
     '../config': { billz: { pageSize: 10, shopId: 'shop' }, sync: { minCatalogRatio: 0.5 } },
     '../logger': { info() {}, error() {} },
@@ -97,6 +98,9 @@ test('Mongo catalogue tombstones advance on repeated absence and resist delayed 
   const first = await runCatalogSync({ force: true });
   assert.equal(first.ok, true, first.error);
   assert.equal(first.markedDeleted, 1);
+  const firstRow = await Model.findOne({ billzProductId: 'missing' }).lean();
+  assert.equal(firstRow.deletedInBillz, true, 'first absence must persist its tombstone');
+  assert.equal(firstRow.snapshotStartedAt?.getTime(), timestamp);
   timestamp += 2000;
   const newest = timestamp;
   const repeated = await runCatalogSync({ force: true });
