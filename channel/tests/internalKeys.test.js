@@ -187,7 +187,7 @@ test('a kind that does not belong to a channel is refused', async () => {
 });
 
 test('an unknown channel is refused', async () => {
-  const res = await call('POST', '/internal/keys', { body: { channel: 'yandex', kind: 'token' } });
+  const res = await call('POST', '/internal/keys', { body: { channel: 'unknown', kind: 'token' } });
   assert.equal(res.status, 422);
   assert.match(res.body.error, /medicalka, uzum/);
 });

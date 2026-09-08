@@ -148,6 +148,9 @@
 .fh-channel-field > small { color: var(--fh-muted); font-size: 11px; }
 .fh-channel-field .fh-input.is-invalid { border-color: var(--fh-danger); }
 .fh-channel-field .fh-input.is-invalid + small { color: var(--fh-danger); font-weight: 700; }
+.fh-yandex-metadata { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; align-items: end; }
+.fh-yandex-metadata > p { grid-column: 1 / -1; margin: 0; color: var(--fh-muted); font-size: 12px; }
+.fh-channel-row:not(.is-on) .fh-yandex-metadata .fh-channel-field { opacity: 1; }
 .fh-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .fh-form-stack { display: grid; gap: 16px; }
 .fh-billz-picker { display: grid; gap: 16px; }

@@ -27,7 +27,7 @@ test('the writable-collection list stays limited to this service', () => {
     [
       'billzproducts', 'billztokens', 'channelcounters', 'channelkeys', 'channelorders',
       'medicalkaapprovals', 'medicalkaapprovals_staging', 'medicalkapartnerprofiles',
-      'medicalkasuborders', 'medicalkasuborders_staging', 'synclogs',
+      'medicalkasuborders', 'medicalkasuborders_staging', 'synclogs', 'yandexpublisheditems',
     ]
   );
 });

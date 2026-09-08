@@ -16,7 +16,7 @@ const { defineModel } = require('../db');
  * value cannot be compared against character by character.
  */
 const channelKeySchema = new mongoose.Schema({
-  channel: { type: String, required: true, index: true },   // 'medicalka' | 'uzum'
+  channel: { type: String, required: true, index: true },   // 'medicalka' | 'uzum' | 'yandex'
   kind: { type: String, required: true },                   // 'token' | 'secret' | 'oauth'
   hash: { type: String, required: true, unique: true },
   /**
@@ -41,7 +41,7 @@ const channelKeySchema = new mongoose.Schema({
 channelKeySchema.index({ channel: 1, kind: 1, active: 1 });
 
 const KIND_TAG = { token: 't', secret: 's', oauth: 'o' };
-const CHANNEL_TAG = { medicalka: 'fhm', uzum: 'fhu' };
+const CHANNEL_TAG = { medicalka: 'fhm', uzum: 'fhu', yandex: 'fhy' };
 
 /**
  * Key format: `<channelTag>_<kindTag>_<43 base64url chars>`, e.g. `fhm_t_...`.

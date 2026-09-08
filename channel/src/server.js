@@ -26,11 +26,14 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', process.env.TRUST_PROXY || 'loopback');
 const jsonParser = express.json({ limit: '256kb' });
-// Enabled Uzum owns JSON parsing so both media types use its contract errors.
-app.use(config.uzum.enabled
-  ? (req, res, next) => /^\/uzum(?:\/|$)/i.test(req.path)
-    ? next() : jsonParser(req, res, next)
-  : jsonParser);
+// Enabled adapters own parsing and error context. Disabled prefixes retain
+// the global parser's existing behavior, including prefix lookalikes.
+const uzumEnabled = config.uzum.enabled;
+const yandexEnabled = config.yandex.enabled;
+app.use((req, res, next) => (
+  (uzumEnabled && /^\/uzum(?:\/|$)/i.test(req.path))
+  || (yandexEnabled && /^\/yandex(?:\/|$)/i.test(req.path))
+) ? next() : jsonParser(req, res, next));
 
 app.use((req, _res, next) => {
   logger.debug('request', { method: req.method, path: req.path });
@@ -49,6 +52,10 @@ if (config.uzum.enabled) {
   const uzum = require('./adapters/uzum/routes');
   app.use('/uzum/v1', uzum);
   app.use('/uzum', uzum);
+}
+
+if (config.yandex.enabled) {
+  app.use('/yandex', require('./adapters/yandex/routes'));
 }
 
 // Service-to-service surface: catalogue sync from the panel, and bot order
@@ -112,6 +119,15 @@ function checkUzumConfig() {
   }
 }
 
+function checkYandexConfig() {
+  if (!config.yandex.enabled) return;
+  const missing = [];
+  if (!config.yandex.placeId.trim()) missing.push('YANDEX_PLACE_ID');
+  if (config.yandex.tokenSigningKey.length < 32) missing.push('YANDEX_TOKEN_SIGNING_KEY (32+ characters)');
+  if (!config.publicImageBaseUrl) missing.push('PUBLIC_IMAGE_BASE_URL');
+  if (missing.length) throw new Error(`YANDEX_ENABLED is on but ${missing.join(', ')} is not set`);
+}
+
 /**
  * The /internal surface moves stock, and it is protected by three things: the
  * service binds to loopback, nginx never proxies /internal, and every request
@@ -135,6 +151,7 @@ function checkInternalExposure() {
 
 async function start() {
   checkUzumConfig();
+  checkYandexConfig();
   checkMedicalkaPartnerConfig(config);
   // Medicalka reads pictures too, and it is on by default. Without a base URL
   // every product ships `images: []` — a partner-visible gap with no error
@@ -209,5 +226,6 @@ module.exports = {
   checkInternalExposure,
   checkMedicalkaPartnerConfig: () => checkMedicalkaPartnerConfig(config),
   checkUzumConfig,
+  checkYandexConfig,
   start,
 };

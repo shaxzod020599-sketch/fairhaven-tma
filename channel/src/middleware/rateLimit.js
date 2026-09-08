@@ -43,7 +43,7 @@ function build({ windowMs, max, keyGenerator, failuresOnly = false }) {
       // Same envelope the rest of the Medicalka surface uses, so their client
       // can read the reason instead of guessing from the status alone.
       const description = 'Too many requests — slow down and retry';
-      res.status(429).json(res.locals.channelErrorContract === 'uzum'
+      res.status(429).json(['uzum', 'yandex'].includes(res.locals.channelErrorContract)
         ? [{ code: 429, description }] : { detail: description });
     },
     ...(keyGenerator ? { keyGenerator } : {}),

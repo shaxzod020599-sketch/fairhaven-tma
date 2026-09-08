@@ -231,6 +231,6 @@ test('only the hash of a key is derivable, and it is stable', () => {
 });
 
 test('unknown channels and kinds are refused at generation', () => {
-  assert.throws(() => generateKey('yandex', 'token'), /unknown channel/);
+  assert.throws(() => generateKey('unknown', 'token'), /unknown channel/);
   assert.throws(() => generateKey('medicalka', 'admin'), /unknown key kind/);
 });

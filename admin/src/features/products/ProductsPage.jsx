@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { productsApi } from '../../api/products';
 import { formatDateTime, formatMoney, formatNumber } from '../../lib/format';
-import { CATEGORIES, CHANNELS, duplicateDraft, emptyProduct, validateProduct } from './productModel';
+import { CATEGORIES, CHANNELS, YANDEX_BARCODE_TYPES, duplicateDraft, emptyProduct, validateProduct } from './productModel';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
@@ -14,6 +14,7 @@ import { useToast } from '../../ui/ToastProvider';
 import { ExcelDialog } from './ExcelDialog';
 
 const LIMIT = 24;
+const EMPTY_CHANNEL = { enabled: false, price: 0, forceStatus: 'auto', minStock: 0 };
 
 /**
  * Одна строка матрицы каналов.
@@ -43,27 +44,54 @@ function TaxChip({ label, title, own, fallback }) {
 }
 
 function ChannelRow({ product, definition, onSave }) {
-  const value = product.channels?.[definition.key] || {};
+  const yandex = definition.key === 'yandex';
+  const value = product.channels?.[definition.key] || EMPTY_CHANNEL;
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const pending = useRef(false);
   useEffect(() => setDraft(value), [value]);
 
-  const changed = ['enabled', 'price', 'forceStatus', 'minStock']
+  const measureChanged = yandex && ['unit', 'value'].some((key) => (draft.measure?.[key] ?? '') !== (value.measure?.[key] ?? ''));
+  const barcodeChanged = yandex && (draft.barcodeType ?? '') !== (value.barcodeType ?? '');
+  const changed = measureChanged || barcodeChanged || ['enabled', 'price', 'forceStatus', 'minStock']
     .some((key) => (draft[key] ?? '') !== (value[key] ?? ''));
   const enabled = Boolean(draft.enabled);
   const priceMissing = enabled && !Number(draft.price);
 
   const save = async () => {
+    if (pending.current) return;
+    if (measureChanged && draft.measure !== null
+      && (!['GRM', 'MLT'].includes(draft.measure?.unit)
+        || !Number.isSafeInteger(draft.measure?.value) || draft.measure.value <= 0)) {
+      setError('Выберите граммы или миллилитры и укажите положительное целое число. Для удаления используйте «Очистить вес / объём».');
+      return;
+    }
+    if (barcodeChanged && draft.barcodeType !== '' && !YANDEX_BARCODE_TYPES.includes(draft.barcodeType)) {
+      setError('Выберите тип штрихкода из списка.');
+      return;
+    }
+    pending.current = true;
     setSaving(true);
-    try { await onSave(definition.key, draft); } finally { setSaving(false); }
+    setError('');
+    try {
+      await onSave(definition.key, {
+        enabled: Boolean(draft.enabled), price: draft.price ?? 0,
+        forceStatus: draft.forceStatus || 'auto', minStock: draft.minStock ?? 0,
+        ...(measureChanged ? { measure: draft.measure } : {}),
+        ...(barcodeChanged ? { barcodeType: draft.barcodeType } : {}),
+      });
+    } catch (_) { setError('Не удалось сохранить настройки канала. Проверьте значения и повторите.'); }
+    finally { pending.current = false; setSaving(false); }
   };
 
   return (
-    <div className={`fh-channel-row ${enabled ? 'is-on' : ''}`}>
+    <div className={`fh-channel-row ${enabled ? 'is-on' : ''}`} role="group" aria-label={`Настройки ${definition.label} для ${product.name}`}>
       <div className="fh-channel-row__name">
         <label className="fh-switch">
           <input
             type="checkbox"
+            disabled={saving}
             checked={enabled}
             onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })}
             aria-label={`Продавать «${product.name}» на ${definition.label}`}
@@ -71,7 +99,15 @@ function ChannelRow({ product, definition, onSave }) {
           <i aria-hidden="true" />
           <span>{definition.label}</span>
         </label>
-        <Badge tone={value.live ? 'success' : 'neutral'}>{value.live ? 'Сейчас в продаже' : 'Сейчас скрыт'}</Badge>
+        {yandex
+          ? <Badge tone="neutral">{value.enabled ? 'Выбран для Yandex' : 'Не выбран'}</Badge>
+          : <Badge tone={value.live ? 'success' : 'neutral'}>{value.live ? 'Сейчас в продаже' : 'Сейчас скрыт'}</Badge>}
+        {yandex && (!product.mxikCode?.trim() || !product.packageCode?.trim())
+          && <small>Для Yandex заполните ИКПУ и код упаковки у товара. Общие коды не применяются.</small>}
+        {yandex && (!['GRM', 'MLT'].includes(value.measure?.unit)
+          || !Number.isSafeInteger(value.measure?.value) || value.measure.value <= 0
+          || !YANDEX_BARCODE_TYPES.includes(value.barcodeType))
+          && <small>Укажите реальный вес или объём упаковки и тип штрихкода: без них товар не готов для Yandex.</small>}
       </div>
 
       <label className="fh-channel-field">
@@ -79,7 +115,7 @@ function ChannelRow({ product, definition, onSave }) {
         <NumberInput
           className={`fh-input fh-mono ${priceMissing ? 'is-invalid' : ''}`}
           min="0"
-          disabled={!enabled}
+          disabled={!enabled || saving}
           value={draft.price}
           onChange={(price) => setDraft({ ...draft, price })}
         />
@@ -90,7 +126,7 @@ function ChannelRow({ product, definition, onSave }) {
         <span>Показывать как</span>
         <select
           className="fh-select"
-          disabled={!enabled}
+          disabled={!enabled || saving}
           value={draft.forceStatus || 'auto'}
           onChange={(event) => setDraft({ ...draft, forceStatus: event.target.value })}
         >
@@ -106,7 +142,7 @@ function ChannelRow({ product, definition, onSave }) {
         <NumberInput
           className="fh-input fh-mono"
           min="0"
-          disabled={!enabled}
+          disabled={!enabled || saving}
           value={draft.minStock}
           onChange={(minStock) => setDraft({ ...draft, minStock })}
         />
@@ -114,12 +150,38 @@ function ChannelRow({ product, definition, onSave }) {
       </label>
 
       <div className="fh-channel-row__action">
+        {error && <p role="alert">{error}</p>}
         {changed && (
           <Button size="sm" variant="primary" disabled={saving} onClick={save}>
             {saving ? 'Сохраняем…' : 'Сохранить'}
           </Button>
         )}
       </div>
+      {yandex && (
+        <div className="fh-yandex-metadata">
+          <p>Данные упаковки для Yandex: фактический вес или объём, не число капсул и не дозировка. Тип штрихкода выбирается по упаковке.</p>
+          <label className="fh-channel-field">
+            <span>Единица измерения</span>
+            <select className="fh-select" disabled={saving} value={draft.measure?.unit ?? ''} onChange={(event) => setDraft({ ...draft, measure: { ...draft.measure, unit: event.target.value } })}>
+              <option value="">Не указана</option>
+              <option value="GRM">Граммы (GRM)</option>
+              <option value="MLT">Миллилитры (MLT)</option>
+            </select>
+          </label>
+          <label className="fh-channel-field">
+            <span>Вес или объём упаковки</span>
+            <input className="fh-input fh-mono" type="number" min="1" step="1" disabled={saving} value={draft.measure?.value ?? ''} onChange={(event) => setDraft({ ...draft, measure: { ...draft.measure, value: event.target.value === '' ? '' : Number(event.target.value) } })} />
+          </label>
+          <label className="fh-channel-field">
+            <span>Тип штрихкода</span>
+            <select className="fh-select" disabled={saving} value={draft.barcodeType ?? ''} onChange={(event) => setDraft({ ...draft, barcodeType: event.target.value })}>
+              <option value="">Не указан</option>
+              {YANDEX_BARCODE_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+            </select>
+          </label>
+          <Button size="sm" disabled={saving || !draft.measure} onClick={() => setDraft({ ...draft, measure: null })}>Очистить вес / объём</Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -169,7 +231,7 @@ function UnlinkDialog({ product, onClose, onConfirm }) {
         <p>После отвязки:</p>
         <ul className="fh-plain-list">
           <li>остаток со склада перестанет подтягиваться;</li>
-          <li>товар пропадёт с Medicalka и Uzum, пока не будет связан снова;</li>
+          <li>товар пропадёт с Medicalka и Uzum, а также Yandex, пока не будет связан снова;</li>
           <li>сам товар, цены и описания останутся на месте.</li>
         </ul>
         <p>Если карточка выбрана по ошибке — проще нажать «Выбрать другую» и указать правильную.</p>
@@ -191,7 +253,7 @@ function ProductCard({ product, taxDefaults, onEdit, onDuplicate, onLink, onUnli
         <div className="fh-product-card__price"><span>Цена FairHaven</span><strong>{formatMoney(product.price)}</strong><div><Button size="sm" onClick={onEdit}>Изменить</Button><Button size="sm" variant="ghost" onClick={onDuplicate}>Дублировать</Button></div></div>
       </div>
       <BillzBlock product={product} onLink={onLink} onUnlink={onUnlink} />
-      <section className="fh-channel-matrix"><div className="fh-channel-matrix__head"><div><h3>Где продаётся</h3><p>Включите площадку, поставьте цену — и товар начнёт продаваться там.</p></div><div className="fh-tax-chips"><TaxChip label="ИКПУ" title="ИКПУ — код товара для налоговой" own={product.mxikCode} fallback={taxDefaults.mxikCode} /><TaxChip label="Упаковка" title="Код упаковки — единица, в которой товар продаётся" own={product.packageCode} fallback={taxDefaults.packageCode} /></div></div>{CHANNELS.map((definition) => <ChannelRow key={definition.key} product={product} definition={definition} onSave={onChannel} />)}</section>
+      <section className="fh-channel-matrix"><div className="fh-channel-matrix__head"><div><h3>Где продаётся</h3><p>Задайте ассортимент и цену для каждой площадки. Запуск согласуется отдельно.</p></div><div className="fh-tax-chips"><TaxChip label="ИКПУ" title="ИКПУ — код товара для налоговой" own={product.mxikCode} fallback={taxDefaults.mxikCode} /><TaxChip label="Упаковка" title="Код упаковки — единица, в которой товар продаётся" own={product.packageCode} fallback={taxDefaults.packageCode} /></div></div>{CHANNELS.map((definition) => <ChannelRow key={definition.key} product={product} definition={definition} onSave={onChannel} />)}</section>
     </Card>
   );
 }
@@ -249,10 +311,11 @@ function ProductEditor({ draft: initial, api, taxDefaults, onClose, onSaved }) {
         <Field label="SKU"><input className="fh-input fh-mono" value={draft.sku || ''} onChange={(e) => set('sku', e.target.value)} /></Field>
         <Field label="Цена FairHaven" error={errors.price}><NumberInput className="fh-input fh-mono" value={draft.price} onChange={(price) => set('price', price)} /></Field>
         <Field label="Старая цена"><NumberInput className="fh-input fh-mono" value={draft.oldPrice} onChange={(oldPrice) => set('oldPrice', oldPrice)} /></Field>
-        <Field label="ИКПУ (код товара)" hint={taxDefaults.mxikCode ? `Пусто — применится общий код ${taxDefaults.mxikCode}.` : 'Оставьте пустым — применится общий код.'} error={errors.mxikCode}><input className="fh-input fh-mono" placeholder={taxDefaults.mxikCode} value={draft.mxikCode || ''} onChange={(e) => set('mxikCode', e.target.value)} /></Field>
-        <Field label="Код упаковки" hint={taxDefaults.packageCode ? `Единица продажи для чека. Пусто — применится ${taxDefaults.packageCode}.` : 'Единица продажи для чека. Пусто — применится общий код.'} error={errors.packageCode}><input className="fh-input fh-mono" placeholder={taxDefaults.packageCode} value={draft.packageCode || ''} onChange={(e) => set('packageCode', e.target.value)} /></Field>
+        <Field label="ИКПУ (код товара)" hint={taxDefaults.mxikCode ? `Для Medicalka и Uzum пусто — общий код ${taxDefaults.mxikCode}.` : 'Для Medicalka и Uzum пусто — общий код.'} error={errors.mxikCode}><input className="fh-input fh-mono" placeholder={taxDefaults.mxikCode} value={draft.mxikCode || ''} onChange={(e) => set('mxikCode', e.target.value)} /></Field>
+        <Field label="Код упаковки" hint={taxDefaults.packageCode ? `Единица продажи для чека. Для Medicalka и Uzum пусто — ${taxDefaults.packageCode}.` : 'Единица продажи для чека. Для Medicalka и Uzum пусто — общий код.'} error={errors.packageCode}><input className="fh-input fh-mono" placeholder={taxDefaults.packageCode} value={draft.packageCode || ''} onChange={(e) => set('packageCode', e.target.value)} /></Field>
         <Field label="Главное изображение"><input className="fh-input" value={draft.imageUrl || ''} onChange={(e) => set('imageUrl', e.target.value)} /></Field>
       </div>
+      <p>Для Yandex нужны собственные ИКПУ и код упаковки: общие коды магазина не применяются.</p>
       <div className="fh-form-stack"><Field label="Описание на русском"><textarea className="fh-textarea" value={draft.description || ''} onChange={(e) => set('description', e.target.value)} /></Field><Field label="Описание на узбекском"><textarea className="fh-textarea" value={draft.descriptionUz || ''} onChange={(e) => set('descriptionUz', e.target.value)} /></Field><Field label="O‘zbekcha tavsif"><textarea className="fh-textarea" value={draft.descriptionUzLat || ''} onChange={(e) => set('descriptionUzLat', e.target.value)} /></Field></div>
       <div className="fh-dialog-actions"><Button onClick={onClose}>Отмена</Button><Button variant="primary" disabled={saving} onClick={save}>{saving ? 'Сохраняем…' : 'Сохранить товар'}</Button></div>
     </Dialog>
@@ -304,13 +367,24 @@ export function ProductsPage({ api = productsApi }) {
       toast?.success?.('Товар отвязан от склада Billz');
     } catch (err) { toast?.error?.(err.message); }
   };
-  const saveChannel = async (product, channel, body) => { try { const response = await api.updateChannel(product._id, channel, body); replace(response.data); toast?.success?.(`${channel === 'medicalka' ? 'Medicalka' : 'Uzum'} обновлён`); } catch (err) { toast?.error?.(err.message); } };
+  const saveChannel = async (product, channel, body) => {
+    const response = await api.updateChannel(product._id, channel, body);
+    const updated = response?.data;
+    if (updated?._id !== product._id || !updated.channels?.[channel]
+      || Object.entries(body).some(([key, value]) => key === 'measure' && value !== null
+        ? updated.channels[channel].measure?.unit !== value.unit || updated.channels[channel].measure?.value !== value.value
+        : updated.channels[channel][key] !== value)) {
+      throw new Error('Invalid channel response');
+    }
+    replace(updated);
+    toast?.success?.(`${CHANNELS.find((definition) => definition.key === channel).label} обновлён`);
+  };
   const saved = (product) => { setEditor(null); setRows((current) => current.some((row) => row._id === product._id) ? current.map((row) => row._id === product._id ? { ...row, ...product } : row) : [product, ...current]); toast?.success?.('Товар сохранён'); };
 
   const chips = [['', 'Все', summary.total], ['unlinked', 'Без Billz', summary.unlinked], ['out_of_stock', 'Нет остатка', summary.out_of_stock], ['no_price', 'Нет цены', summary.no_price], ['no_mxik', 'Без ИКПУ', summary.no_mxik], ['no_package', 'Без упаковки', summary.no_package]];
   return (
     <div className="fh-page fh-products">
-      <header className="fh-page-head"><div><p className="fh-eyebrow">КАТАЛОГ + КАНАЛЫ</p><h1>Товары</h1><p>Billz, FairHaven, Medicalka и Uzum — в одной карточке.</p></div><div className="fh-head-actions"><Button onClick={() => setEditor(emptyProduct())}>Добавить товар</Button><Button variant="primary" onClick={() => setExcel(true)}>Excel</Button></div></header>
+      <header className="fh-page-head"><div><p className="fh-eyebrow">КАТАЛОГ + КАНАЛЫ</p><h1>Товары</h1><p>Billz, FairHaven, Medicalka, Uzum и Yandex — в одной карточке.</p></div><div className="fh-head-actions"><Button onClick={() => setEditor(emptyProduct())}>Добавить товар</Button><Button variant="primary" onClick={() => setExcel(true)}>Excel</Button></div></header>
       <div className="fh-toolbar fh-toolbar--stack"><input className="fh-input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Название, бренд, SKU или штрихкод" aria-label="Поиск товаров" /><div className="fh-filter-chips">{chips.map(([key, label, count]) => <button key={key} type="button" className={filter === key ? 'is-active' : ''} onClick={() => { setFilter(key); setPage(1); }}>{label}<b>{count || 0}</b></button>)}</div></div>
       {error && rows.length > 0 && <div className="fh-stale-note">Не удалось обновить каталог. Показываем предыдущие данные.</div>}
       {loading && rows.length === 0 ? <div className="fh-page-skeleton"><span /><span /><span /></div> : error && rows.length === 0 ? <DataState tone="error" title="Каталог недоступен" message={error} actionLabel="Повторить" onAction={load} /> : rows.length === 0 ? <DataState title="Товары не найдены" message="Измените фильтр или добавьте первый товар." actionLabel="Добавить товар" onAction={() => setEditor(emptyProduct())} /> : <div className="fh-product-list">{rows.map((product) => <ProductCard key={product._id} product={product} taxDefaults={taxDefaults} onEdit={() => setEditor(product)} onDuplicate={() => setEditor(duplicateDraft(product))} onLink={() => setLinking(product)} onUnlink={() => setUnlinking(product)} onChannel={(channel, body) => saveChannel(product, channel, body)} />)}</div>}

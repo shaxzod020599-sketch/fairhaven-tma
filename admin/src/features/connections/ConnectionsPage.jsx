@@ -22,8 +22,13 @@ import { MedicalkaWizard } from './MedicalkaWizard';
 const KEY_KIND_LABEL = {
   token: 'Ключ для каталога',
   secret: 'Ключ для заказов',
-  oauth: 'Доступ Uzum',
 };
+const CHANNEL_LABEL = { medicalka: 'Medicalka', uzum: 'Uzum', yandex: 'Yandex' };
+const KEY_KINDS = { medicalka: ['token', 'secret'], uzum: ['oauth'], yandex: ['oauth'] };
+
+function keyKindLabel(item) {
+  return item.kind === 'oauth' ? `Доступ ${CHANNEL_LABEL[item.channel]}` : KEY_KIND_LABEL[item.kind];
+}
 
 function ConnectionMark({ tone = 'idle', children }) {
   return <span className={`fh-connection-mark is-${tone}`}><i />{children}</span>;
@@ -33,7 +38,7 @@ function KeyRow({ item, onRevoke }) {
   return (
     <div className="fh-key-row">
       <div>
-        <b>{KEY_KIND_LABEL[item.kind] || item.kind}</b>
+        <b>{keyKindLabel(item)}</b>
         <small>{item.label || 'Без названия'}</small>
       </div>
       <span className="fh-mono fh-key-row__print" title="Отпечаток ключа — по нему можно отличить один ключ от другого">
@@ -50,15 +55,17 @@ function KeyRow({ item, onRevoke }) {
 }
 
 // Mounted only while open, so credentials are discarded when the dialog closes.
-function UzumCredentialsDialog({ mode, api, onClose, onSaved }) {
+function OAuthCredentialsDialog({ channel, mode, api, onClose, onSaved }) {
+  const label = CHANNEL_LABEL[channel];
   const importing = mode === 'import';
-  const [form, setForm] = useState({ clientId: '', clientSecret: '', label: 'Основное подключение Uzum' });
+  const [form, setForm] = useState({ clientId: '', clientSecret: '', label: `Основное подключение ${label}` });
   const [pair, setPair] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [uncertain, setUncertain] = useState(false);
   const [copied, setCopied] = useState('');
   const mounted = useRef(true);
+  const pending = useRef(false);
 
   useEffect(() => {
     mounted.current = true;
@@ -66,20 +73,22 @@ function UzumCredentialsDialog({ mode, api, onClose, onSaved }) {
   }, []);
 
   const save = async () => {
-    if (busy || uncertain) return;
+    if (pending.current || uncertain) return;
+    pending.current = true;
     setBusy(true);
     setError('');
     try {
       const response = importing
         ? await api.importUzum(form)
-        : await api.issueUzum({ label: form.label.trim() });
+        : await (channel === 'yandex' ? api.issueYandex : api.issueUzum)({ label: form.label.trim() });
       if (!mounted.current) return;
       if (importing) {
         setForm({ clientId: '', clientSecret: '', label: '' });
         onClose();
       } else {
         const data = response?.data;
-        if (typeof data?.clientId !== 'string' || !data.clientId.trim()
+        if (data?.channel !== channel || data?.kind !== 'oauth'
+          || typeof data?.clientId !== 'string' || !data.clientId.trim()
           || typeof data?.clientSecret !== 'string' || !data.clientSecret.trim()) {
           throw new Error('Incomplete credential response');
         }
@@ -94,6 +103,7 @@ function UzumCredentialsDialog({ mode, api, onClose, onSaved }) {
           : 'Не удалось подтвердить создание доступа. Ключ мог быть создан. Обновите список ключей: если появился новый доступ, секрет которого вы не получили, отзовите его перед созданием новой пары.');
       }
     } finally {
+      pending.current = false;
       if (mounted.current) setBusy(false);
     }
   };
@@ -117,10 +127,10 @@ function UzumCredentialsDialog({ mode, api, onClose, onSaved }) {
   return (
     <Dialog
       open
-      title={importing ? 'Импорт согласованных данных Uzum' : 'Создать доступ для Uzum Tezkor'}
+      title={importing ? 'Импорт согласованных данных Uzum' : `Создать доступ для ${channel === 'uzum' ? 'Uzum Tezkor' : label}`}
       description={importing
         ? 'Необязательный шаг: сохраните существующую пару, заранее согласованную для доступа Uzum к API FairHaven.'
-        : 'FairHaven выпускает Client ID и Client secret для доступа Uzum к нашему API.'}
+        : `FairHaven выпускает Client ID и Client secret для доступа ${label} к нашему API.`}
       onClose={close}
       closeDisabled={busy}
       width="620px"
@@ -138,7 +148,7 @@ function UzumCredentialsDialog({ mode, api, onClose, onSaved }) {
           })}
         </div>
         {copied && <p role="status">{copied === 'clientId' ? 'Client ID скопирован' : 'Client secret скопирован'}</p>}
-        <div className="fh-next-note"><b>Что дальше</b><p>Передайте данные команде Uzum по согласованному безопасному каналу. Выпуск ключей не включает обработку реальных заказов: запуск согласуется отдельно.</p></div>
+        <div className="fh-next-note"><b>Что дальше</b><p>Передайте данные команде {label} по согласованному безопасному каналу. Выпуск ключей не включает обработку реальных заказов: запуск согласуется отдельно.</p></div>
       </> : <div className="fh-form-stack">
         <Field label="Название подключения" hint="Поможет отличить этот доступ в списке ключей.">
           <input className="fh-input" maxLength={120} disabled={busy} value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
@@ -175,8 +185,10 @@ export function ConnectionsPage({ api = connectionsApi }) {
   const [medicalkaPartner, setMedicalkaPartner] = useState(false);
   const [partnerSummary, setPartnerSummary] = useState({ activeEnvironment: '', profiles: [] });
   const [uzum, setUzum] = useState(null);
+  const [yandex, setYandex] = useState(false);
   const [revoking, setRevoking] = useState(null);
   const [busy, setBusy] = useState(false);
+  const revokePending = useRef(false);
 
   const load = useCallback(async () => {
     const [syncResult, settingsResult, keysResult, partnerResult] = await Promise.allSettled([
@@ -190,10 +202,17 @@ export function ConnectionsPage({ api = connectionsApi }) {
       setDefaultMxikCode(settingsResult.value.data.defaultMxikCode || '');
       setDefaultPackageCode(settingsResult.value.data.defaultPackageCode || '');
     }
-    if (keysResult.status === 'fulfilled') {
-      setKeys(keysResult.value.data || []);
+    const listedKeys = keysResult.status === 'fulfilled' ? keysResult.value?.data : null;
+    if (Array.isArray(listedKeys) && listedKeys.every((key) => key
+      && typeof key.id === 'string' && key.id
+      && typeof key.active === 'boolean'
+      && Array.isArray(KEY_KINDS[key.channel]) && KEY_KINDS[key.channel].includes(key.kind))) {
+      setKeys(listedKeys);
       setErrors((e) => ({ ...e, keys: '' }));
-    } else setErrors((e) => ({ ...e, keys: keysResult.reason.message }));
+    } else {
+      setKeys([]);
+      setErrors((e) => ({ ...e, keys: 'Не удалось получить список ключей' }));
+    }
     if (partnerResult.status === 'fulfilled') {
       setPartnerSummary(partnerResult.value.data || { activeEnvironment: '', profiles: [] });
       setErrors((e) => ({ ...e, partner: '' }));
@@ -215,22 +234,27 @@ export function ConnectionsPage({ api = connectionsApi }) {
     } catch (err) { toast?.error?.(err.message); }
   };
   const revoke = async () => {
+    if (revokePending.current || !revoking) return;
+    revokePending.current = true;
     setBusy(true);
     try {
-      await api.revoke(revoking.id);
+      const response = await api.revoke(revoking.id);
+      if (response?.data?.ok !== true || response.data.id !== revoking.id) throw new Error('Invalid revocation response');
       setRevoking(null);
       toast?.success?.('Ключ отозван. Сервис больше не сможет им пользоваться.');
       load();
-    } catch (err) { toast?.error?.(err.message); }
-    finally { setBusy(false); }
+    } catch (_) { toast?.error?.('Не удалось отозвать ключ. Обновите список и проверьте его состояние.'); }
+    finally { revokePending.current = false; setBusy(false); }
   };
 
   const active = (channel) => keys.filter((key) => key.channel === channel && key.active);
   const medicalkaKeys = keys.filter((key) => key.channel === 'medicalka');
   const uzumKeys = keys.filter((key) => key.channel === 'uzum');
+  const yandexKeys = keys.filter((key) => key.channel === 'yandex');
   const medicalkaReady = active('medicalka').length >= 2;
   const activePartner = partnerSummary.profiles?.find((profile) => profile.active);
   const uzumConfigured = active('uzum').some((key) => key.kind === 'oauth');
+  const yandexConfigured = active('yandex').some((key) => key.kind === 'oauth');
   const mirrorTotal = sync?.mirrorTotal || 0;
 
   return (
@@ -281,6 +305,23 @@ export function ConnectionsPage({ api = connectionsApi }) {
           </div>
         </Card>
 
+        <Card className="fh-connection-card">
+          <div className="fh-connection-card__top">
+            <div className="fh-service-logo">Y</div>
+            <div>
+              <h2>Yandex</h2>
+              <ConnectionMark tone="idle">
+                {yandexConfigured ? 'Ключи настроены' : 'Ключи не настроены'}
+              </ConnectionMark>
+            </div>
+          </div>
+          <p>Запуск не подтверждён. Yandex выключен по умолчанию; выпуск ключей не включает канал. Ассортимент и цены задаются отдельно на странице «Товары».</p>
+          <p>Адрес API: <span className="fh-mono">https://api.fairhaven.uz/yandex</span>. Идентификатор магазина (place) задаёт FairHaven.</p>
+          <div className="fh-connection-actions">
+            <Button variant="primary" onClick={() => setYandex(true)}>Создать доступ Yandex</Button>
+          </div>
+        </Card>
+
         <Card className="fh-connection-card fh-connection-card--billz">
           <div className="fh-connection-card__top">
             <div className="fh-service-logo">B</div>
@@ -306,7 +347,7 @@ export function ConnectionsPage({ api = connectionsApi }) {
         </div>
       )}
 
-      {(medicalkaKeys.length > 0 || uzumKeys.length > 0) && (
+      {(medicalkaKeys.length > 0 || uzumKeys.length > 0 || yandexKeys.length > 0) && (
         <Card className="fh-keys-card">
           <div className="fh-keys-card__head">
             <div>
@@ -325,6 +366,12 @@ export function ConnectionsPage({ api = connectionsApi }) {
             <div className="fh-keys-group">
               <h3>Uzum Tezkor</h3>
               {uzumKeys.map((item) => <KeyRow key={item.id} item={item} onRevoke={setRevoking} />)}
+            </div>
+          )}
+          {yandexKeys.length > 0 && (
+            <div className="fh-keys-group">
+              <h3>Yandex</h3>
+              {yandexKeys.map((item) => <KeyRow key={item.id} item={item} onRevoke={setRevoking} />)}
             </div>
           )}
         </Card>
@@ -383,17 +430,20 @@ export function ConnectionsPage({ api = connectionsApi }) {
         onSaved={load}
       />
 
-      {uzum && <UzumCredentialsDialog mode={uzum} api={api} onClose={() => setUzum(null)} onSaved={load} />}
+      {uzum && <OAuthCredentialsDialog channel="uzum" mode={uzum} api={api} onClose={() => setUzum(null)} onSaved={load} />}
+      {yandex && <OAuthCredentialsDialog channel="yandex" mode="create" api={api} onClose={() => setYandex(false)} onSaved={load} />}
 
       <Dialog
         open={Boolean(revoking)}
         title="Отозвать ключ?"
         description="Сервис, который пользуется этим ключом, сразу потеряет доступ. Если он ещё работает — сначала выдайте новый ключ."
         onClose={() => !busy && setRevoking(null)}
+        closeDisabled={busy}
         width="520px"
       >
+        {revoking && <p>{CHANNEL_LABEL[revoking.channel]} · {revoking.label || 'Без названия'} · {revoking.fingerprint}</p>}
         <div className="fh-dialog-actions">
-          <Button onClick={() => setRevoking(null)}>Отмена</Button>
+          <Button disabled={busy} onClick={() => setRevoking(null)}>Отмена</Button>
           <Button variant="danger" disabled={busy} onClick={revoke}>{busy ? 'Отзываем…' : 'Да, отозвать'}</Button>
         </div>
       </Dialog>

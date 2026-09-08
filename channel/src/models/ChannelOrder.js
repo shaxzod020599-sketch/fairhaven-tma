@@ -127,7 +127,19 @@ const channelOrderSchema = new mongoose.Schema({
 
   // The payload exactly as it arrived. Reconstructing what a marketplace sent
   // from our normalised copy is guesswork when something goes wrong.
-  rawIn: { type: mongoose.Schema.Types.Mixed, default: null },
+  rawIn: {
+    type: mongoose.Schema.Types.Mixed, default: null,
+    immutable: function () { return this.channel === 'yandex'; },
+  },
+
+  // Receipt identity stays separate from the actual picked items. Absent on
+  // other channels so their stored records and projections stay unchanged.
+  yandex: {
+    type: new mongoose.Schema({
+      requestSnapshot: { type: mongoose.Schema.Types.Mixed, required: true, immutable: true },
+    }, { _id: false }),
+    default: undefined,
+  },
 }, { timestamps: true });
 
 channelOrderSchema.index({ channel: 1, externalId: 1 }, { unique: true });

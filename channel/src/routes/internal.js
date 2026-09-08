@@ -454,7 +454,7 @@ router.post('/bot-order', async (req, res) => {
  * SHA-256 is stored, so there is no endpoint that can reveal one later and no
  * backup that contains one.
  */
-const KEY_KINDS = { medicalka: ['token', 'secret'], uzum: ['oauth'] };
+const KEY_KINDS = { medicalka: ['token', 'secret'], uzum: ['oauth'], yandex: ['oauth'] };
 
 router.get('/keys', async (_req, res) => {
   try {

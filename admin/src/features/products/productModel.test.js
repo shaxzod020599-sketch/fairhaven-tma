@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { duplicateDraft, validateProduct } from './productModel';
+import { duplicateDraft, emptyProduct, validateProduct } from './productModel';
 
 describe('product editor model', () => {
+  it('keeps new Yandex measurement and barcode type missing without adding them to other channels', () => {
+    const draft = emptyProduct();
+    expect(draft.channels.yandex.measure).toBeNull();
+    expect(draft.channels.yandex.barcodeType).toBe('');
+    expect(draft.channels.medicalka).not.toHaveProperty('measure');
+    expect(draft.channels.uzum).not.toHaveProperty('barcodeType');
+  });
   it('rejects incomplete and unsafe catalogue values', () => {
     expect(validateProduct({ name: '', category: '', price: -1, mxikCode: '12x' })).toEqual({
       name: 'Введите название',

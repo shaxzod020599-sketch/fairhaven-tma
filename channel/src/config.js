@@ -115,6 +115,13 @@ const config = {
     tokenSigningKey: process.env.UZUM_TOKEN_SIGNING_KEY || '',
   },
 
+  // Independent provider credentials and place mapping. No accounting actions.
+  yandex: {
+    enabled: bool('YANDEX_ENABLED', false),
+    placeId: process.env.YANDEX_PLACE_ID || '',
+    tokenSigningKey: process.env.YANDEX_TOKEN_SIGNING_KEY || '',
+  },
+
   // Marketplaces need two tax codes per product for the fiscal receipt: the
   // MXIK (what the product is) and the package code (the unit it is sold in).
   // Billz carries neither, so they live with us. A product without its own

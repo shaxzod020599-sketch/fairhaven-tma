@@ -22,9 +22,29 @@ const channelConfigSchema = new mongoose.Schema({
   minStock: { type: Number, default: 0, min: 0 },
 }, { _id: false });
 
+const yandexChannelConfigSchema = channelConfigSchema.clone();
+yandexChannelConfigSchema.add({
+  // Actual packaging weight/volume, never a capsule count or ingredient dose.
+  measure: {
+    type: new mongoose.Schema({
+      unit: { type: String, enum: ['GRM', 'MLT'], required: true },
+      value: { type: Number, required: true, min: 1, validate: Number.isSafeInteger },
+    }, { _id: false }),
+    default: null,
+  },
+  // Explicit symbologies from Yandex partner.nomenclature.composition.get.
+  // Empty means unknown; the barcode value cannot determine its type.
+  barcodeType: {
+    type: String,
+    enum: ['', ...('auspost ausredirect ausreply ausroute aztec c25iata c25ind c25inter c25logic c25matrix codabar codablockf code11 code100 code128 code128b code16k code39 code49 code93 daft datamatrix dotcode dpident dpleit ean128 ean13 ean14 eanx eanx_chk excode39 fim flat hanxin hibc_128 hibc_39 hibc_aztec hibc_blockf hibc_dm hibc_micpdf hibc_pdf hibc_qr isbnx itf14 japanpost kix koreapost logmars mailmark maxicode micropdf417 microqr msi_plessey nve18 onecode pdf417 pdf417trunc pharma pharma_two planet plessey postnet pzn qrcode rm4scc rss14 rss14stack rss14stack_omni rss_exp rss_expstack rss_ltd telepen telepen_num upca upca_chk upce upce_chk vin').split(' ')],
+    default: '',
+  },
+});
+
 const channelsSchema = new mongoose.Schema({
   medicalka: { type: channelConfigSchema, default: () => ({}) },
   uzum: { type: channelConfigSchema, default: () => ({}) },
+  yandex: { type: yandexChannelConfigSchema, default: () => ({}) },
 }, { _id: false });
 
 const productSchema = new mongoose.Schema({
@@ -85,7 +105,7 @@ const productSchema = new mongoose.Schema({
   // the reconciler stops touching this product.
   autoStock: { type: Boolean, default: true },
 
-  // ── Sales channels (Medicalka, Uzum Tezkor) ───────────────────────────────
+  // ── Sales channels (Medicalka, Uzum Tezkor, Yandex) ───────────────────────
   // Link to the mirrored Billz product. Stock and the reference retail price
   // come from there; the bot's own `price` above is unaffected.
   // Indexed below, with the uniqueness constraint. Declaring `index: true`
@@ -94,7 +114,7 @@ const productSchema = new mongoose.Schema({
   // existed.
   billzProductId: { type: String, default: '' },
   // ИКПУ. Empty means the shop-wide default applies — see Setting
-  // `channels.defaultMxikCode`. Uzum requires a code, Medicalka does not.
+  // `channels.defaultMxikCode`. Yandex requires its own verified product codes.
   mxikCode: { type: String, default: '' },
   packageCode: { type: String, default: '' },
   channels: {
@@ -126,6 +146,7 @@ productSchema.index(
 );
 productSchema.index({ 'channels.medicalka.enabled': 1 });
 productSchema.index({ 'channels.uzum.enabled': 1 });
+productSchema.index({ 'channels.yandex.enabled': 1 });
 
 productSchema.virtual('allImages').get(function () {
   const out = [];

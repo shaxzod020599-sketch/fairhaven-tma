@@ -32,6 +32,7 @@ const OWNED_COLLECTIONS = new Set([
   'medicalkapartnerprofiles',
   'medicalkasuborders',
   'medicalkasuborders_staging',
+  'yandexpublisheditems',
 ]);
 
 /**

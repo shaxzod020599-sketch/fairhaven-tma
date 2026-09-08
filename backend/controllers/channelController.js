@@ -15,8 +15,9 @@ const { availableQuantity } = require('../services/stockReconciler');
  * here).
  */
 
-const CHANNELS = ['medicalka', 'uzum'];
+const CHANNELS = ['medicalka', 'uzum', 'yandex'];
 const FORCE_STATUSES = ['auto', 'in', 'out'];
+const YANDEX_BARCODE_TYPES = Product.schema.path('channels.yandex.barcodeType').enumValues;
 const MAX_LIMIT = 200;
 const DEFAULT_MXIK_KEY = 'channels.defaultMxikCode';
 const DEFAULT_PACKAGE_KEY = 'channels.defaultPackageCode';
@@ -73,6 +74,10 @@ function availability(product, mirror, channel) {
     oldPrice: Number(cfg.oldPrice) || 0,
     forceStatus: cfg.forceStatus || 'auto',
     minStock: Number(cfg.minStock) || 0,
+    ...(channel === 'yandex' ? {
+      measure: cfg.measure ? { unit: cfg.measure.unit, value: cfg.measure.value } : null,
+      barcodeType: cfg.barcodeType || '',
+    } : {}),
     // Configured but priceless means "not published" — surfaced so the operator
     // can see why an enabled product is missing from the feed.
     priceMissing: Boolean(cfg.enabled) && !(Number(cfg.price) > 0),
@@ -281,9 +286,18 @@ exports.summary = async (_req, res) => {
   }
 };
 
-function sanitiseChannelPatch(input) {
+function sanitiseChannelPatch(input, channel) {
   const patch = {};
-  if (input.enabled !== undefined) patch.enabled = Boolean(input.enabled);
+  if (input.enabled !== undefined) {
+    if (channel === 'yandex' && typeof input.enabled !== 'boolean') throw new Error('invalid_enabled');
+    patch.enabled = Boolean(input.enabled);
+  }
+  if (channel === 'yandex') {
+    for (const [field, error] of [['price', 'invalid_price'], ['oldPrice', 'invalid_old_price'], ['minStock', 'invalid_min_stock']]) {
+      if (input[field] !== undefined && typeof input[field] !== 'number'
+        && !(typeof input[field] === 'string' && input[field].trim())) throw new Error(error);
+    }
+  }
   if (input.price !== undefined) {
     const price = Number(input.price);
     if (!Number.isFinite(price) || price < 0) throw new Error('invalid_price');
@@ -303,6 +317,24 @@ function sanitiseChannelPatch(input) {
     if (!Number.isInteger(minStock) || minStock < 0) throw new Error('invalid_min_stock');
     patch.minStock = minStock;
   }
+  if (channel === 'yandex') {
+    if (input.measure !== undefined) {
+      const measure = input.measure;
+      if (measure !== null && (typeof measure !== 'object' || Array.isArray(measure)
+        || !['GRM', 'MLT'].includes(measure.unit)
+        || !Number.isSafeInteger(measure.value) || measure.value <= 0
+        || Object.keys(measure).some((key) => !['unit', 'value'].includes(key)))) {
+        throw new Error('invalid_measure');
+      }
+      patch.measure = measure === null ? null : { unit: measure.unit, value: measure.value };
+    }
+    if (input.barcodeType !== undefined) {
+      if (typeof input.barcodeType !== 'string' || !YANDEX_BARCODE_TYPES.includes(input.barcodeType)) {
+        throw new Error('invalid_barcode_type');
+      }
+      patch.barcodeType = input.barcodeType;
+    }
+  }
   return patch;
 }
 
@@ -315,7 +347,7 @@ exports.updateProductChannel = async (req, res) => {
 
     let patch;
     try {
-      patch = sanitiseChannelPatch(req.body || {});
+      patch = sanitiseChannelPatch(req.body || {}, channel);
     } catch (err) {
       return res.status(400).json({ success: false, error: err.message });
     }
@@ -369,7 +401,7 @@ exports.bulkUpdate = async (req, res) => {
     const { markupPercent } = req.body || {};
     let patch;
     try {
-      patch = sanitiseChannelPatch(req.body || {});
+      patch = sanitiseChannelPatch(req.body || {}, channel);
     } catch (err) {
       return res.status(400).json({ success: false, error: err.message });
     }
@@ -612,13 +644,29 @@ exports.triggerSync = async (_req, res) => {
  * revoked in the minute somebody notices, rather than whenever the next
  * deployment happens.
  */
+const KEY_KINDS = { medicalka: ['token', 'secret'], uzum: ['oauth'], yandex: ['oauth'] };
+
+function validKeyKind(channel, kind) {
+  return CHANNELS.includes(channel) && KEY_KINDS[channel].includes(kind);
+}
+
+function publicKey(key) {
+  return {
+    id: key.id, channel: key.channel, kind: key.kind,
+    label: key.label, fingerprint: key.fingerprint, clientId: key.clientId,
+    active: key.active, lastUsedAt: key.lastUsedAt, createdAt: key.createdAt, revokedAt: key.revokedAt,
+  };
+}
+
 exports.listKeys = async (_req, res) => {
   try {
     const result = await channelHub.request('GET', '/internal/keys');
-    if (!result.ok) {
+    if (!result.ok || !Array.isArray(result.body?.keys)
+      || !result.body.keys.every((key) => key && typeof key.id === 'string' && key.id
+        && validKeyKind(key.channel, key.kind))) {
       return res.status(502).json({ success: false, error: 'keys_unavailable' });
     }
-    res.json({ success: true, data: result.body.keys });
+    res.json({ success: true, data: result.body.keys.map(publicKey) });
   } catch (err) {
     if (err.notConfigured) {
       return res.status(503).json({ success: false, error: 'channel_hub_not_configured' });
@@ -628,26 +676,38 @@ exports.listKeys = async (_req, res) => {
 };
 
 exports.issueKey = async (req, res) => {
+  const { channel, kind } = req.body || {};
+  if (!validKeyKind(channel, kind)) {
+    return res.status(400).json({ success: false, error: 'invalid_key_kind' });
+  }
   try {
     const result = await channelHub.request('POST', '/internal/keys', {
       body: {
-        channel: req.body?.channel,
-        kind: req.body?.kind,
+        channel,
+        kind,
         label: req.body?.label,
       },
     });
     if (!result.ok) {
       return res.status(result.status === 422 ? 400 : 502)
-        .json({ success: false, error: result.body?.error || 'issue_failed' });
+        .json({ success: false, error: 'issue_failed' });
+    }
+    const data = result.body;
+    const nonempty = (value) => typeof value === 'string' && Boolean(value.trim());
+    if (data?.channel !== channel || data?.kind !== kind || !nonempty(data?.id)
+      || (kind === 'oauth'
+        ? !nonempty(data.clientId) || !nonempty(data.clientSecret)
+        : !nonempty(data.key))) {
+      return res.status(502).json({ success: false, error: 'issue_failed' });
     }
 
-    console.log(
-      `[channels] ${req.admin?.telegramId || 'admin'} issued a ${result.body.channel} `
-      + `${result.body.kind} key (${result.body.fingerprint})`
-    );
+    console.log(`[channels] ${req.admin?.telegramId || 'admin'} issued a ${channel} ${kind} key`);
     // The secret travels exactly once, in this response. It is not stored here
     // and cannot be read back from anywhere.
-    res.json({ success: true, data: result.body });
+    res.json({
+      success: true,
+      data: { ...publicKey(data), ...(kind === 'oauth' ? { clientSecret: data.clientSecret } : { key: data.key }) },
+    });
   } catch (err) {
     if (err.notConfigured) {
       return res.status(503).json({ success: false, error: 'channel_hub_not_configured' });
@@ -800,12 +860,15 @@ exports.revokeKey = async (req, res) => {
     const result = await channelHub.request('POST', `/internal/keys/${req.params.id}/revoke`);
     if (!result.ok) {
       return res.status(result.status === 404 ? 404 : 502)
-        .json({ success: false, error: result.body?.error || 'revoke_failed' });
+        .json({ success: false, error: 'revoke_failed' });
+    }
+    if (result.body?.ok !== true || result.body.id !== req.params.id) {
+      return res.status(502).json({ success: false, error: 'revoke_failed' });
     }
     console.warn(
       `[channels] ${req.admin?.telegramId || 'admin'} revoked key ${req.params.id}`
     );
-    res.json({ success: true, data: result.body });
+    res.json({ success: true, data: { ok: true, id: result.body.id, revokedAt: result.body.revokedAt } });
   } catch (err) {
     if (err.notConfigured) {
       return res.status(503).json({ success: false, error: 'channel_hub_not_configured' });
