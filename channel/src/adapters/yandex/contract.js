@@ -65,4 +65,15 @@ function snapshot(body, placeId) {
   return { ...JSON.parse(JSON.stringify(body)), restaurantId: body.restaurantId ?? placeId };
 }
 
-module.exports = { validate, snapshot };
+function validateStatus(body) {
+  if (!object(body) || !safeObjectKeys(body)
+    || Object.keys(body).some((key) => !['status', 'reason', 'comment', 'updatedAt', 'platform', 'attributes'].includes(key))
+    || !['CANCELLED', 'TAKEN_BY_COURIER', 'DELIVERED'].includes(body.status)) return 'Invalid status';
+  if (!optionalFields(body, ['reason', 'comment'], (value) => text(value) && value.length <= 256 * 1024)
+    || !optionalFields(body, ['updatedAt'], dateTime)
+    || !optionalFields(body, ['platform'], (value) => ['YE', 'DC', 'LAVKA', 'PHARMA', 'FLOWERS'].includes(value))
+    || !optionalFields(body, ['attributes'], (value) => Array.isArray(value) && value.length <= 100
+      && value.every((item) => text(item) && item.length <= 512))) return 'Invalid status metadata';
+  return null;
+}
+module.exports = { validate, snapshot, validateStatus };

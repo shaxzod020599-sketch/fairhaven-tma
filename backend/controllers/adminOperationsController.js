@@ -297,11 +297,16 @@ exports.dashboard = async (req, res) => {
       deletedInBillz: false,
       $expr: {
         $lte: [
-          { $subtract: [{ $subtract: ['$stock', '$reservedQty'] }, '$pendingQty'] },
+          { $subtract: [{ $ifNull: ['$stock', 0] }, { $add: [
+            { $ifNull: ['$reservedQty', 0] }, { $ifNull: ['$pendingQty', 0] },
+            ...['uzumSoldHolds', 'yandexSoldHolds'].map((field) => ({ $sum: { $map: {
+              input: { $ifNull: [`$${field}`, []] }, as: 'hold', in: { $ifNull: ['$$hold.quantity', 0] },
+            } } })),
+          ] }] },
           LOW_STOCK_THRESHOLD,
         ],
       },
-    }).select('billzProductId name stock reservedQty pendingQty').limit(50).lean();
+    }).select('billzProductId name stock reservedQty pendingQty uzumSoldHolds yandexSoldHolds').limit(50).lean();
     const lowIds = lowMirror.map((m) => m.billzProductId);
     const lowLinked = lowIds.length
       ? await Product.find({ billzProductId: { $in: lowIds } }).select('name billzProductId').limit(6).lean()
@@ -309,7 +314,7 @@ exports.dashboard = async (req, res) => {
     const mirrorById = new Map(lowMirror.map((m) => [m.billzProductId, m]));
     const lowStock = lowLinked.map((p) => {
       const m = mirrorById.get(p.billzProductId);
-      const available = Math.max(0, (m.stock || 0) - (m.reservedQty || 0) - (m.pendingQty || 0));
+      const available = require('../services/stockReconciler').availableQuantity(m);
       return { productId: p._id, name: p.name, available };
     });
 

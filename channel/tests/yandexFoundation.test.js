@@ -256,8 +256,9 @@ test('GET projects actual items while retry compares immutable receipt and exclu
   error(await call('GET', `/yandex/order/${body.eatsId}`), 404);
   await Order.create({ channel: 'uzum', internalOrderId: 'other-order', externalId: body.eatsId });
   error(await call('GET', '/yandex/order/other-order'), 404); error(await call('GET', '/yandex/order/other-order/status'), 404);
-  error(await call('PUT', `/yandex/order/${id}/status`, { body: { status: 'CANCELLED' }, type: 'application/vnd.eats.order.status.v1+json' }), 404);
+  assert.equal((await call('PUT', `/yandex/order/${id}/status`, { body: { status: 'CANCELLED' }, type: 'application/vnd.eats.order.status.v1+json' })).status, 204);
   assert.equal((await Order.findOne({ internalOrderId: id })).status, 'received');
+  assert.equal((await call('GET', `/yandex/order/${id}/status`)).body.status, 'CANCELLED');
 });
 
 test('receipt snapshots survive actual-item edits without mutating raw input', async () => {

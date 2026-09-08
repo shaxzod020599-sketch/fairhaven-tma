@@ -5,12 +5,13 @@ const { channelLimiter, authFailureLimiter } = require('../../middleware/rateLim
 const { issueToken, requireBearer } = require('./oauth');
 const publication = require('../../yandex/publication');
 const receipt = require('../../yandex/receipt');
+const lifecycle = require('../../yandex/lifecycle');
 const contract = require('./contract');
 const S = require('./serializers');
 
 const router = express.Router();
 router.use((_req, res, next) => { res.locals.channelErrorContract = 'yandex'; next(); });
-router.use(express.json({ type: ['application/json', 'application/vnd.eats.order.v2+json'], limit: '256kb' }));
+router.use(express.json({ type: ['application/json', 'application/vnd.eats.order.v2+json', 'application/vnd.eats.order.status.v1+json'], limit: '256kb' }));
 router.use(authFailureLimiter);
 router.use(express.urlencoded({ extended: false, limit: '16kb' }));
 router.post('/security/oauth/token', channelLimiter, issueToken);
@@ -75,7 +76,19 @@ router.get('/order/:orderId/status', async (req, res, next) => {
   } catch (err) { return next(err); }
 });
 
-// Lifecycle callbacks, including PUT status, are intentionally not registered.
+router.put('/order/:orderId/status', async (req, res, next) => {
+  try {
+    const invalid = contract.validateStatus(req.body);
+    if (invalid) return fail(res, 400, invalid);
+    // Acknowledgement means durable receipt only; never await external cleanup.
+    await lifecycle.callback(req.params.orderId, req.body);
+    return res.status(204).end();
+  } catch (err) {
+    if (err.code === 'yandex_not_found') return fail(res, 404, 'Order not found');
+    return next(err);
+  }
+});
+
 router.use((_req, res) => fail(res, 404, 'Unknown endpoint'));
 router.use((err, _req, res, _next) => {
   if (err.type === 'entity.parse.failed') return fail(res, 400, 'Malformed JSON');

@@ -18,6 +18,11 @@ async function receive(body, placeId) {
         // Mixed values go directly through the update path: document.save()
         // minimizes empty optional objects and would change retry identity.
         rawIn: JSON.parse(JSON.stringify(body)), 'yandex.requestSnapshot': snapshot,
+        'yandex.version': 1, 'yandex.fulfillmentStatus': 'NEW', 'yandex.revision': 1,
+        'yandex.itemsRevision': 1, 'yandex.itemsFrozen': false, 'yandex.notification.pending': true,
+        'yandex.cancelRequested': null, 'yandex.operation': null, 'yandex.cancellationPending': false,
+        'yandex.reconciliationRequired': false, 'yandex.audit': [], 'yandex.decisions': {}, 'yandex.accountingStage': '',
+        customer: { name: body.deliveryInfo.clientName || '', phone: body.deliveryInfo.phoneNumber || '' },
         items: body.items.map((item) => ({ billzProductId: item.id, name: item.name || '', quantity: item.quantity, unitPrice: item.price })),
         totalAmount: body.paymentInfo.itemsCost, createdAt: now, updatedAt: now,
       } }, { upsert: true, new: true, runValidators: true, timestamps: false }).lean();
@@ -34,6 +39,7 @@ async function receive(body, placeId) {
 }
 
 function find(orderId) {
+  if (typeof orderId !== 'string' || !/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(orderId)) return null;
   return ChannelOrder().findOne({ channel: 'yandex', internalOrderId: orderId }).lean();
 }
 

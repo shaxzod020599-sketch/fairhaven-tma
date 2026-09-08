@@ -40,6 +40,7 @@ const billzProductSchema = new mongoose.Schema({
   // Covering snapshots zero quantities; replay markers remain until the order
   // is durably sold/unreserved and catalogue cleanup can safely remove them.
   uzumSoldHolds: { type: [{ orderId: String, quantity: Number, soldAt: Date, _id: false }], default: [] },
+  yandexSoldHolds: { type: [{ orderId: String, quantity: Number, soldAt: Date, _id: false }], default: [] },
   snapshotStartedAt: { type: Date, default: null },
 
   // Medicalka's contract types product ids as integers. Allocated once, on
@@ -51,7 +52,8 @@ const billzProductSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 billzProductSchema.methods.availableStock = function availableStock() {
-  return Math.max(0, this.stock - this.reservedQty - this.pendingQty - require('../uzum/stock').soldHoldQuantity(this));
+  return Math.max(0, this.stock - this.reservedQty - this.pendingQty
+    - require('../uzum/stock').soldHoldQuantity(this) - require('../yandex/stock').soldHoldQuantity(this));
 };
 
 let model = null;

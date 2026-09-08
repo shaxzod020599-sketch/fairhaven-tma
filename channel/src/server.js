@@ -195,6 +195,7 @@ async function start() {
   const holdTimer = botOrders.startHoldSweeper();
   await medicalka.start();
   const uzumTimer = require('./uzum/notifications').start();
+  const yandexCancellationTimer = require('./yandex/lifecycle').start();
 
   if (!notify.isConfigured()) {
     logger.warn('telegram announcements are off — marketplace orders will not appear in the channel');
@@ -205,6 +206,7 @@ async function start() {
     clearInterval(timer);
     clearInterval(holdTimer);
     if (uzumTimer) clearInterval(uzumTimer);
+    if (yandexCancellationTimer) clearInterval(yandexCancellationTimer);
     medicalka.stop();
     server.close();
     await db.disconnect();

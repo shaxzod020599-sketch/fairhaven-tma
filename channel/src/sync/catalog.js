@@ -119,6 +119,7 @@ async function applyToMirror(products, shopId, startedAt) {
   // snapshot must not resurrect a product absent from this newer catalogue.
   await Model.updateMany(missing, tombstone);
   await require('../uzum/stock').cleanupSoldHolds(Model);
+  await require('../yandex/stock').cleanupSoldHolds(Model);
 
   return {
     created: operations.length - knownIds.size,

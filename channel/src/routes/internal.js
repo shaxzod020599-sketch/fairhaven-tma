@@ -41,6 +41,7 @@ const internalLimiter = process.env.DISABLE_RATE_LIMIT === 'true'
 
 router.use(internalLimiter, requireInternalToken);
 router.use('/uzum', require('../uzum/internal'));
+router.use('/yandex', require('../yandex/internal'));
 
 // ── Catalogue ───────────────────────────────────────────────────────────────
 router.post('/sync', async (req, res) => {

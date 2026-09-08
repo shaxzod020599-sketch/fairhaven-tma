@@ -27,14 +27,14 @@ New integration remains disabled by default. Credentials, mapped place, signed-t
 
 Receipt is not reservation or sale. Operator picking changes must be versioned, auditable and frozen before reservation; reductions/removals and explicit catalog-backed replacements are needed for partner checkup. Both admin and Telegram decisions use one channel-owned lifecycle, with current admin identity checked at both boundaries. Telegram receives a distinct callback namespace and durable notification revisions; removed admins receive no fresh order content.
 
-Accounting trigger is awaiting the owner's answer to the separate question: admin Ready (matching existing Uzum) or Yandex Taken by courier. Do not silently select either or activate a money/stock path before that answer. Cancellation after a proven sale requires visible accounting reconciliation, never a fabricated successful refund or release. Cancellation arriving during an in-flight action must be durably retained and fenced.
+For the continued implementation, use admin Ready as an explicitly stated code assumption, matching the existing Uzum flow. The owner asked to continue according to the documents but did not separately select the accounting event; partner wire documentation does not define it. This assumption permits local fixture implementation, not live financial activation. Keep BILLZ_WRITE_ENABLED false and every existing production setting unchanged. Cancellation after a proven sale requires visible accounting reconciliation, never a fabricated successful refund or release. Cancellation arriving during an in-flight action must be durably retained and fenced.
 
 If Yandex accounting is enabled later, add its own sold holds and count both channels' holds in every shared stock consumer. Preserve deployed uzumSoldHolds records and legacy behavior; no risky rename/migration. Existing allocation concurrency limitations must be documented honestly, not declared fixed by new tests unrelated to allocation.
 
 ## Delivery sequence and verification
 
 1. Identity/catalog/receipt contract plus independently editable Yandex product settings and Connections. Verify isolated credentials, media/errors, explicit-zero ledger, retry identity and unchanged existing suites.
-2. After accounting choice: lifecycle, picked composition, shared sold-stock protection, admin orders and Telegram actions. Verify Mongo races, retries, cancellation/reconciliation, mixed-channel stock and current-admin gates using local fixtures.
+2. Implement lifecycle, picked composition, shared sold-stock protection, admin orders and Telegram actions under the stated Ready assumption, with live accounting disabled. Verify Mongo races, retries, cancellation/reconciliation, mixed-channel stock and current-admin gates using local fixtures.
 3. Review all changes independently; run complete channel/backend/admin suites and admin build. Public nginx candidate keeps internal endpoints private. Commit and push tested branch. Production activation is separate from having code available.
 
 Tests run with dotenv disabled, live credentials absent, temporary local MongoDB and fake external transports. Never create a live order, Billz write or Telegram send as a verification probe.

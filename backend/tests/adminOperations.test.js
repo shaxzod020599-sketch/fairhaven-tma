@@ -265,6 +265,18 @@ test('dashboard aggregates revenue, average check and top products for the perio
 
 // ── Search ──────────────────────────────────────────────────────────────────
 
+test('dashboard low-stock query and projection count both independent sold holds', async () => {
+  await Product.create({ name: 'Mixed holds', price: 100, category: 'vitamins', billzProductId: 'mixed-holds' });
+  const mirrors = mongoose.connection.collection('billzproducts');
+  await mirrors.insertOne({ billzProductId: 'mixed-holds', stock: 20, reservedQty: 1, pendingQty: 1,
+    deletedInBillz: false, uzumSoldHolds: [{ quantity: 8 }], yandexSoldHolds: [{ quantity: 9 }] });
+  try {
+    const res = response(); await ops.dashboard(request(), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.lowStock.find((item) => item.name === 'Mixed holds').available, 1);
+  } finally { await mirrors.deleteOne({ billzProductId: 'mixed-holds' }); }
+});
+
 test('global search finds orders by id suffix, customers by phone, products by sku', async () => {
   const order = await makeOrder();
   await User.create({ telegramId: 20007, firstName: 'Малика', phone: '+998977778899', registrationStep: 'done', consentAccepted: true });

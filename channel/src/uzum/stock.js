@@ -49,6 +49,7 @@ function snapshotUpdate(fields, startedAt, appliedAt) {
     ...Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, { $cond: [newer, literal(value), `$${key}`] }])),
     syncedAt: { $cond: [newer, literal(appliedAt), '$syncedAt'] },
     snapshotStartedAt: { $cond: [newer, literal(startedAt), '$snapshotStartedAt'] },
+    yandexSoldHolds: require('../yandex/stock').snapshotHolds(startedAt),
     uzumSoldHolds: { $cond: [newer, { $map: { input: holds, as: 'hold', in: {
       orderId: '$$hold.orderId', soldAt: '$$hold.soldAt',
       quantity: { $cond: [{ $gte: ['$$hold.soldAt', literal(startedAt)] }, '$$hold.quantity', 0] },

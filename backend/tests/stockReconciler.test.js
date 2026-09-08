@@ -40,6 +40,11 @@ test('Uzum sold holds keep final units unavailable until a fresh stock snapshot'
   assert.equal(decide(product(), mirror({ stock: 2, uzumSoldHolds: [] })).available, true);
 });
 
+test('independent Yandex and Uzum sold holds jointly protect storefront stock', () => {
+  assert.equal(decide(product(), mirror({ stock: 5, uzumSoldHolds: [{ quantity: 2 }], yandexSoldHolds: [{ quantity: 3 }] })).available, false);
+  assert.equal(decide(product(), mirror({ stock: 5, uzumSoldHolds: [{ quantity: 2 }], yandexSoldHolds: [{ quantity: 0 }] })).available, true);
+});
+
 test('a product that disappeared from Billz is hidden, not deleted', () => {
   const gone = decide(product(), null);
   assert.equal(gone.available, false);

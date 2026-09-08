@@ -42,7 +42,8 @@ function hasImage(product) {
 
 function availableQuantity(mirror) {
   if (!mirror) return 0;
-  const sold = (mirror.uzumSoldHolds || []).reduce((sum, hold) => sum + (Number(hold.quantity) || 0), 0);
+  const sold = [...(mirror.uzumSoldHolds || []), ...(mirror.yandexSoldHolds || [])]
+    .reduce((sum, hold) => sum + (Number(hold.quantity) || 0), 0);
   return Math.max(0,
     (mirror.stock || 0) - (mirror.reservedQty || 0) - (mirror.pendingQty || 0) - sold);
 }

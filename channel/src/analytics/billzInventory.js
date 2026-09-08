@@ -44,6 +44,11 @@ async function summarizeInventory({
                     as: 'hold',
                     in: { $ifNull: ['$$hold.quantity', 0] },
                   } } },
+                  { $sum: { $map: {
+                    input: { $ifNull: ['$yandexSoldHolds', []] },
+                    as: 'hold',
+                    in: { $ifNull: ['$$hold.quantity', 0] },
+                  } } },
                 ] },
               ],
             }],

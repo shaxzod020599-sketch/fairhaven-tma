@@ -228,6 +228,13 @@ async function claimBillzOperation(internalOrderId, action, allowedStatuses) {
       internalOrderId,
       'billz.reconciliationRequired': { $ne: true },
       $and: [
+        // Yandex cancellation fences new effects; other channel claims retain
+        // their established behavior. Local no-effect cancellation stays usable.
+        { $or: [{ channel: { $ne: 'yandex' } }, action === 'cancel'
+          ? (config.billzWriteEnabled ? { channel: 'yandex' } : { channel: 'yandex',
+            'billz.draftOrderId': { $in: ['', null] }, 'billz.reservationApplied': { $ne: true }, 'billz.pendingApplied': { $ne: true } })
+          : { channel: 'yandex', 'yandex.cancelRequested': null, 'yandex.reconciliationRequired': { $ne: true },
+            ...(config.billzWriteEnabled && config.yandex.enabled ? {} : { _id: null }) }] },
         {
           $or: claimableStatuses,
         },
@@ -257,6 +264,12 @@ async function claimBillzOperation(internalOrderId, action, allowedStatuses) {
 
   const current = await Model.findOne({ internalOrderId });
   if (!current) throw new Error(`unknown order ${internalOrderId}`);
+  if (current.channel === 'yandex' && action !== 'cancel' && current.yandex?.cancelRequested) {
+    throw Object.assign(new Error('yandex_cancelled'), { code: 'YANDEX_CANCELLATION_REQUESTED', retrySafe: true, outcomeUnknown: false });
+  }
+  if (current.channel === 'yandex' && (!config.billzWriteEnabled || !config.yandex.enabled) && action !== 'cancel') {
+    throw Object.assign(new Error('yandex_accounting_disabled'), { code: 'yandex_accounting_disabled', retrySafe: true, outcomeUnknown: false });
+  }
 
   if (current.billz.reconciliationRequired) {
     if (current.status === 'failed' && current.billz.failureDisposition !== 'retry_safe') {
@@ -374,6 +387,7 @@ async function checkpointBillzDraft(order, token, { orderId, orderNumber }) {
       $set: {
         'billz.draftOrderId': orderId,
         'billz.orderNumber': orderNumber || '',
+        ...(order.channel === 'yandex' ? { 'yandex.accountingStage': 'draft' } : {}),
       },
     },
     { new: true }
@@ -384,17 +398,26 @@ async function checkpointBillzDraft(order, token, { orderId, orderNumber }) {
   return updated;
 }
 
-async function refreshBillzOperationLease(order, token) {
+async function refreshBillzOperationLease(order, token, { beforeEffect = false, stage } = {}) {
   const refreshed = await ChannelOrder().findOneAndUpdate(
     {
       _id: order._id,
       'billz.operationToken': token,
       'billz.reconciliationRequired': { $ne: true },
+      ...(order.channel === 'yandex' && beforeEffect ? { 'yandex.cancelRequested': null, 'yandex.reconciliationRequired': { $ne: true } } : {}),
     },
-    { $set: { 'billz.operationStartedAt': new Date() } },
+    { $set: { 'billz.operationStartedAt': new Date(),
+      ...(order.channel === 'yandex' && stage ? { 'yandex.accountingStage': stage } : {}) } },
     { new: true }
   );
   if (!refreshed) {
+    if (order.channel === 'yandex' && beforeEffect) {
+      const current = await ChannelOrder().findOne({ _id: order._id, 'billz.operationToken': token,
+        'billz.reconciliationRequired': { $ne: true }, 'yandex.reconciliationRequired': { $ne: true }, 'yandex.cancelRequested': { $ne: null } }).lean();
+      if (current) throw Object.assign(new Error('yandex_cancelled'), {
+        code: 'YANDEX_CANCELLATION_REQUESTED', retrySafe: true, outcomeUnknown: false,
+      });
+    }
     throw operationError(order.internalOrderId, 'BILLZ_OPERATION_OWNERSHIP_LOST');
   }
 }
@@ -437,6 +460,7 @@ async function reserveOrder(internalOrderId) {
       throw operationError(internalOrderId, 'BILLZ_RECONCILIATION_REQUIRED');
     }
 
+    if (order.channel === 'yandex') await refreshBillzOperationLease(order, token, { beforeEffect: true, stage: 'creating_draft' });
     const result = await sale.reserveOrder({
       items: order.items.map((i) => ({
         billzProductId: i.billzProductId,
@@ -450,12 +474,13 @@ async function reserveOrder(internalOrderId) {
           orderNumber = progress.orderNumber;
           await checkpointBillzDraft(order, token, progress);
         }
-        await refreshBillzOperationLease(order, token);
+        await refreshBillzOperationLease(order, token, { beforeEffect: true,
+          stage: progress.operation === 'reserve' ? 'reserving' : 'draft' });
       },
     });
     draftOrderId = result.orderId;
     orderNumber = result.orderNumber;
-    await refreshBillzOperationLease(order, token);
+    await refreshBillzOperationLease(order, token, { stage: 'reserved' });
 
     // Counter first, then status: a crash between the two leaves units
     // reserved with the order still marked for retry, which an operator can
@@ -500,7 +525,7 @@ async function reserveOrder(internalOrderId) {
       || err.code === 'BILLZ_RECONCILIATION_REQUIRED') throw err;
     if (err.billzOrderId) draftOrderId = err.billzOrderId;
     const reconciliationRequired = err.outcomeUnknown === true
-      || Boolean(draftOrderId)
+      || (Boolean(draftOrderId) && !(order.channel === 'yandex' && err.code === 'YANDEX_CANCELLATION_REQUESTED'))
       || !isSafePreEffectFailure(err);
     await persistBillzOperation(order, token, {
       status: 'failed',
@@ -541,6 +566,7 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
   let soldAt = order.soldAt;
 
   try {
+    if (order.channel === 'yandex') await refreshBillzOperationLease(order, token, { beforeEffect: true, stage: 'paying' });
     await sale.completeSale(order.billz.draftOrderId, {
       paymentTypeId: typeId,
       paymentTypeName: config.billz.paymentTypeName,
@@ -550,12 +576,22 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
       comment: `${order.channel} ${order.externalId}`,
     });
     paymentCompleted = true;
-    if (order.channel === 'uzum') soldAt = new Date();
+    if (['uzum', 'yandex'].includes(order.channel)) soldAt = new Date();
+    if (order.channel === 'yandex') {
+      // Save confirmed payment even if a concurrent cancellation or stale-owner
+      // fence prevents finalization. Never infer a refund from partner metadata.
+      const paid = await ChannelOrder().findOneAndUpdate({ _id: order._id, 'billz.operationToken': token }, {
+        $set: { 'yandex.paymentConfirmedAt': soldAt, 'yandex.accountingStage': 'paid' },
+      });
+      if (!paid) throw operationError(internalOrderId, 'BILLZ_OPERATION_OWNERSHIP_LOST');
+    }
     await refreshBillzOperationLease(order, token);
 
     if (reservationApplied) {
       if (order.channel === 'uzum') {
         await require('../uzum/stock').transferSoldHold(order, soldAt);
+      } else if (order.channel === 'yandex') {
+        await require('../yandex/stock').transferSoldHold(order, soldAt);
       } else {
         await applyReservedQty(order.items, -1);
       }
@@ -570,7 +606,7 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
     }
     const stored = await persistBillzOperation(order, token, {
       status: 'sold',
-      soldAt: order.channel === 'uzum' ? soldAt : order.soldAt || new Date(),
+      soldAt: ['uzum', 'yandex'].includes(order.channel) ? soldAt : order.soldAt || new Date(),
       soldAtEstimated: false,
       holdExpiresAt,
       'billz.reservationApplied': reservationApplied,
@@ -726,13 +762,15 @@ async function cancelOrder(internalOrderId, { reason = '' } = {}) {
 
   try {
     if (order.billz.draftOrderId) {
+      const draftOnly = order.channel === 'yandex' && order.yandex?.accountingStage === 'draft'
+        && !reservationApplied && order.billz.failureDisposition === '';
       try {
-        await sale.releaseReservation(order.billz.draftOrderId);
+        if (!draftOnly) await sale.releaseReservation(order.billz.draftOrderId);
         reservationReleased = true;
       } catch (err) {
         // Uzum CANCELLED means the reservation was actually cleaned up.
         // Even a retry-safe refusal is not a successful cancellation.
-        if (order.channel === 'uzum') throw err;
+        if (['uzum', 'yandex'].includes(order.channel)) throw err;
         if (err.outcomeUnknown !== false || err.retrySafe !== true) throw err;
         logger.warn('could not release billz reservation', { internalOrderId, err });
         lastError = `release failed: ${err.message}`;
@@ -742,6 +780,7 @@ async function cancelOrder(internalOrderId, { reason = '' } = {}) {
         try {
           await sale.deleteDraft(order.billz.draftOrderId);
         } catch (err) {
+          if (order.channel === 'yandex') throw err;
           if (err.outcomeUnknown === true) throw err;
           logger.warn('released the reservation but could not remove the draft', {
             internalOrderId, billzOrderId: order.billz.draftOrderId, err,

@@ -49,7 +49,8 @@ function order(record) {
 }
 
 function orderStatus(record) {
-  return { status: 'NEW', ...(record.createdAt ? { updatedAt: new Date(record.createdAt).toISOString() } : {}) };
+  return { status: record.yandex?.cancelRequested ? 'CANCELLED' : record.yandex?.fulfillmentStatus || 'NEW',
+    ...(record.updatedAt || record.createdAt ? { updatedAt: new Date(record.updatedAt || record.createdAt).toISOString() } : {}) };
 }
 
 module.exports = { compositionItem, composition, order, orderStatus };

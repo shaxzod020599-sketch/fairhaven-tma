@@ -36,6 +36,7 @@ test.before(async () => {
     mongoose,
     '../db': { defineModel: (name, schema, collection) => connection.model(name, schema, collection) },
     '../uzum/stock': stock,
+    '../yandex/stock': require('../src/yandex/stock'),
   });
   Model = getModel();
   await Model.init();
@@ -94,6 +95,7 @@ test('Mongo catalogue tombstones advance on repeated absence and resist delayed 
     '../models/BillzProduct': () => Model,
     '../models/SyncLog': () => ({ create: async () => ({}) }),
     '../uzum/stock': stock,
+    '../yandex/stock': require('../src/yandex/stock'),
   }, { Date: Clock });
   const first = await runCatalogSync({ force: true });
   assert.equal(first.ok, true, first.error);
