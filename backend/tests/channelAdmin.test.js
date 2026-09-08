@@ -39,6 +39,21 @@ test('available stock never reports a negative number', () => {
   assert.equal(row.billz.available, 0);
 });
 
+test('Uzum sold holds reduce admin quantity, shop visibility and channel availability', () => {
+  const linked = product({}, { billzProductId: 'billz-1', imageUrl: '/image.jpg' });
+  const held = mirror({ stock: 5, reservedQty: 1, pendingQty: 1, uzumSoldHolds: [{ quantity: 1 }, { quantity: 2 }] });
+  const row = serialise(linked, held);
+  assert.equal(row.billz.available, 0);
+  assert.equal(row.shop.visible, false);
+  assert.equal(row.shop.reason, 'out_of_stock');
+  assert.equal(row.channels.medicalka.live, false);
+  assert.equal(POST_JOIN_FILTERS.out_of_stock(row), true);
+  const noHolds = serialise(linked, mirror({ stock: 5, reservedQty: 1, pendingQty: 1 }));
+  assert.equal(noHolds.billz.available, 3);
+  assert.equal(noHolds.shop.visible, true);
+  assert.equal(noHolds.channels.medicalka.live, true);
+});
+
 test('forceStatus overrides stock in both directions', () => {
   assert.equal(availability(product({ forceStatus: 'out' }), mirror(), 'medicalka').live, false);
   assert.equal(

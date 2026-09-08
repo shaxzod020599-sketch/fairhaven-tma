@@ -10,6 +10,7 @@ const channels = require('../controllers/channelController');
 const sales = require('../controllers/salesAnalyticsController');
 const salesExport = require('../controllers/salesExportController');
 const medicalka = require('../controllers/medicalkaController');
+const uzum = require('../controllers/uzumController');
 const {
   adminLoginLimiter,
   adminPollLimiter,
@@ -89,6 +90,9 @@ router.get('/medicalka/sub-orders/:id', medicalka.detailSubOrder);
 router.post('/medicalka/sub-orders/:id/status', medicalka.transitionSubOrder);
 router.post('/medicalka/sub-orders/:id/cancel', medicalka.cancelSubOrder);
 router.post('/medicalka/sub-orders/:id/labels', medicalka.addSubOrderLabel);
+router.get('/uzum/orders', uzum.list);
+router.get('/uzum/orders/:id', uzum.detail);
+router.post('/uzum/orders/:id/decision', uzum.decide);
 
 // Products
 router.get('/products', admin.listProducts);

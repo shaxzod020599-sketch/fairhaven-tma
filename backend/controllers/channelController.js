@@ -3,6 +3,7 @@ const BillzProductView = require('../models/BillzProductView');
 const Setting = require('../models/Setting');
 const channelHub = require('../utils/channelHub');
 const { sendError } = require('../utils/http');
+const { availableQuantity } = require('../services/stockReconciler');
 
 /**
  * Sales-channel administration.
@@ -57,9 +58,7 @@ function channelOf(product, channel) {
  */
 function availability(product, mirror, channel) {
   const cfg = channelOf(product, channel);
-  const available = mirror
-    ? Math.max(0, (mirror.stock || 0) - (mirror.reservedQty || 0) - (mirror.pendingQty || 0))
-    : 0;
+  const available = availableQuantity(mirror);
 
   let live;
   if (!cfg.enabled) live = false;
@@ -107,8 +106,7 @@ function shopVisibility(product, mirror) {
     return { mode: 'auto', reason: 'gone_from_billz', image, visible: false };
   }
 
-  const free = Math.max(0,
-    (mirror.stock || 0) - (mirror.reservedQty || 0) - (mirror.pendingQty || 0));
+  const free = availableQuantity(mirror);
   return {
     mode: 'auto',
     reason: free > 0 ? 'in_stock' : 'out_of_stock',
@@ -155,8 +153,7 @@ function serialise(product, mirror) {
       stock: Number(mirror.stock) || 0,
       reservedQty: Number(mirror.reservedQty) || 0,
       pendingQty: Number(mirror.pendingQty) || 0,
-      available: Math.max(0,
-        (mirror.stock || 0) - (mirror.reservedQty || 0) - (mirror.pendingQty || 0)),
+      available: availableQuantity(mirror),
       deletedInBillz: Boolean(mirror.deletedInBillz),
       syncedAt: mirror.syncedAt,
     } : null,

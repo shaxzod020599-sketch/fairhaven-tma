@@ -80,6 +80,7 @@ async function acceptOrder(channel, { externalId, items, totalAmount, customer, 
     ),
     customer: customer || {},
     status: 'received',
+    ...(channel === 'uzum' ? { uzum: { version: 1, revision: 1, notification: { pending: true } } } : {}),
     rawIn: raw || null,
   };
 
@@ -537,6 +538,7 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
   let pendingApplied = order.billz.pendingApplied;
   let holdExpiresAt = order.holdExpiresAt;
   let paymentCompleted = false;
+  let soldAt = order.soldAt;
 
   try {
     await sale.completeSale(order.billz.draftOrderId, {
@@ -548,10 +550,15 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
       comment: `${order.channel} ${order.externalId}`,
     });
     paymentCompleted = true;
+    soldAt = order.channel === 'uzum' ? new Date() : soldAt || new Date();
     await refreshBillzOperationLease(order, token);
 
     if (reservationApplied) {
-      await applyReservedQty(order.items, -1);
+      if (order.channel === 'uzum') {
+        await require('../uzum/stock').transferSoldHold(order, soldAt);
+      } else {
+        await applyReservedQty(order.items, -1);
+      }
       reservationApplied = false;
     }
     // Normally already gone — reserving releases it. Kept as a belt-and-braces
@@ -563,7 +570,7 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
     }
     const stored = await persistBillzOperation(order, token, {
       status: 'sold',
-      soldAt: order.soldAt || new Date(),
+      soldAt,
       soldAtEstimated: false,
       holdExpiresAt,
       'billz.reservationApplied': reservationApplied,
@@ -723,6 +730,9 @@ async function cancelOrder(internalOrderId, { reason = '' } = {}) {
         await sale.releaseReservation(order.billz.draftOrderId);
         reservationReleased = true;
       } catch (err) {
+        // Uzum CANCELLED means the reservation was actually cleaned up.
+        // Even a retry-safe refusal is not a successful cancellation.
+        if (order.channel === 'uzum') throw err;
         if (err.outcomeUnknown !== false || err.retrySafe !== true) throw err;
         logger.warn('could not release billz reservation', { internalOrderId, err });
         lastError = `release failed: ${err.message}`;

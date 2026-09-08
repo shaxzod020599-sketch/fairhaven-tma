@@ -82,7 +82,7 @@ async function fetchAllProducts() {
   return all;
 }
 
-async function applyToMirror(products, shopId) {
+async function applyToMirror(products, shopId, startedAt) {
   const Model = BillzProduct();
   const seenIds = products.map((p) => p.id).filter(Boolean);
 
@@ -97,12 +97,9 @@ async function applyToMirror(products, shopId) {
     .map((p) => ({
       updateOne: {
         filter: { billzProductId: p.id },
-        // $set only. reservedQty and pendingQty keep their stored values, and
-        // $setOnInsert seeds them for genuinely new products.
-        update: {
-          $set: { ...toMirrorFields(p, shopId), syncedAt: now },
-          $setOnInsert: { billzProductId: p.id, reservedQty: 0, pendingQty: 0 },
-        },
+        // The atomic snapshot preserves local reservations, initializes new
+        // counters and rejects an older overlapping catalogue.
+        update: require('../uzum/stock').snapshotUpdate(toMirrorFields(p, shopId), startedAt, now),
         upsert: true,
       },
     }));
@@ -111,10 +108,16 @@ async function applyToMirror(products, shopId) {
 
   // Products the mirror knows but Billz no longer returns are flagged, never
   // removed: order history and product links must survive.
-  const gone = await Model.updateMany(
-    { billzProductId: { $nin: seenIds }, deletedInBillz: false },
-    { $set: { deletedInBillz: true, syncedAt: now } }
-  );
+  const missing = { billzProductId: { $nin: seenIds } };
+  const tombstone = require('../uzum/stock').snapshotUpdate({ deletedInBillz: true }, startedAt, now);
+  const gone = await Model.updateMany({
+    ...missing,
+    deletedInBillz: { $ne: true },
+    $expr: { $lt: [{ $ifNull: ['$snapshotStartedAt', new Date(0)] }, { $literal: startedAt }] },
+  }, tombstone);
+  // Even existing tombstones need the newest watermark: an older overlapping
+  // snapshot must not resurrect a product absent from this newer catalogue.
+  await Model.updateMany(missing, tombstone);
 
   return {
     created: operations.length - knownIds.size,
@@ -150,7 +153,7 @@ async function runCatalogSync({ force = false } = {}) {
       return { ok: false, rejected: true, reason };
     }
 
-    const counts = await applyToMirror(products, shopId);
+    const counts = await applyToMirror(products, shopId, startedAt);
     const durationMs = Date.now() - startedAt.getTime();
 
     await SyncLog().create({

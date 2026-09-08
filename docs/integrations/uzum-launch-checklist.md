@@ -1,6 +1,6 @@
 # Uzum integration — ordered launch checklist
 
-Updated: 2026-09-07. Launch is not complete. This checklist records sequence, evidence and gates; it is not approval to enable production or make live test transactions.
+Updated: 2026-09-08. Launch is not complete. This checklist records sequence, evidence and gates; it is not approval to enable production or make live test transactions.
 
 ## Current evidence
 
@@ -8,8 +8,28 @@ Updated: 2026-09-07. Launch is not complete. This checklist records sequence, ev
 - The prior root verification on 2026-09-06 passed 375 channel and 220 backend tests with isolated/fake external services. Those results apply to that revision, not to future changes.
 - Uzum is disabled by default. No enablement has been performed in this task.
 - The attempted production preflight failed before connecting: SSH port 22 returned `Operation not permitted`. Production deployment is unverified and must not be reported as complete.
-- On 2026-09-07 the configured implementation worker could not initialize: its state database was read-only and the in-process app-server client returned `Operation not permitted`. No source-code changes or new test runs resulted from that dispatch.
+- The external CLI worker could not initialize on 2026-09-07: its state database was read-only and the in-process app-server client returned `Operation not permitted`. A subsequent implementation uses the available in-session worker within the same workspace permissions. The failed CLI dispatch itself made no source changes.
+- The operator subsequently confirmed that Uzum manages courier/delivery automatically, while Fairhaven manually accepts and marks ready. The reserve-on-accept/sale-on-ready flow is recorded in `uzum-operator-flow.md`.
 - Existing Medicalka credentials and behaviour must remain unchanged throughout every phase.
+
+### In-progress verification (not release acceptance)
+
+- The 2026-09-07 working-tree run passed 25 socket-free Uzum serializer, validation, router and lifecycle tests. Live-sensitive environment variables were absent before this run. These tests do not exercise MongoDB atomicity.
+- The full backend run on that working tree recorded 224 tests: 170 passed, 54 failed. Listener creation was denied with `listen EPERM` on `0.0.0.0` / `127.0.0.1`; dependent setup and teardown failures mean this is not a passing regression run.
+- On 2026-09-08, the focused Uzum and Medicalka Telegram/admin action tests passed 7/7, and `git diff --check` passed. Remaining implementation changes still require fresh verification.
+- Admin tests/build remain unverified: local dependencies are absent; offline installation failed with `ENOTCACHED` for `xmlchars-2.2.0.tgz`. The matching old checkout contains unavailable/dataless build-tool files; attempted test/build commands were interrupted. No package versions or lockfiles were changed to work around this.
+- A fresh normal dependency-install attempt on 2026-09-08 also failed: registry tarball requests returned `ENOTFOUND` for `registry.npmjs.org`; npm then reported `Exit handler never called!`. This did not establish a usable frontend toolchain.
+- Accounting review identified a stale-stock exposure window after sale and a cancellation-cleanup failure path. Scoped corrections are implemented; actual database regression evidence remains a release gate. Existing shared counter-repair races and atomic cross-channel allocation remain outside this patch.
+
+### Current implementation
+
+- Receipt durably stores NEW without automatic reservation. Shared decisions implement accept/reserve, ready/sale and reject/cleanup, with original-receipt deadline, persistent cancellation intent, audited actors and uncertain-operation fencing.
+- The existing Orders page now has an Uzum source, and Telegram actions use the same decision service. Current admin authorization is checked at the backend and internal decision boundary. Revoked Telegram recipients receive keyboard cleanup only, not new order content.
+- Uzum OAuth credentials can be created in Connections through the existing issuance endpoint. The secret is transient and shown once; malformed or lost creation responses cannot trigger immediate reissuance in the same dialog. Existing keys are not rotated.
+- Order-keyed sold holds protect availability in the channel catalogue, storefront/bot reconciliation, admin stock views and sellable-stock analytics. Snapshot stock/hold cleanup is atomic per product and ordered by fetch-start watermark, including repeated tombstones. Existing counter-repair concurrency limitations and uncertain external outcomes are not claimed resolved.
+- Shared HTTP throttling selects the Uzum ErrorListV1 array from router-owned context; Medicalka retains its existing response shape. No protocol keys or limiter budgets were changed.
+
+These are local source changes, not proof of production deployment or partner acceptance. Uzum remains disabled by default.
 
 ## 1. Partner onboarding — current
 
@@ -20,7 +40,7 @@ Updated: 2026-09-07. Launch is not complete. This checklist records sequence, ev
 
 Do not request credentials in chat. Any credentials needed for an additional API must use the existing inject-only vault workflow. Partner credentials are not a prerequisite for the inbound OAuth scheme: Fairhaven issues the dedicated Uzum credentials.
 
-## 2. Close the bounded HTTP 429 contract gap — pending execution environment
+## 2. Close the bounded HTTP 429 contract gap — implemented, local contract tests pass
 
 Scope: `channel/src/middleware/rateLimit.js`, the Uzum router only if needed, focused rate-limit tests and the existing contract-foundation notes.
 
@@ -33,32 +53,40 @@ Acceptance:
 - No credentials, authentication decisions, shared order accounting or dependencies change.
 - Independent review and root verification precede commit/push. No production testing is needed.
 
-## 3. Approve the Uzum order-management design — partner decisions required
+## 3. Uzum order-management design — operator direction confirmed
 
-Current source automatically calls `reserveOrder` after accepting a new Uzum order. A reserved order maps to ACCEPTED_BY_RESTAURANT, and a sold order maps to DELIVERED. The shared accounting states do not represent assembly or courier progress. Therefore adding buttons alone would not implement a correct lifecycle.
+Before this implementation, the adapter automatically called `reserveOrder` on receipt and mapped sold to DELIVERED. The approved replacement is NEW on receipt, reservation only on staff acceptance, and READY only after staff action and successful Billz sale. See `uzum-operator-flow.md` for the complete business contract and source limits.
 
-Recommended direction to validate with the operator and Uzum:
+Implementation requirements:
 
 - Keep delivery/fulfilment progress distinct from Billz accounting evidence. A successful Billz sale must not by itself assert that a courier delivered the order.
 - Use the existing admin panel and Telegram admin identity checks; both surfaces must invoke one Uzum decision path with audit records, concurrency protection and stale-button rejection.
-- Decide explicitly whether receipt merely records a request or also takes a local stock hold. Confirm the approval/rejection deadline and what happens when it expires before choosing a timer or stock-hold policy.
-- Implement only the agreed acceptance/assembly transitions. Courier, delivery and refund events require an identified authoritative source; do not invent a callback or a successful-payment event.
-- Decide when Billz reserve, complete and cancellation run, and how pending/uncertain external operations are reconciled. Preserve the existing protection against repeating uncertain writes.
+- Receipt records the request without an automatic Billz write. The visible HTML confirms a 15-minute acceptance deadline; late acceptance is blocked and the card shows expiry.
+- Implement staff acceptance, readiness and rejection. Courier and delivery belong to Uzum's separate platform, as clarified by the operator. Do not invent a callback or a successful-payment event.
+- Billz reservation runs on acceptance; completion runs on readiness. Preserve the protection against repeating uncertain writes. Post-sale cancellation needs reconciliation until return accounting exists.
 - A narrower first release of piece goods without promotions/modifiers/composition replacement is possible only if Uzum accepts that scope. Otherwise those capabilities require a separate reviewed accounting design.
 
-Alternative: use Uzum's own cabinet for operator actions if they document how our integration receives the resulting events. Without that return path, this alternative does not close the lifecycle gap.
+Admin panel and Telegram are the chosen operator surfaces. The user authorized implementation of this flow; no further approval of the same direction is pending. Partner configuration and acceptance still gate production enablement.
 
-Gate: write and approve the concrete design and task plan after these decisions are known. Do not implement both alternatives speculatively.
+## 4. Implement and verify locally — implemented, release verification incomplete
 
-## 4. Implement and verify locally — after design approval
-
-- [ ] Add failing tests for approved status transitions, invalid transitions, unauthorized actions, duplicate clicks and concurrent admin/Telegram actions.
-- [ ] Implement the scoped Uzum decision path and existing-panel/Telegram controls.
+- [x] Add failing tests for approved status transitions, invalid transitions, unauthorized actions, duplicate clicks and concurrent admin/Telegram actions.
+- [x] Implement the scoped Uzum decision path and existing-panel/Telegram controls.
 - [ ] Verify stock holds, reserve/complete/cancel behaviour and failure reconciliation against a local database and fake Billz, with live credentials absent.
-- [ ] Test notification retry and finalization against fake Telegram; preserve complete order information in storage even when display text is shortened.
+- [x] Test notification retry and finalization against fake Telegram; preserve complete order information in storage even when display text is shortened.
 - [ ] Complete agreed promotions, units or composition-update scope, if required by partner acceptance.
 - [ ] Run required channel/backend regressions and admin lint/build/tests for any modified frontend. Review final diff for Medicalka isolation and secret exposure.
 - [ ] Commit and push verified changes to the configured GitHub remote. A network failure must be reported separately from a successful local commit.
+
+### Verification evidence on 2026-09-08
+
+- Final root socket-free regression selection passed 98/98, zero skipped: Uzum schemas, order validation, parser/auth/429 contracts, lifecycle, notifications, sold holds and consumers; catalogue paging; backend Uzum actions, Medicalka Telegram actions, stock reconciliation and channel admin views.
+- The final selection includes three real Express handler tests (fake persistence/external accounting, no listening socket): durable inert receipt/retry/snapshot, internal token/current-admin/cross-channel boundaries, and safe service-error mapping. These do not prove database query semantics.
+- All modified/new `.js` files passed `node --check`; `git diff --check` passed. JSX runtime/build checks remain blocked as described below.
+- Full channel suite attempt recorded 391 tests: 155 passed, 236 failed from denied local listeners and dependent setup/teardown. Later focused tests are separate evidence, not a replacement for this failed regression run.
+- The new real Mongo/Mongoose sold-stock regression suite was attempted: all three cases failed during setup with `listen EPERM: operation not permitted 0.0.0.0`. It did not reach database assertions.
+- Root admin focused tests and build both failed to start: `vitest: command not found` / `vite: command not found`. UI behavior remains unexecuted in this environment.
+- Independent review found and prompted corrections for stock consumers, stale tombstone resurrection, notification enqueue, revoked-recipient updates, stale Telegram keyboards, stale UI responses and misleading service-error mapping. Review is not production acceptance.
 
 ## 5. Staging acceptance — isolated environment required
 

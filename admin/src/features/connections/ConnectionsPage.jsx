@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { connectionsApi } from '../../api/connections';
 import { formatDateTime, formatNumber } from '../../lib/format';
 import { Badge } from '../../ui/Badge';
@@ -49,6 +49,121 @@ function KeyRow({ item, onRevoke }) {
   );
 }
 
+// Mounted only while open, so credentials are discarded when the dialog closes.
+function UzumCredentialsDialog({ mode, api, onClose, onSaved }) {
+  const importing = mode === 'import';
+  const [form, setForm] = useState({ clientId: '', clientSecret: '', label: 'Основное подключение Uzum' });
+  const [pair, setPair] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [uncertain, setUncertain] = useState(false);
+  const [copied, setCopied] = useState('');
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  const save = async () => {
+    if (busy || uncertain) return;
+    setBusy(true);
+    setError('');
+    try {
+      const response = importing
+        ? await api.importUzum(form)
+        : await api.issueUzum({ label: form.label.trim() });
+      if (!mounted.current) return;
+      if (importing) {
+        setForm({ clientId: '', clientSecret: '', label: '' });
+        onClose();
+      } else {
+        const data = response?.data;
+        if (typeof data?.clientId !== 'string' || !data.clientId.trim()
+          || typeof data?.clientSecret !== 'string' || !data.clientSecret.trim()) {
+          throw new Error('Incomplete credential response');
+        }
+        setPair({ clientId: data.clientId, clientSecret: data.clientSecret });
+      }
+      onSaved();
+    } catch (_) {
+      if (mounted.current) {
+        setUncertain(!importing);
+        setError(importing
+          ? 'Не удалось подтвердить сохранение. Обновите список ключей перед повторной попыткой.'
+          : 'Не удалось подтвердить создание доступа. Ключ мог быть создан. Обновите список ключей: если появился новый доступ, секрет которого вы не получили, отзовите его перед созданием новой пары.');
+      }
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  };
+
+  const close = () => {
+    if (busy) return;
+    setPair(null);
+    setForm({ clientId: '', clientSecret: '', label: '' });
+    onClose();
+    if (uncertain) onSaved();
+  };
+  const copy = async (field) => {
+    try {
+      await navigator.clipboard.writeText(pair[field]);
+      if (mounted.current) { setCopied(field); setError(''); }
+    } catch (_) {
+      if (mounted.current) setError('Не удалось скопировать автоматически. Выделите значение и скопируйте вручную.');
+    }
+  };
+
+  return (
+    <Dialog
+      open
+      title={importing ? 'Импорт согласованных данных Uzum' : 'Создать доступ для Uzum Tezkor'}
+      description={importing
+        ? 'Необязательный шаг: сохраните существующую пару, заранее согласованную для доступа Uzum к API FairHaven.'
+        : 'FairHaven выпускает Client ID и Client secret для доступа Uzum к нашему API.'}
+      onClose={close}
+      closeDisabled={busy}
+      width="620px"
+    >
+      {pair ? <>
+        <div className="fh-secret-warning"><b>Скопируйте сейчас.</b> Данные показываются один раз. После закрытия окна увидеть секрет снова нельзя.</div>
+        <div className="fh-key-grid">
+          {['clientId', 'clientSecret'].map((field) => {
+            const label = field === 'clientId' ? 'Client ID' : 'Client secret';
+            return <div className="fh-key-box" key={field}>
+              <span>{label}</span>
+              <code className="fh-key-box__value">{pair[field]}</code>
+              <Button onClick={() => copy(field)}>Скопировать {label}</Button>
+            </div>;
+          })}
+        </div>
+        {copied && <p role="status">{copied === 'clientId' ? 'Client ID скопирован' : 'Client secret скопирован'}</p>}
+        <div className="fh-next-note"><b>Что дальше</b><p>Передайте данные команде Uzum по согласованному безопасному каналу. Выпуск ключей не включает обработку реальных заказов: запуск согласуется отдельно.</p></div>
+      </> : <div className="fh-form-stack">
+        <Field label="Название подключения" hint="Поможет отличить этот доступ в списке ключей.">
+          <input className="fh-input" maxLength={120} disabled={busy} value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
+        </Field>
+        {importing && <>
+          <Field label="Client ID" hint="Существующий идентификатор для доступа к FairHaven.">
+            <input className="fh-input fh-mono" autoComplete="off" disabled={busy} value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })} />
+          </Field>
+          <Field label="Client secret" hint="После закрытия окна поле очистится.">
+            <input className="fh-input fh-mono" type="password" autoComplete="new-password" disabled={busy} value={form.clientSecret} onChange={(e) => setForm({ ...form, clientSecret: e.target.value })} />
+          </Field>
+        </>}
+        {!importing && <p>Новая пара создаётся только по кнопке ниже. Ранее выданные ключи продолжат действовать.</p>}
+      </div>}
+      {error && <div className="fh-error-note" role="alert">{error}</div>}
+      <div className="fh-dialog-actions">
+        <Button disabled={busy} onClick={close}>{uncertain ? 'Закрыть и обновить список' : pair ? 'Закрыть окно' : 'Отмена'}</Button>
+        {!pair && <Button variant="primary" disabled={busy || uncertain || !form.label.trim() || (importing && (form.clientId.trim().length < 4 || form.clientSecret.trim().length < 8))} onClick={save}>
+          {busy ? 'Сохраняем…' : importing ? 'Сохранить согласованную пару' : 'Создать Client ID и secret'}
+        </Button>}
+      </div>
+    </Dialog>
+  );
+}
+
 export function ConnectionsPage({ api = connectionsApi }) {
   const toast = useToast();
   const [sync, setSync] = useState(null);
@@ -59,10 +174,9 @@ export function ConnectionsPage({ api = connectionsApi }) {
   const [medicalka, setMedicalka] = useState(false);
   const [medicalkaPartner, setMedicalkaPartner] = useState(false);
   const [partnerSummary, setPartnerSummary] = useState({ activeEnvironment: '', profiles: [] });
-  const [uzum, setUzum] = useState(false);
+  const [uzum, setUzum] = useState(null);
   const [revoking, setRevoking] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [uzumForm, setUzumForm] = useState({ clientId: '', clientSecret: '', label: 'Основное подключение Uzum' });
 
   const load = useCallback(async () => {
     const [syncResult, settingsResult, keysResult, partnerResult] = await Promise.allSettled([
@@ -100,17 +214,6 @@ export function ConnectionsPage({ api = connectionsApi }) {
       window.setTimeout(load, 1500);
     } catch (err) { toast?.error?.(err.message); }
   };
-  const importUzum = async () => {
-    setBusy(true);
-    try {
-      await api.importUzum(uzumForm);
-      setUzum(false);
-      setUzumForm({ clientId: '', clientSecret: '', label: 'Основное подключение Uzum' });
-      toast?.success?.('Данные Uzum сохранены');
-      load();
-    } catch (err) { toast?.error?.(err.message); }
-    finally { setBusy(false); }
-  };
   const revoke = async () => {
     setBusy(true);
     try {
@@ -127,7 +230,7 @@ export function ConnectionsPage({ api = connectionsApi }) {
   const uzumKeys = keys.filter((key) => key.channel === 'uzum');
   const medicalkaReady = active('medicalka').length >= 2;
   const activePartner = partnerSummary.profiles?.find((profile) => profile.active);
-  const uzumReady = active('uzum').length > 0;
+  const uzumConfigured = active('uzum').some((key) => key.kind === 'oauth');
   const mirrorTotal = sync?.mirrorTotal || 0;
 
   return (
@@ -166,15 +269,16 @@ export function ConnectionsPage({ api = connectionsApi }) {
             <div className="fh-service-logo">U</div>
             <div>
               <h2>Uzum Tezkor</h2>
-              <ConnectionMark tone={uzumReady ? 'ok' : 'idle'}>
-                {uzumReady ? 'Подключено' : 'Пока не подключено'}
+              <ConnectionMark tone="idle">
+                {uzumConfigured ? 'Ключи настроены' : 'Ключи не настроены'}
               </ConnectionMark>
             </div>
           </div>
-          <p>Маркетплейс Uzum. Здесь наоборот: доступ выдаёт их менеджер, а мы только сохраняем то, что он прислал.</p>
-          <Button variant="primary" onClick={() => setUzum(true)}>
-            {uzumReady ? 'Заменить данные' : 'Ввести данные Uzum'}
-          </Button>
+          <p>FairHaven выдаёт Uzum данные для доступа к нашему API. Настроенные ключи не подтверждают запуск: обработка реальных заказов согласуется отдельно.</p>
+          <div className="fh-connection-actions">
+            <Button variant="primary" onClick={() => setUzum('create')}>Создать доступ Uzum</Button>
+            <Button size="sm" variant="ghost" onClick={() => setUzum('import')}>Импорт согласованной пары</Button>
+          </div>
         </Card>
 
         <Card className="fh-connection-card fh-connection-card--billz">
@@ -279,31 +383,7 @@ export function ConnectionsPage({ api = connectionsApi }) {
         onSaved={load}
       />
 
-      <Dialog
-        open={uzum}
-        title="Подключить Uzum Tezkor"
-        description="Введите данные, которые прислал менеджер Uzum. Мы их не придумываем — просто сохраняем."
-        onClose={() => !busy && setUzum(false)}
-        width="620px"
-      >
-        <div className="fh-form-stack">
-          <Field label="Client ID" hint="Похож на набор букв и цифр. Скопируйте целиком, без пробелов.">
-            <input className="fh-input fh-mono" autoComplete="off" value={uzumForm.clientId} onChange={(e) => setUzumForm({ ...uzumForm, clientId: e.target.value })} />
-          </Field>
-          <Field label="Client secret" hint="Секретная часть. После сохранения поле очистится и показать его снова будет нельзя.">
-            <input className="fh-input fh-mono" type="password" autoComplete="new-password" value={uzumForm.clientSecret} onChange={(e) => setUzumForm({ ...uzumForm, clientSecret: e.target.value })} />
-          </Field>
-          <Field label="Название" hint="Чтобы потом понять, откуда этот доступ.">
-            <input className="fh-input" value={uzumForm.label} onChange={(e) => setUzumForm({ ...uzumForm, label: e.target.value })} />
-          </Field>
-        </div>
-        <div className="fh-dialog-actions">
-          <Button onClick={() => setUzum(false)}>Отмена</Button>
-          <Button variant="primary" disabled={busy || uzumForm.clientId.length < 4 || uzumForm.clientSecret.length < 8} onClick={importUzum}>
-            {busy ? 'Сохраняем…' : 'Сохранить данные Uzum'}
-          </Button>
-        </div>
-      </Dialog>
+      {uzum && <UzumCredentialsDialog mode={uzum} api={api} onClose={() => setUzum(null)} onSaved={load} />}
 
       <Dialog
         open={Boolean(revoking)}

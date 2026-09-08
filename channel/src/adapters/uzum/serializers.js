@@ -150,7 +150,7 @@ function order(record) {
 /** GET status exposes business progress, never upstream diagnostic text. */
 function orderStatus(record) {
   return {
-    status: statuses.toUzum(record.status, record.billz),
+    status: statuses.toUzum(record.status, record.billz, record.uzum),
     ...(record.updatedAt ? { updatedAt: new Date(record.updatedAt).toISOString() } : {}),
   };
 }

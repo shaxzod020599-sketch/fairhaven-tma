@@ -38,7 +38,8 @@ function channelConfig(card, channel) {
  * arrives for something that is gone.
  */
 function availableStock(mirror) {
-  return Math.max(0, (mirror.stock || 0) - (mirror.reservedQty || 0) - (mirror.pendingQty || 0));
+  return Math.max(0, (mirror.stock || 0) - (mirror.reservedQty || 0) - (mirror.pendingQty || 0)
+    - require('../uzum/stock').soldHoldQuantity(mirror));
 }
 
 function isAvailable(card, mirror, channel) {
