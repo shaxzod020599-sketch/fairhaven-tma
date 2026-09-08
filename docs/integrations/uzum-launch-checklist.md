@@ -12,7 +12,9 @@ This section supersedes earlier environment-blocked observations below; those re
 - Final production candidate verification after stock/restart corrections: **413/413 channel**, **225/225 backend**, and **102/102 admin** tests (27 frontend files), zero skipped; **740 total**. MongoDB7.0.34 was isolated with live credentials absent. Admin production build passed. The candidate has fewer channel tests than the original integration branch because the separate Medicalka repair and its tests were deliberately excluded.
 - Routine Telegram webhook setup/polling fallback now preserves queued updates instead of discarding admin callbacks during deployment. Transport authentication and Medicalka-specific behavior are unchanged. Non-Uzum soldAt creation again occurs at final persistence as in production394f4f7; Uzum retains payment-confirmation time. Regression tests first reproduced two queue failures and two timing failures, then passed; independent code/security reviews approved the bounded correction.
 - Independent stock review found no blocking defect. The race is corrected; the tombstone regression was a native-Date test-fixture issue, not a production tombstone defect. Existing cross-channel counter-repair races and partner stock-read consistency are not proven solved.
-- No production deployment, Uzum activation, live test order, inventory write or Telegram test send has occurred at this checkpoint.
+- Production application revision **a3575fa** was installed at **2026-09-08 10:40 UTC**. Only `fairhaven` and `channel-hub` restarted. Node20.20.2 syntax checks, installed nginx syntax/reload, backend/hub health, frontend artifact hashes and unchanged configuration/Medicalka credential fingerprints were verified. Deployment details and rollback limits: `uzum-release-20260908.md`.
+- Telegram started in its existing configured polling mode, with queued updates preserved. A single startup Medicalka sub-order HTTP400 warning was observed; subsequent normal polling recovered. At10:44:55/56UTC, approval and sub-order status both reported recent success, no current error and `stale:false`. No Medicalka fix or setting change was made.
+- No Uzum activation, live test order, inventory write or Telegram test send was performed. Normal existing service schedulers resumed on restart.
 - Activation is blocked by missing confirmed Uzum store ID, signing configuration, dedicated active OAuth credentials, selected assortment and partner acceptance. The shared Billz write flag is currently false and must not be silently enabled. Shipping disabled code is not a completed launch.
 - Browser inspection of `admin.fairhaven.uz` remains blocked by a saved site permission; do not circumvent it. SSH deployment/artifact checks are independently available.
 
@@ -82,15 +84,15 @@ Implementation requirements:
 
 Admin panel and Telegram are the chosen operator surfaces. The user authorized implementation of this flow; no further approval of the same direction is pending. Partner configuration and acceptance still gate production enablement.
 
-## 4. Implement and verify locally — implemented, release verification incomplete
+## 4. Implement and verify locally — release verified; partner acceptance pending
 
 - [x] Add failing tests for approved status transitions, invalid transitions, unauthorized actions, duplicate clicks and concurrent admin/Telegram actions.
 - [x] Implement the scoped Uzum decision path and existing-panel/Telegram controls.
-- [ ] Verify stock holds, reserve/complete/cancel behaviour and failure reconciliation against a local database and fake Billz, with live credentials absent.
+- [x] Verify stock holds, reserve/complete/cancel behaviour and failure reconciliation against a local database and fake Billz, with live credentials absent.
 - [x] Test notification retry and finalization against fake Telegram; preserve complete order information in storage even when display text is shortened.
 - [ ] Complete agreed promotions, units or composition-update scope, if required by partner acceptance.
-- [ ] Run required channel/backend regressions and admin lint/build/tests for any modified frontend. Review final diff for Medicalka isolation and secret exposure.
-- [ ] Commit and push verified changes to the configured GitHub remote. A network failure must be reported separately from a successful local commit.
+- [x] Run required channel/backend regressions and admin lint/build/tests for any modified frontend. Review final diff for Medicalka isolation and secret exposure. No separate admin lint/typecheck script is defined.
+- [x] Commit and push verified changes to the configured GitHub remote. Production and original integration branches were independently verified on GitHub.
 
 ### Verification evidence on 2026-09-08
 
@@ -112,11 +114,11 @@ Admin panel and Telegram are the chosen operator surfaces. The user authorized i
 
 ## 6. Production deployment and enablement — separate gates
 
-- [ ] Restore permitted SSH/network access; repeat read-only preflight against current server HEAD and status.
-- [ ] Preserve unrelated dirty files, existing keys and Medicalka runtime configuration; establish a reversible release and rollback path.
-- [ ] Deploy only reviewed commits and restart only affected services; verify revision, process health and sanitized errors without live test orders or sends.
+- [x] Restore permitted SSH/network access; repeat read-only preflight against current server HEAD and status.
+- [x] Preserve unrelated dirty files, existing keys and Medicalka runtime configuration; establish a reversible release and rollback path.
+- [x] Deploy only reviewed commits and restart only affected services; verify revision, process health and sanitized errors without live test orders or sends.
 - [ ] Enable Uzum only after configuration checks, partner acceptance and explicit operator authorization for activation. Shipping disabled code is not a completed Uzum launch.
-- [ ] Verify operational readiness using read-only evidence and report untested delivery/financial behaviour honestly.
+- [x] Verify disabled-release operational readiness using read-only evidence and report untested delivery/financial behaviour honestly. Activation is still gated.
 
 ### Fresh release audit on 2026-09-08
 
