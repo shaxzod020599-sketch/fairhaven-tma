@@ -78,7 +78,7 @@ test('disabled by default', async () => {
   });
 });
 
-test('a successful setup passes the secret and drops queued updates', async () => {
+test('a successful setup passes the secret and preserves queued updates', async () => {
   await withEnv(
     {
       TELEGRAM_USE_WEBHOOK: 'true',
@@ -91,8 +91,9 @@ test('a successful setup passes the secret and drops queued updates', async () =
 
       const opts = bot.calls.createWebhook[0];
       assert.equal(opts.secret_token, GOOD_SECRET);
-      // Replaying an hour of queued updates after downtime sends stale replies.
-      assert.equal(opts.drop_pending_updates, true);
+      // Queued admin callbacks must survive a routine restart.
+      assert.equal(opts.drop_pending_updates, false);
+      assert.deepEqual(opts.allowed_updates, ['message', 'callback_query', 'my_chat_member']);
       // The scheme and trailing slash must be stripped, or Telegram rejects it.
       assert.equal(opts.domain, 'mini.example.uz');
       assert.match(opts.path, /^\/tg\/[a-f0-9]{32}$/);
@@ -129,12 +130,12 @@ test('non-webhook paths always pass through', () => {
   assert.equal(nextCalled, true);
 });
 
-test('clearing the webhook also drops the queue', async () => {
+test('clearing the webhook preserves the queue for polling', async () => {
   // Telegram refuses getUpdates while a webhook is set, so polling cannot
   // start until this runs.
   const bot = fakeBot();
   await webhook.clearWebhook(bot);
-  assert.deepEqual(bot.calls.deleteWebhook[0], { drop_pending_updates: true });
+  assert.deepEqual(bot.calls.deleteWebhook[0], { drop_pending_updates: false });
 });
 
 test('clearing survives a Telegram error', async () => {
