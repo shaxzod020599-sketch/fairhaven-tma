@@ -104,6 +104,16 @@ Admin panel and Telegram are the chosen operator surfaces. The user authorized i
 - [ ] Enable Uzum only after configuration checks, partner acceptance and explicit operator authorization for activation. Shipping disabled code is not a completed Uzum launch.
 - [ ] Verify operational readiness using read-only evidence and report untested delivery/financial behaviour honestly.
 
+### Fresh release audit on 2026-09-08
+
+- Reviewed local release `c5dadef` on `codex/medicalka-telegram-uzum-contract`. The current task's network permission request returned no grant; neither the current GitHub branch head nor the installed production revision was verified in this audit. A local commit is not deployment evidence.
+- Re-ran 94 socket-free Uzum, stock-consumer and backend tests successfully, plus four Medicalka Telegram authorization/action regressions. Live-sensitive environment variables were absent and no local `.env` files were present. Original YAML checksum still matches the recorded source.
+- Corrected nginx-origin 429 responses only for the existing Uzum locations, using a dedicated ErrorListV1 handler. Five static tests inspect the tracked config and original YAML; the three Uzum cases failed before the change and all five passed afterward. Root also passed the two application-limiter tests and four Medicalka Telegram regressions; independent review found no issue in the scoped patch. Medicalka/default handlers, proxy snippets, quotas, allowlist, logging and headers remain unchanged. No nginx binary is installed locally, so actual `nginx -t`, effective configuration and runtime responses remain release gates.
+- Re-ran the three Mongo stock regressions: all failed during setup with `listen EPERM: operation not permitted 0.0.0.0`, before database assertions. Admin test and build commands still cannot start: `vitest: command not found` and `vite: command not found`. No dependencies, live services or credentials were changed.
+- Independent review reproduced a temporary stock-understatement race: if a post-sale snapshot applies before the first sold-hold transfer, the transfer skips releasing the reservation, but the order clears `reservationApplied`. Further catalogue snapshots do not repair that counter; the periodic counter-repair path can. A correction must distinguish first settlement from replay after marker pruning, and must not introduce a second decrement or an unsafe payment retry.
+- Validate all Uzum settings before enablement: missing store ID, signing key or public image base URL prevents the shared hub from starting and can therefore interrupt Medicalka. The Billz write flag is shared, not Uzum-specific. Preserve existing values until their production state and cross-channel effects are established.
+- Partner production store mapping, accepted assortment scope, current OAuth credentials and acceptance results remain unknown to this task. Do not infer missing real-world values from empty defaults or from an unchecked documentation checklist.
+
 ## Sources
 
 - Original partner YAML: `channel/tests/fixtures/uzum/Uzum-Tezkor-Grocery-API.yml`.
