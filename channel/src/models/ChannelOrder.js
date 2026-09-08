@@ -158,6 +158,7 @@ const channelOrderSchema = new mongoose.Schema({
         token: { type: String, default: '' },
         leaseUntil: Date,
         retryAt: Date,
+        cooldownUntil: Date,
         deliveredKey: { type: String, default: '' },
         messages: { type: [mongoose.Schema.Types.Mixed], default: [] },
       },

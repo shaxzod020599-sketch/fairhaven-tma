@@ -11,6 +11,7 @@ const sales = require('../controllers/salesAnalyticsController');
 const salesExport = require('../controllers/salesExportController');
 const medicalka = require('../controllers/medicalkaController');
 const uzum = require('../controllers/uzumController');
+const yandex = require('../controllers/yandexController');
 const {
   adminLoginLimiter,
   adminPollLimiter,
@@ -93,6 +94,11 @@ router.post('/medicalka/sub-orders/:id/labels', medicalka.addSubOrderLabel);
 router.get('/uzum/orders', uzum.list);
 router.get('/uzum/orders/:id', uzum.detail);
 router.post('/uzum/orders/:id/decision', uzum.decide);
+router.get('/yandex/orders', yandex.list);
+router.get('/yandex/orders/:id', yandex.detail);
+router.get('/yandex/products', yandex.products);
+router.put('/yandex/orders/:id/items', yandex.updateItems);
+router.post('/yandex/orders/:id/decision', yandex.decide);
 
 // Products
 router.get('/products', admin.listProducts);
