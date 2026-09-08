@@ -64,11 +64,18 @@ server {
     }
 
     location = /uzum {
+        error_page 429 = @uzum_rate_limited;
         include snippets/fairhaven-api-proxy.conf;
     }
 
     location ^~ /uzum/ {
+        error_page 429 = @uzum_rate_limited;
         include snippets/fairhaven-api-proxy.conf;
+    }
+
+    location @uzum_rate_limited {
+        default_type application/json;
+        return 429 '[{"code":429,"description":"Too many requests — slow down and retry"}]\n';
     }
 
     location @fairhaven_rate_limited {
