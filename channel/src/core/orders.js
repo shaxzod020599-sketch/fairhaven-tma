@@ -550,7 +550,7 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
       comment: `${order.channel} ${order.externalId}`,
     });
     paymentCompleted = true;
-    soldAt = order.channel === 'uzum' ? new Date() : soldAt || new Date();
+    if (order.channel === 'uzum') soldAt = new Date();
     await refreshBillzOperationLease(order, token);
 
     if (reservationApplied) {
@@ -570,7 +570,7 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
     }
     const stored = await persistBillzOperation(order, token, {
       status: 'sold',
-      soldAt,
+      soldAt: order.channel === 'uzum' ? soldAt : order.soldAt || new Date(),
       soldAtEstimated: false,
       holdExpiresAt,
       'billz.reservationApplied': reservationApplied,

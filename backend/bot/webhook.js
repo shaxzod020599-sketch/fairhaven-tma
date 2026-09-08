@@ -77,9 +77,8 @@ async function useWebhook(bot, token) {
       domain,
       path,
       secret_token: secretToken,
-      // After downtime Telegram has queued updates. Replaying an hour of them
-      // sends stale replies to people who have long since moved on.
-      drop_pending_updates: true,
+      // Preserve queued updates, including admin callbacks, across restarts.
+      drop_pending_updates: false,
       allowed_updates: ['message', 'callback_query', 'my_chat_member'],
     });
     console.log(`🤖 Telegram webhook active at https://${domain}${path}`);
@@ -99,7 +98,7 @@ async function useWebhook(bot, token) {
  */
 async function clearWebhook(bot) {
   try {
-    await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+    await bot.telegram.deleteWebhook({ drop_pending_updates: false });
   } catch (err) {
     console.warn('[bot] could not clear webhook:', errorLabel(err));
   }

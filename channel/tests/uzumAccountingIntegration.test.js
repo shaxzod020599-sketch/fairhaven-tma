@@ -21,6 +21,65 @@ async function seed(id) {
     items: [{ billzProductId: id, quantity: 1, unitPrice: 100 }], uzum: { version: 1, acceptedAt: new Date() },
     billz: { draftOrderId: `draft-${id}`, reservationApplied: true } });
 }
+
+for (const channel of ['medicalka', 'fairhaven-bot', 'uzum']) {
+  for (const priorSoldAt of [null, '2026-09-07T10:00:00.000Z']) {
+    test(`${channel} soldAt ${priorSoldAt ? 'with a prior timestamp' : 'without a prior timestamp'} follows channel completion timing`, async (t) => {
+      const id = `timing-${channel}-${priorSoldAt ? 'prior' : 'new'}`;
+      await seed(id);
+      await Mirror.updateOne({ billzProductId: id }, { $set: { pendingQty: 1 } });
+      await Order.updateOne({ internalOrderId: id }, { $set: {
+        channel, soldAt: priorSoldAt, soldAtEstimated: true,
+        'billz.pendingApplied': true, holdExpiresAt: new Date('2026-09-08T12:00:00Z'),
+      } });
+
+      t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-09-08T10:00:00Z') });
+      t.mock.method(sale, 'completeSale', async () => {
+        t.mock.timers.setTime(Date.parse('2026-09-08T10:00:10Z'));
+      });
+      const bulkWrite = Mirror.bulkWrite;
+      t.mock.method(Mirror, 'bulkWrite', async function (operations, options) {
+        const result = await bulkWrite.call(this, operations, options);
+        const pendingRelease = operations[0].updateOne.update.$inc.pendingQty === -1;
+        t.mock.timers.setTime(Date.parse(pendingRelease
+          ? '2026-09-08T10:00:30Z' : '2026-09-08T10:00:20Z'));
+        return result;
+      });
+      if (channel === 'uzum') {
+        const transferSoldHold = stock.transferSoldHold;
+        t.mock.method(stock, 'transferSoldHold', async (...args) => {
+          t.mock.timers.setTime(Date.parse('2026-09-08T10:00:20Z'));
+          return transferSoldHold(...args);
+        });
+      }
+
+      const result = await core.completeOrder(id);
+      const row = await Order.findOne({ internalOrderId: id }).lean();
+      const mirror = await Mirror.findOne({ billzProductId: id }).lean();
+      const expected = channel === 'uzum'
+        ? '2026-09-08T10:00:10.000Z'
+        : priorSoldAt || '2026-09-08T10:00:30.000Z';
+      assert.equal(result.soldAt.toISOString(), expected);
+      assert.equal(row.soldAt.toISOString(), expected);
+      assert.equal(row.soldAtEstimated, false);
+      assert.equal(row.status, 'sold');
+      assert.equal(row.billz.reservationApplied, false);
+      assert.equal(row.billz.pendingApplied, false);
+      assert.equal(row.billz.operationToken, '');
+      assert.equal(row.holdExpiresAt, null);
+      assert.equal(mirror.reservedQty, 0);
+      assert.equal(mirror.pendingQty, 0);
+      if (channel === 'uzum') {
+        assert.equal(mirror.uzumSoldHolds.length, 1);
+        assert.equal(mirror.uzumSoldHolds[0].soldAt.toISOString(), '2026-09-08T10:00:10.000Z');
+        assert.equal(mirror.uzumSoldHolds[0].quantity, 1);
+      } else {
+        assert.deepEqual(mirror.uzumSoldHolds, []);
+      }
+    });
+  }
+}
+
 test('actual core retry-safe cancellation failure leaves reservation held until successful cleanup', async () => {
   await seed('cancel');
   sale.releaseReservation = async () => { throw Object.assign(new Error('refused'), { retrySafe: true, outcomeUnknown: false }); };
