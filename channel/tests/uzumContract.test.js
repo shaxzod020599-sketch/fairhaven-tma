@@ -411,7 +411,9 @@ test('vendor JSON works on both mounts; GET preserves documented snapshot and bu
   const stored = await ChannelOrder().findOne({ externalId: ORDER.eatsId }).lean();
   assert.equal(stored.customer.phone, ORDER.deliveryInfo.clientPhoneNumber);
   assert.equal(stored.customer.name, 'Ali');
-  assert.equal(reserveCalls, 1);
+  assert.equal(reserveCalls, 0);
+  assert.equal(stored.status, 'received');
+  assert.equal(stored.uzum.notification.pending, true);
 });
 
 test('duplicate after delisting keeps original id without another reservation', async () => {
@@ -422,7 +424,7 @@ test('duplicate after delisting keeps original id without another reservation', 
     const again = await api('POST', '/order', { body: ORDER });
     assert.equal(again.status, 200);
     assert.equal(again.body.orderId, first.body.orderId);
-    assert.equal(reserveCalls, 1);
+    assert.equal(reserveCalls, 0);
   } finally { await cards.updateOne({ billzProductId: 'bp-1' }, { $set: { 'channels.uzum.enabled': true } }); }
 });
 
@@ -471,10 +473,10 @@ test('PUT rejects both composition and fake status callbacks without stock effec
     assert.equal((await api('PUT', '/order/UZ-1001', { body })).status, 422);
   }
   assert.equal(saleCalls, 0);
-  assert.equal(reserveCalls, 1);
+  assert.equal(reserveCalls, 0);
   const after = await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean();
   assert.equal(after.reservedQty, before.reservedQty);
-  assert.equal((await api('GET', '/order/UZ-1001/status')).body.status, 'ACCEPTED_BY_RESTAURANT');
+  assert.equal((await api('GET', '/order/UZ-1001/status')).body.status, 'NEW');
 });
 
 test('DELETE requires matching eatsId and cancels idempotently', async () => {
@@ -490,7 +492,7 @@ test('DELETE requires matching eatsId and cancels idempotently', async () => {
     assert.equal(res.body, null);
     assert.equal(res.type, '');
   }
-  assert.equal(deleteCalls, 1);
+  assert.equal(deleteCalls, 0);
   assert.equal((await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean()).reservedQty, 0);
   assert.equal((await api('GET', '/order/UZ-1001/status')).body.status, 'CANCELLED');
 });
@@ -581,7 +583,7 @@ test('concurrent exact and conflicting retries recheck the core acceptance winne
       assert.deepEqual(responses.map((res) => res.status).sort(), conflicting ? [200, 422] : [200, 200]);
       if (!conflicting) assert.equal(responses[0].body.orderId, responses[1].body.orderId);
       await settle();
-      assert.equal(reserveCalls, before + 1);
+      assert.equal(reserveCalls, before);
       assert.equal(await ChannelOrder().countDocuments({ channel: 'uzum', externalId: eatsId }), 1);
       await api('DELETE', `/order/${eatsId}`, { body: { eatsId } });
     } finally {
@@ -589,4 +591,24 @@ test('concurrent exact and conflicting retries recheck the core acceptance winne
       orders.acceptOrder = originalAccept;
     }
   }
+});
+
+test('manual operator accept and ready use actual core; partner still sees READY and rejects post-sale cancellation', async () => {
+  const lifecycle = require('../src/uzum/lifecycle');
+  const body = { ...ORDER, eatsId: 'UZ-OPERATOR', items: [{ ...ORDER.items[0], quantity: 1 }], paymentInfo: { ...ORDER.paymentInfo, itemsCost: 300000 } };
+  const receipt = await api('POST', '/order', { body });
+  assert.equal(receipt.status, 200);
+  const id = receipt.body.orderId;
+  const actor = { type: 'admin-panel', telegramId: 77, name: 'Test admin' };
+  const before = { reserveCalls, saleCalls };
+  assert.equal((await lifecycle.decide(id, { action: 'accept', actor })).order.status, 'ACCEPTED_BY_RESTAURANT');
+  assert.equal((await lifecycle.decide(id, { action: 'accept', actor })).idempotent, true);
+  assert.equal((await lifecycle.decide(id, { action: 'ready', actor })).order.status, 'READY');
+  assert.equal((await lifecycle.decide(id, { action: 'ready', actor })).idempotent, true);
+  assert.equal(reserveCalls, before.reserveCalls + 1); assert.equal(saleCalls, before.saleCalls + 1);
+  for (const prefix of ['/uzum', '/uzum/v1']) assert.equal((await api('GET', `/order/${id}/status`, { prefix })).body.status, 'READY');
+  assert.equal((await api('DELETE', `/order/${id}`, { body: { eatsId: body.eatsId } })).status, 409);
+  assert.equal((await ChannelOrder().findOne({ internalOrderId: id }).lean()).status, 'sold');
+  const mirror = await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean();
+  assert.equal(mirror.uzumSoldHolds.find((hold) => hold.orderId === id).quantity, 1);
 });

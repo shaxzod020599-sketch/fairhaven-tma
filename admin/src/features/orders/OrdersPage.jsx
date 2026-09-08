@@ -13,6 +13,7 @@ import { Pagination } from '../../ui/Pagination';
 import { useToast } from '../../ui/ToastProvider';
 import { OrderWorkbench } from './OrderWorkbench';
 import { MedicalkaQueue } from './MedicalkaQueue';
+import { UzumOrders } from './UzumOrders';
 import { medicalkaApi as defaultMedicalkaApi } from '../../api/medicalka';
 
 const LIMIT = 30;
@@ -60,6 +61,7 @@ function SourceTabs({ source, onSource }) {
     <div className="fh-order-sources" aria-label="Buyurtma manbasi">
       <button type="button" className={source === 'fairhaven' ? 'is-active' : ''} onClick={() => onSource('fairhaven')}>FairHaven</button>
       <button type="button" className={source === 'medicalka' ? 'is-active' : ''} onClick={() => onSource('medicalka')}>Medicalka</button>
+      <button type="button" className={source === 'uzum' ? 'is-active' : ''} onClick={() => onSource('uzum')}>Uzum</button>
     </div>
   );
 }
@@ -175,18 +177,18 @@ export function OrdersPage({ api = ordersApi, medicalkaApi = defaultMedicalkaApi
 
   const attention = useMemo(() => rows.filter((row) => attentionReason(row)), [rows]);
 
-  if (source === 'medicalka') {
+  if (source === 'medicalka' || source === 'uzum') {
     return (
       <div className="fh-page fh-orders">
         <header className="fh-page-head" data-print-hide>
           <div>
             <p className="fh-eyebrow">OPERATOR NAVBATI</p>
             <h1>Buyurtmalar</h1>
-            <p>FairHaven va Medicalka zayavkalari bitta ish joyida.</p>
+            <p>FairHaven, Medicalka va Uzum buyurtmalari bitta ish joyida.</p>
           </div>
         </header>
         <SourceTabs source={source} onSource={setSource} />
-        <MedicalkaQueue api={medicalkaApi} />
+        {source === 'uzum' ? <UzumOrders /> : <MedicalkaQueue api={medicalkaApi} />}
       </div>
     );
   }

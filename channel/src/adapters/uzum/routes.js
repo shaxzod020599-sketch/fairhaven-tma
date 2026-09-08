@@ -4,7 +4,7 @@ const logger = require('../../logger');
 const catalog = require('../../core/catalog');
 const orders = require('../../core/orders');
 const images = require('../../media/images');
-const notify = require('../../notify/telegram');
+const lifecycle = require('../../uzum/lifecycle');
 const ChannelOrder = require('../../models/ChannelOrder');
 const { readSettings } = require('../../models/SettingView');
 const { channelLimiter, authFailureLimiter } = require('../../middleware/rateLimit');
@@ -21,9 +21,8 @@ const S = require('./serializers');
  * them are obvious from the endpoint list:
  *
  *   - **Fifteen minutes.** If Uzum does not see ACCEPTED_BY_RESTAURANT within
- *     that window it cancels the order. So accepting an order writes a record
- *     and answers; the Billz reservation happens after the response, and a slow
- *     Billz costs us a reservation rather than the order.
+ *     that window it cancels the order. Receipt only stores NEW; an operator
+ *     must accept and successfully reserve before this deadline.
  *   - **A resent order must return the same id with a 200.** Their retry is
  *     indistinguishable from a new order except by `eatsId`, so that is the
  *     unique key.
@@ -32,6 +31,9 @@ const S = require('./serializers');
  */
 const router = express.Router();
 
+// Router-owned context, set before either shared limiter. Request headers and
+// path-prefix lookalikes cannot choose a channel's error contract.
+router.use((_req, res, next) => { res.locals.channelErrorContract = 'uzum'; next(); });
 router.use(express.json({ type: ['application/json', 'application/vnd.eats.order.v2+json'], limit: '256kb' }));
 router.use(authFailureLimiter);
 
@@ -159,18 +161,9 @@ router.post('/order', async (req, res, next) => {
     });
     if (!created && !isDeepStrictEqual(S.order(order), snapshot)) return fail(res, 422, 'eatsId already exists with a different order');
 
-    // Answered before Billz is touched. Their fifteen-minute deadline is on the
-    // acknowledgement, and a resend must produce this same body.
+    // The record includes a durable notification revision. Operators decide
+    // separately; the acknowledgement makes no inventory/accounting claim.
     res.json({ orderId: order.internalOrderId, result: 'OK' });
-
-    if (created) {
-      orders.reserveOrder(order.internalOrderId)
-        .catch((err) => logger.error('reservation failed after accepting uzum order', {
-          internalOrderId: order.internalOrderId, err,
-        }))
-        .finally(() => notify.announceOrder(CHANNEL, parsed.externalId)
-          .catch((err) => logger.warn('order announcement failed', { err })));
-    }
   } catch (err) { next(err); }
 });
 
@@ -211,7 +204,7 @@ router.put('/order/:orderId', async (req, res, next) => {
 router.delete('/order/:orderId', async (req, res, next) => {
   try {
     if (!req.body || typeof req.body.eatsId !== 'string' || !req.body.eatsId.trim()
-      || (req.body.comment !== undefined && typeof req.body.comment !== 'string')
+      || (req.body.comment !== undefined && (typeof req.body.comment !== 'string' || req.body.comment.length > 300))
       || Object.keys(req.body).some((key) => !['eatsId', 'comment'].includes(key))) return fail(res, 400, 'eatsId and optional comment are required');
     const record = await findOrder(req.params.orderId);
     if (!record) return fail(res, 404, `Order ${req.params.orderId} not found`, 404);
@@ -220,20 +213,16 @@ router.delete('/order/:orderId', async (req, res, next) => {
     if (record.status === 'cancelled') return res.status(200).end();
 
     try {
-      await orders.cancelOrder(record.internalOrderId, {
-        reason: String(req.body?.comment || 'cancelled by uzum').slice(0, 300),
-      });
+      await lifecycle.decide(record.internalOrderId, {
+        action: 'reject', reason: req.body.comment || 'Cancelled by Uzum', actor: { type: 'uzum' },
+      }, { partner: true });
     } catch (err) {
-      // A delivered order is returned, not cancelled — different accounting,
-      // and not something this endpoint may do silently.
-      return fail(res, 409, err.message, 409);
+      // Pending cleanup is not a successful DELETE; a completed sale requires
+      // accounting reconciliation. Only bounded codes leave this boundary.
+      return fail(res, 409, err.code?.startsWith('uzum_') ? err.code : 'uzum_reconciliation_required', 409);
     }
 
-    const fresh = await findOrder(record.internalOrderId);
     res.status(200).end();
-
-    notify.announceOrder(CHANNEL, fresh.externalId)
-      .catch((err) => logger.warn('order announcement failed', { err }));
   } catch (err) { next(err); }
 });
 

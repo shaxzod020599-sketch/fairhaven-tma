@@ -177,6 +177,7 @@ async function start() {
   // stops keeping stock out of the marketplaces.
   const holdTimer = botOrders.startHoldSweeper();
   await medicalka.start();
+  const uzumTimer = require('./uzum/notifications').start();
 
   if (!notify.isConfigured()) {
     logger.warn('telegram announcements are off — marketplace orders will not appear in the channel');
@@ -186,6 +187,7 @@ async function start() {
     logger.info('shutting down', { signal });
     clearInterval(timer);
     clearInterval(holdTimer);
+    if (uzumTimer) clearInterval(uzumTimer);
     medicalka.stop();
     server.close();
     await db.disconnect();

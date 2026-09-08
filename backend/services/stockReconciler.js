@@ -18,7 +18,7 @@ const BillzProductView = require('../models/BillzProductView');
  *   2. Not approved yet          -> hidden. New products wait for an operator.
  *   3. Set by hand               -> left alone. An operator marking something
  *                                   in or out of stock outranks Billz.
- *   4. Linked to Billz           -> follows Billz stock minus reservations.
+ *   4. Linked to Billz           -> follows Billz stock minus reservations and sold holds.
  *   5. Linked but gone from Billz-> hidden, never deleted. Order history and
  *                                   the link survive so it returns by itself
  *                                   if Billz gets it back.
@@ -40,6 +40,13 @@ function hasImage(product) {
   return Array.isArray(product.images) && product.images.some((u) => u && String(u).trim());
 }
 
+function availableQuantity(mirror) {
+  if (!mirror) return 0;
+  const sold = (mirror.uzumSoldHolds || []).reduce((sum, hold) => sum + (Number(hold.quantity) || 0), 0);
+  return Math.max(0,
+    (mirror.stock || 0) - (mirror.reservedQty || 0) - (mirror.pendingQty || 0) - sold);
+}
+
 /**
  * @returns {{ available: boolean|null, reason: string }}
  *   `available: null` means "leave this product alone".
@@ -53,8 +60,7 @@ function decide(product, mirror) {
 
   if (!mirror || mirror.deletedInBillz) return { available: false, reason: 'gone_from_billz' };
 
-  const free = Math.max(0,
-    (mirror.stock || 0) - (mirror.reservedQty || 0) - (mirror.pendingQty || 0));
+  const free = availableQuantity(mirror);
   return free > 0
     ? { available: true, reason: 'in_stock' }
     : { available: false, reason: 'out_of_stock' };
@@ -143,6 +149,7 @@ function startScheduler({ intervalMs = Number(process.env.STOCK_RECONCILE_MS) ||
 }
 
 module.exports = {
+  availableQuantity,
   decide,
   hasImage,
   planReconcile,

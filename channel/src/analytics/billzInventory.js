@@ -39,6 +39,11 @@ async function summarizeInventory({
                 { $add: [
                   { $ifNull: ['$reservedQty', 0] },
                   { $ifNull: ['$pendingQty', 0] },
+                  { $sum: { $map: {
+                    input: { $ifNull: ['$uzumSoldHolds', []] },
+                    as: 'hold',
+                    in: { $ifNull: ['$$hold.quantity', 0] },
+                  } } },
                 ] },
               ],
             }],

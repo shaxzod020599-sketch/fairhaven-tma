@@ -660,6 +660,7 @@ function createBot(token, frontendUrl) {
   bot.broadcastBackInStock = (product) => broadcastProductToUsers(bot, product, FRONTEND, 'restock');
   bot.broadcastDiscount = (product) => broadcastProductToUsers(bot, product, FRONTEND, 'discount');
   registerMedicalkaActions(bot);
+  require('../services/uzumTelegramAction').registerUzumActions(bot);
 
   // Attach a helper for customer-initiated cancellations — edits the existing
   // channel card to strip the approve/reject buttons and append a verdict.

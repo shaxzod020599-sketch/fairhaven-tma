@@ -7,6 +7,9 @@ export const connectionsApi = {
   saveSettings: (body) => apiRequest('/channels/settings', { method: 'PUT', body }),
   keys: () => apiRequest('/channels/keys'),
   issuePair: (body) => apiRequest('/channels/keys/pair', { method: 'POST', body }),
+  issueUzum: ({ label }) => apiRequest('/channels/keys', {
+    method: 'POST', body: { channel: 'uzum', kind: 'oauth', label },
+  }),
   importUzum: (body) => apiRequest('/channels/keys/import', { method: 'POST', body: { ...body, channel: 'uzum' } }),
   revoke: (id) => apiRequest(`/channels/keys/${id}/revoke`, { method: 'POST' }),
   medicalkaPartner: () => apiRequest('/channels/medicalka/partner'),

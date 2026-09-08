@@ -71,7 +71,7 @@ function isMedicalkaConfigured() {
  * posted must not turn into a failed order. The error is logged and the caller
  * carries on.
  */
-async function call(method, payload) {
+async function call(method, payload, { unchangedIsSuccess = false } = {}) {
   let lastError = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
@@ -86,6 +86,8 @@ async function call(method, payload) {
       });
       const body = await res.json().catch(() => ({}));
       if (body?.ok) return body.result;
+      if (unchangedIsSuccess && ['editMessageText', 'editMessageReplyMarkup'].includes(method) && res.status === 400
+        && /^Bad Request: message is not modified(?::|$)/i.test(body?.description || '')) return { message_id: payload.message_id };
 
       // 400s are permanent — a bad chat id, a message that cannot be edited
       // because it is identical. Retrying those only delays the log line.
@@ -551,6 +553,7 @@ async function drainMedicalkaSubOrderNotifications(options = {}) {
 }
 
 module.exports = {
+  call,
   announceMedicalkaApproval,
   announceMedicalkaSubOrder,
   announceOrder,

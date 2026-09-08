@@ -35,6 +35,10 @@ const billzProductSchema = new mongoose.Schema({
   // Units held by a bot order that is still awaiting Telegram approval. Local
   // only — nothing is written to Billz until an operator confirms.
   pendingQty: { type: Number, default: 0, min: 0 },
+  // Proven Uzum sales awaiting a stock snapshot fetched after their payment.
+  // Kept apart from reservation counters so repair cannot erase this hold.
+  uzumSoldHolds: { type: [{ orderId: String, quantity: Number, soldAt: Date, _id: false }], default: [] },
+  snapshotStartedAt: { type: Date, default: null },
 
   // Medicalka's contract types product ids as integers. Allocated once, on
   // first publication, and then stable for the life of the product.
@@ -45,7 +49,7 @@ const billzProductSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 billzProductSchema.methods.availableStock = function availableStock() {
-  return Math.max(0, this.stock - this.reservedQty - this.pendingQty);
+  return Math.max(0, this.stock - this.reservedQty - this.pendingQty - require('../uzum/stock').soldHoldQuantity(this));
 };
 
 let model = null;

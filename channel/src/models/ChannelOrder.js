@@ -104,6 +104,27 @@ const channelOrderSchema = new mongoose.Schema({
   // instead of posting again.
   telegramMessageId: { type: Number, default: null },
 
+  // Uzum operator decisions are independent of Medicalka approvals and of the
+  // core Billz lease. A durable pending cancellation survives either surface.
+  uzum: {
+    version: Number,
+    acceptedAt: Date,
+    readyAt: Date,
+    revision: { type: Number, default: 0 },
+    reconciliationRequired: { type: Boolean, default: false },
+    operation: { type: mongoose.Schema.Types.Mixed, default: null },
+    cancelRequested: { type: mongoose.Schema.Types.Mixed, default: null },
+    audit: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    notification: {
+      pending: { type: Boolean, default: true },
+      token: { type: String, default: '' },
+      leaseUntil: Date,
+      retryAt: Date,
+      deliveredKey: { type: String, default: '' },
+      messages: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    },
+  },
+
   // The payload exactly as it arrived. Reconstructing what a marketplace sent
   // from our normalised copy is guesswork when something goes wrong.
   rawIn: { type: mongoose.Schema.Types.Mixed, default: null },

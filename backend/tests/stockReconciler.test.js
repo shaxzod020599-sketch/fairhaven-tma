@@ -35,6 +35,11 @@ test('reserved and pending units count as sold for shop visibility', () => {
   assert.equal(state.reason, 'out_of_stock');
 });
 
+test('Uzum sold holds keep final units unavailable until a fresh stock snapshot', () => {
+  assert.equal(decide(product(), mirror({ stock: 2, uzumSoldHolds: [{ quantity: 2 }] })).available, false);
+  assert.equal(decide(product(), mirror({ stock: 2, uzumSoldHolds: [] })).available, true);
+});
+
 test('a product that disappeared from Billz is hidden, not deleted', () => {
   const gone = decide(product(), null);
   assert.equal(gone.available, false);

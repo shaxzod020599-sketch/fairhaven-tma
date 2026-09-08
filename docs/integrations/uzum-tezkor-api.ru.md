@@ -3,6 +3,8 @@
 Phase: 2026-09-06. This is a contract-alignment foundation, not launch acceptance.
 Uzum remains disabled by default. No Medicalka configuration or tokens changed.
 
+This document records foundation commit `d69f5e0`, including its historical gaps and test evidence. The subsequently approved operator flow and its implementation gates are tracked in [uzum-operator-flow.md](uzum-operator-flow.md) and [uzum-launch-checklist.md](uzum-launch-checklist.md). In particular, the approved target is NEW on receipt, manual acceptance/reservation, and manual READY/sale; courier pickup and delivery remain owned by Uzum. Historical DELIVERED mapping and automatic receipt-time reservation described below are not the approved target.
+
 ## Source of truth
 
 Original complete OpenAPI 3.0.1 YAML from the [public Uzum Retail API page](https://flash-longship-af1.notion.site/Uzum-Tezkor-Retail-API-3eb48f484ac84504808078ae59c89e1f).
@@ -40,7 +42,7 @@ PUT is optional composition replacement, not a status callback. Known orders ret
 DELETE requires eatsId matching the loaded order before cancellation; first and repeat cancellation return empty HTTP 200, without repeating the cancellation path.
 A failed record reports ACCEPTED_BY_RESTAURANT only when reservationApplied=true proves the reservation was applied. A draft-created checkpoint alone remains NEW. Raw Billz error text is not returned in status.
 
-## Remaining work before enablement
+## Foundation gaps at d69f5e0 (historical)
 
 Weighted products, promotions/modifiers and PUT replacement remain unsupported.
 Operators still need an agreed and implemented workflow for COOKING, READY, courier handover and delivery confirmation. No invented courier callbacks or full UI flow are introduced here.
