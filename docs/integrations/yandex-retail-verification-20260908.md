@@ -27,6 +27,8 @@ Server tests use an empty environment, disabled dotenv loading, cached local Mon
 
 No lint or separate typecheck script exists in the current admin package. Live partner acceptance and real accounting behavior were not tested.
 
+Existing mobile-layout limitation: at a 390px viewport, the shared products toolbar expands the document to 703px. Read-only browser comparison with exact baseline `f5dd07d` CSS, original descriptions and the Yandex row removed produced the same widths. Hiding the pre-existing toolbar, or applying `min-width: 0` to it only in browser memory, restored 390px. This is not introduced by Yandex; no unrelated responsive-layout fix was bundled. Functional browser checks above do not claim a flawless mobile layout.
+
 ## Not implemented or activated
 
 - Order picking/replacements, admin order actions and Telegram actions.
