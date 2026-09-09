@@ -4,6 +4,11 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrdersPage } from './OrdersPage';
 import { ToastProvider } from '../../ui/ToastProvider';
+import { yandexApi } from '../../api/yandex';
+import { uzumApi } from '../../api/uzum';
+
+vi.mock('../../api/yandex', () => ({ yandexApi: { list: vi.fn() } }));
+vi.mock('../../api/uzum', () => ({ uzumApi: { list: vi.fn() } }));
 
 const order = {
   _id: '507f1f77bcf86cd799439011',
@@ -118,5 +123,22 @@ describe('OrdersPage', () => {
     expect(await screen.findByText('Medicalka zayavkalari')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'FairHaven' })).toBeInTheDocument();
     expect(medicalkaApi.list).toHaveBeenCalled();
+  });
+
+  it('opens Yandex in the existing workspace and preserves all other source tabs', async () => {
+    yandexApi.list.mockResolvedValue({ enabled: true, accountingEnabled: true, data: [], meta: { total: 0 } });
+    uzumApi.list.mockResolvedValue({ enabled: false, data: [], meta: { total: 0 } });
+    const medicalkaApi = { list: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 }, sync: { stale: false } }) };
+    renderPage(makeApi(), medicalkaApi);
+    await screen.findByText('Dilnoza Karimova');
+    await userEvent.click(screen.getByRole('button', { name: 'Yandex', exact: true }));
+    expect(await screen.findByRole('region', { name: 'Заказы Yandex' })).toBeVisible();
+    expect(yandexApi.list).toHaveBeenCalledWith({ bucket: 'active', page: 1, limit: 30 });
+    await userEvent.click(screen.getByRole('button', { name: 'Uzum', exact: true }));
+    expect(await screen.findByRole('region', { name: 'Заказы Uzum' })).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Medicalka', exact: true }));
+    expect(await screen.findByText('Medicalka zayavkalari')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'FairHaven', exact: true }));
+    expect(await screen.findByText('Dilnoza Karimova')).toBeVisible();
   });
 });

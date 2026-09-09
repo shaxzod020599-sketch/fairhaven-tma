@@ -14,6 +14,7 @@ import { useToast } from '../../ui/ToastProvider';
 import { OrderWorkbench } from './OrderWorkbench';
 import { MedicalkaQueue } from './MedicalkaQueue';
 import { UzumOrders } from './UzumOrders';
+import { YandexOrders } from './YandexOrders';
 import { medicalkaApi as defaultMedicalkaApi } from '../../api/medicalka';
 
 const LIMIT = 30;
@@ -62,6 +63,7 @@ function SourceTabs({ source, onSource }) {
       <button type="button" className={source === 'fairhaven' ? 'is-active' : ''} onClick={() => onSource('fairhaven')}>FairHaven</button>
       <button type="button" className={source === 'medicalka' ? 'is-active' : ''} onClick={() => onSource('medicalka')}>Medicalka</button>
       <button type="button" className={source === 'uzum' ? 'is-active' : ''} onClick={() => onSource('uzum')}>Uzum</button>
+      <button type="button" className={source === 'yandex' ? 'is-active' : ''} onClick={() => onSource('yandex')}>Yandex</button>
     </div>
   );
 }
@@ -85,6 +87,12 @@ export function OrdersPage({ api = ordersApi, medicalkaApi = defaultMedicalkaApi
   const [source, setSource] = useState('fairhaven');
   const requestId = useRef(0);
   const knownRows = useRef(null);
+  const yandexLeave = useRef(null);
+  const changeSource = (next) => {
+    if (next === source) return;
+    if (source === 'yandex' && yandexLeave.current) yandexLeave.current(() => setSource(next));
+    else setSource(next);
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => { setQuery(search.trim()); setPage(1); }, 300);
@@ -177,18 +185,18 @@ export function OrdersPage({ api = ordersApi, medicalkaApi = defaultMedicalkaApi
 
   const attention = useMemo(() => rows.filter((row) => attentionReason(row)), [rows]);
 
-  if (source === 'medicalka' || source === 'uzum') {
+  if (source === 'medicalka' || source === 'uzum' || source === 'yandex') {
     return (
       <div className="fh-page fh-orders">
         <header className="fh-page-head" data-print-hide>
           <div>
-            <p className="fh-eyebrow">OPERATOR NAVBATI</p>
-            <h1>Buyurtmalar</h1>
-            <p>FairHaven, Medicalka va Uzum buyurtmalari bitta ish joyida.</p>
+            <p className="fh-eyebrow">{source === 'yandex' ? 'ОПЕРАТОРСКАЯ ОЧЕРЕДЬ' : 'OPERATOR NAVBATI'}</p>
+            <h1>{source === 'yandex' ? 'Заказы' : 'Buyurtmalar'}</h1>
+            <p>{source === 'yandex' ? 'Заказы Yandex: сборка, выдача и учёт.' : 'FairHaven, Medicalka va Uzum buyurtmalari bitta ish joyida.'}</p>
           </div>
         </header>
-        <SourceTabs source={source} onSource={setSource} />
-        {source === 'uzum' ? <UzumOrders /> : <MedicalkaQueue api={medicalkaApi} />}
+        <SourceTabs source={source} onSource={changeSource} />
+        {source === 'yandex' ? <YandexOrders leaveRef={yandexLeave} /> : source === 'uzum' ? <UzumOrders /> : <MedicalkaQueue api={medicalkaApi} />}
       </div>
     );
   }
@@ -211,7 +219,7 @@ export function OrdersPage({ api = ordersApi, medicalkaApi = defaultMedicalkaApi
         </div>
       </header>
 
-      <SourceTabs source={source} onSource={setSource} />
+      <SourceTabs source={source} onSource={changeSource} />
 
       <div className="fh-toolbar" data-print-hide>
         <div className="fh-tabs">

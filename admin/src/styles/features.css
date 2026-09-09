@@ -61,6 +61,26 @@
 .fh-health-card a:hover { text-decoration: underline; }
 
 /* Orders */
+.fh-yandex, .fh-yandex-detail, .fh-yandex-card { display: grid; gap: 16px; min-width: 0; overflow-wrap: anywhere; }
+.fh-yandex-card { padding: 20px; }
+.fh-yandex h2, .fh-yandex h3, .fh-yandex p { margin: 0; }
+.fh-yandex p { line-height: 1.5; }
+.fh-yandex-lead, .fh-yandex-status { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; min-width: 0; }
+.fh-yandex-status { justify-content: flex-start; }
+.fh-yandex .fh-badge { white-space: normal; }
+.fh-yandex button, .fh-yandex input, .fh-yandex-dialog button { min-height: 44px; }
+.fh-yandex .fh-toolbar, .fh-yandex .fh-tabs, .fh-yandex-dialog { flex-wrap: wrap; }
+.fh-yandex-items, .fh-yandex-products { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+.fh-yandex-items > li, .fh-yandex-products > li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 240px); gap: 16px; align-items: start; padding-block: 16px; border-top: 1px solid var(--fh-line-soft); }
+.fh-yandex small { display: block; color: var(--fh-muted); margin-block: 6px; }
+.fh-yandex-quantity { display: grid; gap: 8px; min-width: 0; }
+.fh-yandex .fh-stale-note { display: grid; gap: 8px; }
+.fh-yandex .fh-input, .fh-yandex .fh-textarea, .fh-yandex .fh-field { min-width: 0; width: 100%; }
+@media (max-width: 600px) {
+  .fh-yandex-card { padding: 16px; }
+  .fh-yandex-items > li, .fh-yandex-products > li { grid-template-columns: minmax(0, 1fr); }
+  .fh-yandex .fh-button { white-space: normal; overflow-wrap: anywhere; }
+}
 .fh-order-list, .fh-product-list { display: grid; gap: 12px; }
 .fh-order-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 12px 10px 0; overflow: hidden; }
 .fh-order-row.is-attention { border-left: 4px solid var(--fh-burgundy); }
@@ -302,7 +322,7 @@
 }
 
 /* ── Orders / Medicalka approval queue ─────────────────────────────────── */
-.fh-order-sources { display: inline-flex; gap: 4px; width: fit-content; padding: 4px; border: 1px solid var(--fh-line); border-radius: var(--fh-radius-pill); background: var(--fh-canvas); }
+.fh-order-sources { display: inline-flex; flex-wrap: wrap; gap: 4px; width: fit-content; max-width: 100%; padding: 4px; border: 1px solid var(--fh-line); border-radius: var(--fh-radius-pill); background: var(--fh-canvas); }
 .fh-order-sources button { min-height: 38px; border: 0; border-radius: var(--fh-radius-pill); padding: 0 18px; background: transparent; color: var(--fh-muted); font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
 .fh-order-sources button.is-active { background: var(--fh-burgundy); color: var(--fh-white); box-shadow: var(--fh-shadow-sm); }
 .fh-medicalka-queue { display: grid; gap: 16px; }
