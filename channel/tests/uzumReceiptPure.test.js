@@ -63,7 +63,10 @@ test('internal boundary rejects missing token, spoofed partner actor, demoted ad
   assert.equal((await request('POST', path, input, 'test-internal')).body.order.status, 'ACCEPTED_BY_RESTAURANT');
   assert.equal((await request('POST', path, { ...input, action: 'ready' }, 'test-internal')).body.order.status, 'READY');
   assert.equal((await request('GET', '/uzum/v1/order/eats/status')).body.status, 'READY');
-  assert.equal((await request('DELETE', '/uzum/order/eats', { eatsId: 'eats' })).status, 409);
+  assert.equal((await request('DELETE', '/uzum/order/eats', { eatsId: 'eats' })).status, 200);
+  assert.equal((await request('GET', '/uzum/v1/order/eats/status')).body.status, 'CANCELLED');
+  assert.equal(rows[0].status, 'sold');
+  assert.equal(rows[0].uzum.reconciliationRequired, true);
   assert.deepEqual(calls, ['reserve', 'complete']);
 });
 

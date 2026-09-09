@@ -149,7 +149,7 @@ async function tokenRequest(body, headers = {}) {
   const res = await fetch(`${base}/uzum/security/oauth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers },
-    body: new URLSearchParams(body).toString(),
+    body: new URLSearchParams({ scope: 'read write', ...body }).toString(),
   });
   const result = { status: res.status, type: res.headers.get('content-type'), body: await res.json().catch(() => null) };
   response('/security/oauth/token', 'post', result);
@@ -234,6 +234,25 @@ test('another grant type is refused', async () => {
   });
   assert.equal(res.status, 400);
   schema('ErrorListV1', res.body);
+});
+
+test('OAuth requires typed grant, scope and form credentials without changing existing bearers', async () => {
+  const oauth = require('../src/adapters/uzum/oauth');
+  const record = await ChannelKey().findOne({ channel: 'uzum', clientId }).lean();
+  const previous = oauth.mintToken({ keyId: record._id, expiresAt: Math.floor(Date.now() / 1000) + 1000 });
+  const valid = { grant_type: 'client_credentials', scope: 'read write', client_id: clientId, client_secret: clientSecret };
+  for (const field of Object.keys(valid)) {
+    for (const value of [undefined, '', [], [valid[field]], {}]) {
+      const body = { ...valid, [field]: value };
+      const res = await fetch(`${base}/uzum/security/oauth/token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      assert.equal(res.status, 400, `${field} must reject ${JSON.stringify(value)}`);
+    }
+  }
+  for (const scope of ['read', 'write', 'read write admin']) {
+    assert.equal((await tokenRequest({ ...valid, scope })).status, 400);
+  }
+  assert.equal((await tokenRequest({ ...valid, scope: ' write  read ' })).status, 200);
+  assert.equal(String((await oauth.resolveToken(previous))._id), String(record._id));
 });
 
 test('catalogue endpoints refuse an unauthenticated caller', async () => {
@@ -593,7 +612,7 @@ test('concurrent exact and conflicting retries recheck the core acceptance winne
   }
 });
 
-test('manual operator accept and ready use actual core; partner still sees READY and rejects post-sale cancellation', async () => {
+test('manual accept and ready sell once; partner cancellation changes fulfillment without refund', async () => {
   const lifecycle = require('../src/uzum/lifecycle');
   const body = { ...ORDER, eatsId: 'UZ-OPERATOR', items: [{ ...ORDER.items[0], quantity: 1 }], paymentInfo: { ...ORDER.paymentInfo, itemsCost: 300000 } };
   const receipt = await api('POST', '/order', { body });
@@ -607,8 +626,114 @@ test('manual operator accept and ready use actual core; partner still sees READY
   assert.equal((await lifecycle.decide(id, { action: 'ready', actor })).idempotent, true);
   assert.equal(reserveCalls, before.reserveCalls + 1); assert.equal(saleCalls, before.saleCalls + 1);
   for (const prefix of ['/uzum', '/uzum/v1']) assert.equal((await api('GET', `/order/${id}/status`, { prefix })).body.status, 'READY');
-  assert.equal((await api('DELETE', `/order/${id}`, { body: { eatsId: body.eatsId } })).status, 409);
+  const beforeCancel = await ChannelOrder().findOne({ internalOrderId: id }).lean();
+  const beforeMirror = await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean();
+  const beforeCalls = { reserveCalls, saleCalls, deleteCalls };
+  for (let i = 0; i < 2; i++) {
+    const cancelled = await api('DELETE', `/order/${id}`, { body: { eatsId: body.eatsId } });
+    assert.equal(cancelled.status, 200); assert.equal(cancelled.raw, '');
+    assert.equal((await api('GET', `/order/${id}/status`)).body.status, 'CANCELLED');
+  }
+  const afterCancel = await ChannelOrder().findOne({ internalOrderId: id }).lean();
+  assert.ok(afterCancel.uzum.fulfillmentCancelledAt);
+  assert.equal(afterCancel.uzum.reconciliationRequired, true);
+  for (const key of ['status', 'soldAt', 'items', 'billz']) assert.deepEqual(afterCancel[key], beforeCancel[key]);
+  assert.deepEqual(await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean(), beforeMirror);
+  assert.deepEqual({ reserveCalls, saleCalls, deleteCalls }, beforeCalls);
   assert.equal((await ChannelOrder().findOne({ internalOrderId: id }).lean()).status, 'sold');
   const mirror = await BillzProduct().findOne({ billzProductId: 'bp-1' }).lean();
   assert.equal(mirror.uzumSoldHolds.find((hold) => hold.orderId === id).quantity, 1);
+});
+
+test('partner cancellation accepts long Unicode comments but stores a bounded reason', async () => {
+  for (const comment of ['x'.repeat(301), 'Изоҳ😀'.repeat(3000)]) {
+    const eatsId = `UZ-COMMENT-${comment.length}`;
+    const receipt = await api('POST', '/order', { body: { ...ORDER, eatsId } });
+    assert.equal(receipt.status, 200);
+    const result = await api('DELETE', `/order/${receipt.body.orderId}`, { body: { eatsId, comment } });
+    assert.equal(result.status, 200);
+    const row = await ChannelOrder().findOne({ externalId: eatsId }).lean();
+    assert.ok(Array.from(row.uzum.cancelRequested.reason).length <= 4096);
+    assert.equal(row.uzum.cancelRequested.reasonTruncated, Array.from(comment).length > 4096);
+  }
+  for (const comment of [[], {}, 42, null]) {
+    assert.equal((await api('DELETE', '/order/UZ-1001', { body: { eatsId: ORDER.eatsId, comment } })).status, 400);
+  }
+  assert.equal((await api('DELETE', '/order/UZ-1001', { body: { eatsId: ORDER.eatsId, comment: 'x'.repeat(270000) } })).status, 413);
+});
+
+test('Mongo cancellation marker failure retries after restart and preserves another owner', async (t) => {
+  const { createLifecycle, cleanOrder } = require('../src/uzum/lifecycle');
+  const Model = ChannelOrder();
+  const id = crypto.randomUUID();
+  const at = new Date();
+  await Model.create({ channel: 'uzum', internalOrderId: id, externalId: 'UZ-MARKER-RETRY', status: 'sold', soldAt: at,
+    uzum: { version: 1, operation: { token: 'another-owner', action: 'ready', startedAt: at } },
+    billz: { orderId: 'synthetic-sale', reservationApplied: false } });
+  const core = { reserveOrder() { assert.fail('reserve'); }, completeOrder() { assert.fail('sale'); }, cancelOrder() { assert.fail('cancel/refund'); } };
+  const service = () => createLifecycle({ Model, core, enabled: () => true });
+  const original = Model.findOneAndUpdate;
+  const mock = t.mock.method(Model, 'findOneAndUpdate', function (filter, mutation, ...rest) {
+    if (mutation.$set?.['uzum.fulfillmentCancelledAt']) throw new Error('synthetic marker failure');
+    return original.call(this, filter, mutation, ...rest);
+  });
+  const input = { action: 'reject', actor: { type: 'uzum' }, reason: 'First reason' };
+  await assert.rejects(service().decide(id, input, { partner: true }));
+  const pending = await Model.findOne({ internalOrderId: id }).lean();
+  assert.equal(cleanOrder(pending).status, 'READY');
+  assert.equal(pending.uzum.cancelRequested.reason, 'First reason');
+  mock.mock.restore();
+  await service().drainCancellations();
+  const confirmed = await Model.findOne({ internalOrderId: id }).lean();
+  assert.equal(cleanOrder(confirmed).status, 'CANCELLED');
+  assert.equal(confirmed.uzum.operation.token, 'another-owner');
+  assert.deepEqual(confirmed.billz, pending.billz);
+  assert.deepEqual(confirmed.soldAt, pending.soldAt);
+  const revision = confirmed.uzum.revision;
+  assert.equal((await service().decide(id, { ...input, reason: 'Different replay' }, { partner: true })).idempotent, true);
+  const replay = await Model.findOne({ internalOrderId: id }).lean();
+  assert.equal(replay.uzum.revision, revision);
+  assert.equal(replay.uzum.cancelRequested.reason, 'First reason');
+});
+
+test('Mongo Ready race confirms fulfillment cancellation only after durable sale', async () => {
+  const { createLifecycle } = require('../src/uzum/lifecycle');
+  const Model = ChannelOrder(); const id = crypto.randomUUID();
+  await Model.create({ channel: 'uzum', internalOrderId: id, externalId: 'UZ-READY-RACE', status: 'reserved',
+    uzum: { version: 1, acceptedAt: new Date() }, billz: { reservationApplied: true } });
+  let release, entered;
+  const gate = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  const core = {
+    async completeOrder() { entered(); await gate; await Model.updateOne({ internalOrderId: id }, { $set: { status: 'sold', soldAt: new Date(), 'billz.reservationApplied': false } }); },
+    cancelOrder() { assert.fail('sold race must not refund'); },
+  };
+  const service = createLifecycle({ Model, core, enabled: () => true });
+  const ready = service.decide(id, { action: 'ready', actor: { type: 'admin-panel', telegramId: 77 } });
+  const rejectedReady = assert.rejects(ready, { code: 'uzum_cancelled' });
+  await started;
+  try {
+    await assert.rejects(service.decide(id, { action: 'reject', actor: { type: 'uzum' } }, { partner: true }), { code: 'uzum_operation_in_progress' });
+    assert.equal((await service.get(id)).status, 'ACCEPTED_BY_RESTAURANT');
+  } finally { release(); }
+  await rejectedReady;
+  const row = await Model.findOne({ internalOrderId: id }).lean();
+  assert.equal(row.status, 'sold'); assert.ok(row.uzum.fulfillmentCancelledAt);
+  assert.equal(row.uzum.operation, null);
+  assert.equal((await service.get(id)).cancellationPending, false);
+});
+
+test('unproven sale and failed pre-sale cleanup cannot acknowledge fulfillment cancellation', async () => {
+  const { createLifecycle } = require('../src/uzum/lifecycle');
+  const Model = ChannelOrder();
+  for (const status of ['sold', 'reserved']) {
+    const id = crypto.randomUUID();
+    await Model.create({ channel: 'uzum', internalOrderId: id, externalId: id, status,
+      uzum: { version: 1 }, billz: { reservationApplied: true, reconciliationRequired: true } });
+    const service = createLifecycle({ Model, enabled: () => true, core: { cancelOrder() { assert.fail('uncertain cleanup'); } } });
+    await assert.rejects(service.decide(id, { action: 'reject', actor: { type: 'uzum' } }, { partner: true }));
+    const row = await Model.findOne({ internalOrderId: id }).lean();
+    assert.equal(row.uzum.fulfillmentCancelledAt, undefined);
+    assert.notEqual((await service.get(id)).status, 'CANCELLED');
+  }
 });

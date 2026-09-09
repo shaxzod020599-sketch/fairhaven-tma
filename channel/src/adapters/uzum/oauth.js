@@ -108,8 +108,8 @@ function readCredentials(req) {
     }
   }
   return {
-    clientId: String(req.body?.client_id || ''),
-    clientSecret: String(req.body?.client_secret || ''),
+    clientId: typeof req.body?.client_id === 'string' ? req.body.client_id : '',
+    clientSecret: typeof req.body?.client_secret === 'string' ? req.body.client_secret : '',
   };
 }
 
@@ -120,9 +120,20 @@ function oauthError(res, status, error, description) {
 
 /** `POST /security/oauth/token` */
 async function issueToken(req, res) {
-  const grant = String(req.body?.grant_type || '');
-  if (grant && grant !== 'client_credentials') {
+  const grant = req.body?.grant_type;
+  if (typeof grant !== 'string' || !grant) {
+    return oauthError(res, 400, 'invalid_request', 'grant_type is required');
+  }
+  if (grant !== 'client_credentials') {
     return oauthError(res, 400, 'unsupported_grant_type', 'only client_credentials is supported');
+  }
+  const scope = req.body?.scope;
+  if (typeof scope !== 'string' || !scope.trim()) {
+    return oauthError(res, 400, 'invalid_request', 'scope is required');
+  }
+  const scopes = new Set(scope.trim().split(/\s+/));
+  if (scopes.size !== 2 || !scopes.has('read') || !scopes.has('write')) {
+    return oauthError(res, 400, 'invalid_scope', 'read write scope is required');
   }
 
   const { clientId, clientSecret } = readCredentials(req);

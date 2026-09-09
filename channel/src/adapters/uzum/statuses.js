@@ -4,6 +4,7 @@ const OURS_TO_THEIRS = {
   sold: 'READY', cancelled: 'CANCELLED', failed: 'NEW',
 };
 function toUzum(status, billz = {}, uzum = {}) {
+  if (status === 'sold' && uzum.fulfillmentCancelledAt) return 'CANCELLED';
   if (uzum.version === 1 && ['reserved', 'failed'].includes(status) && !uzum.acceptedAt) return 'NEW';
   if (status === 'failed' && billz.reservationApplied === true) return 'ACCEPTED_BY_RESTAURANT';
   return OURS_TO_THEIRS[status] || 'NEW';

@@ -204,7 +204,7 @@ router.put('/order/:orderId', async (req, res, next) => {
 router.delete('/order/:orderId', async (req, res, next) => {
   try {
     if (!req.body || typeof req.body.eatsId !== 'string' || !req.body.eatsId.trim()
-      || (req.body.comment !== undefined && (typeof req.body.comment !== 'string' || req.body.comment.length > 300))
+      || (req.body.comment !== undefined && typeof req.body.comment !== 'string')
       || Object.keys(req.body).some((key) => !['eatsId', 'comment'].includes(key))) return fail(res, 400, 'eatsId and optional comment are required');
     const record = await findOrder(req.params.orderId);
     if (!record) return fail(res, 404, `Order ${req.params.orderId} not found`, 404);
@@ -217,8 +217,8 @@ router.delete('/order/:orderId', async (req, res, next) => {
         action: 'reject', reason: req.body.comment || 'Cancelled by Uzum', actor: { type: 'uzum' },
       }, { partner: true });
     } catch (err) {
-      // Pending cleanup is not a successful DELETE; a completed sale requires
-      // accounting reconciliation. Only bounded codes leave this boundary.
+      // Pending or unproven cleanup is not a successful DELETE. Confirmed
+      // fulfillment cancellation preserves any completed sale for reconciliation.
       return fail(res, 409, err.code?.startsWith('uzum_') ? err.code : 'uzum_reconciliation_required', 409);
     }
 

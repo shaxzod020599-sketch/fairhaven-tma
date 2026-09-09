@@ -11,6 +11,7 @@ function render(row, at = new Date()) {
   const lines = [
     `🛵 Uzum Tezkor · ${String(row.externalId).slice(0, 64)}`,
     clean.status,
+    clean.fulfillmentCancelled ? 'Выдача отменена. Продажа сохранена; возврат не выполнен.' : '',
     deadline ? `Принять до: ${deadline.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' })} (UTC+05:00)` : 'Срок принятия неизвестен',
     clean.expired && !row.uzum?.acceptedAt ? 'Срок принятия истёк' : '',
     clean.reconciliationRequired ? '⚠️ Нужна сверка учёта. Откройте админ-панель.' : '',

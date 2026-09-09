@@ -1,5 +1,7 @@
 # Uzum contract audit — 2026-09-08
 
+Update 2026-09-09: the corrections below are implemented and locally verified in `uzum-contract-verification-20260909.md`. Statements about the old handler remain historical baseline findings, not unresolved code defects. Production activation and partner acceptance remain separate gates.
+
 Baseline: 86b17c2. Read-only audit against the retained partner YAML at channel/tests/fixtures/uzum/Uzum-Tezkor-Grocery-API.yml (SHA256 308c887ce7de226f03e5a57a565b29c9c4cd70557dcd03c7eae5c319c1ccafe7) and the operator-provided Retail API HTML. The original Downloads YAML attachment is no longer available at its supplied path; no fresh byte-equivalence claim is made.
 
 ## Evidence-backed corrections

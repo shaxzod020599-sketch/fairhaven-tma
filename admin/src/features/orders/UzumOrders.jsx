@@ -67,6 +67,7 @@ export function UzumOrders({ api = uzumApi }) {
           <span>{formatDateTime(row.createdAt)}</span>
         </div>
         <p>Принять до {formatDateTime(row.deadlineAt)} · {row.status === 'NEW' ? seconds > 0 ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : 'Срок принятия истёк' : STATUS[row.status]}</p>
+        {row.fulfillmentCancelled && <p>Выдача отменена. Продажа сохранена; возврат не выполнен.</p>}
         {row.reconciliationRequired && <p role="status">Нужна сверка учёта. Продажа и отмена заблокированы до проверки.</p>}
         {row.cancellationPending && <p>Отмена ожидает обработки.</p>}
         {row.inProgress && <p>Решение обрабатывается…</p>}

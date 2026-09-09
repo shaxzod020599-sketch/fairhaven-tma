@@ -17,7 +17,7 @@ The source HTML confirms a 15-minute acceptance window: Uzum cancels if it has n
 | Authorized admin marks accepted order ready | READY after successful sale completion | Complete the Billz sale once |
 | Staff reject or Uzum cancels before sale completion | CANCELLED after successful cleanup | Release reservation/draft if present |
 | Courier pickup/delivery in Uzum | Managed by Uzum; our READY does not claim delivery | No invented second sale or callback |
-| Cancellation after sale completion | Accounting conflict requiring reconciliation | No automatic refund or fabricated stock return |
+| Cancellation after proven sale completion | CANCELLED after durable fulfillment marker; sale remains accounted | Reconciliation required; no automatic refund or fabricated stock return |
 
 Reserve-on-accept and sale-on-ready are the operator-approved business policy, not a payment confirmation supplied by the partner API. CARD/CASH describes payment type; READY must not be described as an independently verified bank payment.
 
@@ -54,7 +54,7 @@ A crash during a multi-product accounting operation still requires reconciliatio
 
 Required evidence includes API receipt without Billz calls, acceptance/ready/rejection, duplicate and conflicting decisions, deadline enforcement, admin authorization, notification retry/finalization, failed accounting, and post-sale cancellation. Test with fake external services and an isolated database. Run affected admin tests/build and channel/backend regressions, then review the resulting diff.
 
-The current sandbox cannot bind a local MongoMemoryServer listener (`listen EPERM`). That limitation must remain explicit until a real database integration run succeeds in an authorized development environment. Passing socket-free tests alone is not partner acceptance.
+The earlier sandbox listener restriction was resolved. On 2026-09-09, the full isolated backend/channel suite passed903/903 against local MongoDB7.0.34, including cancellation races and durable marker retries. This is not partner acceptance; see `uzum-contract-verification-20260909.md`.
 
 A staging marketplace URL is insufficient isolation: test database, Billz, payments, courier and Telegram destinations must be isolated too. Partner test-store configuration and acceptance are still required before enablement. Production state must be checked afresh before any deployment.
 

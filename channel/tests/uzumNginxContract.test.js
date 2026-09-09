@@ -42,7 +42,7 @@ function rateResponse(location) {
   return { status: Number(reply.args[0]), body: JSON.parse(reply.args[1]) };
 }
 
-for (const uri of ['/uzum', '/uzum/security/oauth/token', '/uzum/v1/order/test/status']) {
+for (const uri of ['/uzum', '/uzum/security/oauth/token', '/uzum/v1/order/test/status', '/yandex', '/yandex/order', '/yandex/security/oauth/token']) {
   test(`nginx rate-limit response configured for ${uri} conforms to ErrorListV1`, () => {
     const location = locationFor(uri);
     assert.equal(directive(location, 'include').args[0], 'snippets/fairhaven-api-proxy.conf');
@@ -60,7 +60,7 @@ test('Medicalka and the server default retain their existing rate-limit envelope
 });
 
 test('private hub paths still select the unproxied JSON 404', () => {
-  for (const uri of ['/internal', '/internal/orders', '/health', '/health/detail', '/uzum-private']) {
+  for (const uri of ['/internal', '/internal/orders', '/health', '/health/detail', '/uzum-private', '/yandex-private']) {
     const location = locationFor(uri);
     assert.equal(directive(location, 'include'), undefined);
     assert.equal(directive(location, 'proxy_pass'), undefined);

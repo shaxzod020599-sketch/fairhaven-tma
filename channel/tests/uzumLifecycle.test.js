@@ -102,10 +102,11 @@ test('cancel during sale records reconciliation; ready and post-sale reject cann
   f.core.completeOrder = async () => { await gate; return complete(); };
   const ready = decide(f, 'ready'); await new Promise(setImmediate);
   await assert.rejects(decide(f, 'reject', { reason: 'Cancel' }), { code: 'uzum_operation_in_progress' });
-  release(); await assert.rejects(ready, { code: 'uzum_reconciliation_required' });
+  release(); await assert.rejects(ready, { code: 'uzum_cancelled' });
   assert.equal(f.row.status, 'sold');
-  assert.equal(cleanOrder(f.row, at).status, 'READY');
-  await assert.rejects(decide(f, 'reject'), { code: 'uzum_reconciliation_required' });
+  assert.equal(cleanOrder(f.row, at).status, 'CANCELLED');
+  assert.equal(cleanOrder(f.row, at).cancellationPending, false);
+  assert.equal((await decide(f, 'reject')).idempotent, true);
   assert.deepEqual(f.calls, ['reserve', 'complete']);
 });
 test('uncertain Billz failure and stale lease stay fenced, safe errors only', async () => {

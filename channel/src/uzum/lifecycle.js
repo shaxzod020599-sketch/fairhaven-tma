@@ -30,7 +30,8 @@ function cleanOrder(row, at = new Date()) {
   const expired = !deadline || at >= deadline;
   const reconciliationRequired = needsReview(row, at);
   const inProgress = Boolean(row.uzum?.operation?.token || row.billz?.operationToken);
-  const cancellationPending = Boolean(row.uzum?.cancelRequested && row.status !== 'cancelled');
+  const fulfillmentCancelled = row.status === 'sold' && Boolean(row.uzum?.fulfillmentCancelledAt);
+  const cancellationPending = Boolean(row.uzum?.cancelRequested && row.status !== 'cancelled' && !fulfillmentCancelled);
   const allowed = !reconciliationRequired && !inProgress && !cancellationPending;
   return {
     id: row.internalOrderId, externalId: row.externalId, status: toUzum(row.status, row.billz, row.uzum),
@@ -38,7 +39,7 @@ function cleanOrder(row, at = new Date()) {
     items: (row.items || []).map(({ billzProductId, name, quantity, unitPrice }) => ({ billzProductId, name, quantity, unitPrice })),
     totalAmount: row.totalAmount || 0,
     customer: { name: row.customer?.name || '', phone: row.customer?.phone || '' },
-    inProgress, reconciliationRequired, cancellationPending,
+    inProgress, reconciliationRequired, cancellationPending, fulfillmentCancelled,
     actions: allowed ? [
       ...(!expired && ['received', 'failed'].includes(row.status) ? ['accept'] : []),
       ...(row.status === 'reserved' && row.billz?.reservationApplied && row.uzum?.acceptedAt ? ['ready'] : []),
@@ -91,24 +92,63 @@ function createLifecycle({
       $set: { 'uzum.reconciliationRequired': true, 'uzum.notification.pending': true, 'uzum.notification.retryAt': null }, $inc: { 'uzum.revision': 1 },
     });
   }
+  // This marker cancels fulfillment, never accounting. Core stock, payment,
+  // reservation and sale fields are deliberately absent from the mutation.
+  async function confirmSoldCancellation(id, token) {
+    const row = await getRaw(id);
+    const request = row.uzum?.cancelRequested;
+    if (!request) throw failure('uzum_reconciliation_required');
+    const proven = { ...filter(id), status: 'sold', soldAt: { $ne: null },
+      'billz.reservationApplied': { $ne: true }, 'billz.pendingApplied': { $ne: true },
+      $or: [{ 'billz.operationToken': null }, { 'billz.operationToken': '' }], 'billz.reconciliationRequired': { $ne: true } };
+    const confirmed = await Model.findOneAndUpdate({ ...proven,
+      'uzum.fulfillmentCancelledAt': null, 'uzum.cancelRequested': { $ne: null },
+      ...(token ? { 'uzum.operation.token': token } : {}),
+    }, {
+      $set: { 'uzum.fulfillmentCancelledAt': now(), 'uzum.reconciliationRequired': true,
+        'uzum.notification.pending': true, 'uzum.notification.retryAt': null,
+        ...(token ? { 'uzum.operation': null } : {}) },
+      $inc: { 'uzum.revision': 1 },
+      $push: { 'uzum.audit': { $each: [{ action: 'reject', actor: request.actor, reason: request.reason,
+        at: now(), outcome: 'fulfillment_cancelled_accounting_retained' }], $slice: -100 } },
+    }, { new: true }).lean();
+    if (confirmed) return { order: cleanOrder(confirmed, now()), idempotent: false };
+    let fresh = await getRaw(id);
+    if (fresh.status !== 'sold' || !fresh.uzum?.fulfillmentCancelledAt) throw failure('uzum_reconciliation_required');
+    // A partner may have confirmed the marker after core completed but before
+    // this owner finalized. Only that exact completed owner may be cleared.
+    if (token && fresh.uzum?.operation?.token === token) {
+      fresh = await Model.findOneAndUpdate({ ...proven, 'uzum.operation.token': token,
+        'uzum.fulfillmentCancelledAt': { $ne: null } }, {
+        $set: { 'uzum.operation': null, 'uzum.notification.pending': true, 'uzum.notification.retryAt': null },
+        $inc: { 'uzum.revision': 1 },
+      }, { new: true }).lean();
+      if (!fresh) throw failure('uzum_reconciliation_required');
+    }
+    return { order: cleanOrder(fresh, now()), idempotent: true };
+  }
   async function decide(id, input = {}, { partner = false } = {}) {
     if (!enabled()) throw failure('uzum_disabled', 503);
     const { action } = input;
     const actor = readActor(input.actor, { partner });
     if (!actor || (actor.type === 'uzum' && action !== 'reject')) throw failure('uzum_invalid_actor', 422);
     if (!ACTIONS.includes(action)) throw failure('uzum_invalid_action', 422);
-    if (input.reason !== undefined && (typeof input.reason !== 'string' || input.reason.length > 300)) throw failure('uzum_invalid_reason', 422);
-    const reason = String(input.reason || (actor.type === 'uzum' ? 'Cancelled by Uzum' : 'Отклонено оператором')).trim();
+    if (input.reason !== undefined && (typeof input.reason !== 'string'
+      || (actor.type !== 'uzum' && input.reason.length > 300))) throw failure('uzum_invalid_reason', 422);
+    const reasonPoints = Array.from(String(input.reason || (actor.type === 'uzum' ? 'Cancelled by Uzum' : 'Отклонено оператором')).trim());
+    const reason = reasonPoints.slice(0, 4096).join('');
+    const reasonTruncated = reasonPoints.length > 4096;
     let row = await getRaw(id);
     if (action === 'reject' && row.status === 'cancelled') return { order: cleanOrder(row, now()), idempotent: true };
+    if (action === 'reject' && row.status === 'sold' && row.uzum?.fulfillmentCancelledAt) return { order: cleanOrder(row, now()), idempotent: true };
     if (action === 'reject') {
       // Preserve the first request even when another process owns the decision.
       await Model.updateOne({ ...filter(id), 'uzum.cancelRequested': null }, {
-        $set: { 'uzum.cancelRequested': { at: now(), actor, reason }, 'uzum.notification.pending': true, 'uzum.notification.retryAt': null }, $inc: { 'uzum.revision': 1 },
+        $set: { 'uzum.cancelRequested': { at: now(), actor, reason, reasonTruncated }, 'uzum.notification.pending': true, 'uzum.notification.retryAt': null }, $inc: { 'uzum.revision': 1 },
         $push: { 'uzum.audit': { $each: [{ action, actor, reason, at: now(), outcome: 'requested' }], $slice: -100 } },
       });
       row = await getRaw(id);
-      if (row.status === 'sold') { await markReview(id); throw failure('uzum_reconciliation_required'); }
+      if (row.status === 'sold') return confirmSoldCancellation(id);
     }
     if (needsReview(row, now())) { await markReview(id); throw failure('uzum_reconciliation_required'); }
     if (row.uzum?.operation?.token || row.billz?.operationToken) throw failure('uzum_operation_in_progress');
@@ -168,7 +208,11 @@ function createLifecycle({
         row = await getRaw(id);
       }
       if (row.uzum?.cancelRequested) {
-        if (row.status === 'sold') throw failure('uzum_reconciliation_required');
+        if (row.status === 'sold') {
+          const result = await confirmSoldCancellation(id, token);
+          if (action !== 'reject') throw failure('uzum_cancelled');
+          return result;
+        }
         await core.cancelOrder(id, { reason: row.uzum.cancelRequested.reason });
         row = await getRaw(id);
         if (row.status !== 'cancelled' || row.billz?.reservationApplied || row.billz?.pendingApplied
@@ -194,6 +238,16 @@ function createLifecycle({
   }
   async function drainCancellations() {
     if (!enabled()) return;
+    // A marker write can fail after the sale was durably completed. Such rows
+    // are excluded from the pre-sale drain and must survive restart separately.
+    const sold = await Model.find({ channel: 'uzum', status: 'sold', soldAt: { $ne: null },
+      'uzum.cancelRequested': { $ne: null }, 'uzum.fulfillmentCancelledAt': null,
+      'billz.reservationApplied': { $ne: true }, 'billz.pendingApplied': { $ne: true },
+      $or: [{ 'billz.operationToken': null }, { 'billz.operationToken': '' }], 'billz.reconciliationRequired': { $ne: true },
+    }).limit(50).lean();
+    for (const row of sold) {
+      try { await confirmSoldCancellation(row.internalOrderId); } catch (_) { /* retry the durable marker, never accounting */ }
+    }
     const rows = await Model.find({ channel: 'uzum', status: { $nin: ['cancelled', 'sold'] },
       'uzum.cancelRequested': { $ne: null }, 'uzum.reconciliationRequired': { $ne: true } }).limit(50).lean();
     for (const row of rows) {

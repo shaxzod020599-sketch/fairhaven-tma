@@ -110,6 +110,7 @@ const channelOrderSchema = new mongoose.Schema({
     version: Number,
     acceptedAt: Date,
     readyAt: Date,
+    fulfillmentCancelledAt: Date,
     revision: { type: Number, default: 0 },
     reconciliationRequired: { type: Boolean, default: false },
     operation: { type: mongoose.Schema.Types.Mixed, default: null },

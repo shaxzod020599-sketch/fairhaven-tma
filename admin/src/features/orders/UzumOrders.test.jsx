@@ -4,6 +4,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { UzumOrders } from './UzumOrders';
 const row = { id: 'id', externalId: 'uz-order', status: 'NEW', createdAt: new Date().toISOString(), deadlineAt: new Date(Date.now() + 60_000).toISOString(), actions: ['accept', 'reject'], items: [{ billzProductId: 'p', name: 'Vitamin', quantity: 2, unitPrice: 100 }], totalAmount: 200, customer: {} };
 describe('Uzum operator orders', () => {
+  it('distinguishes cancelled fulfillment from retained sale without claiming a refund', async () => {
+    const api = { list: vi.fn().mockResolvedValue({ enabled: true, data: [{ ...row, status: 'CANCELLED', accountingStatus: 'sold', fulfillmentCancelled: true, reconciliationRequired: true, actions: [] }], meta: { total: 1 } }) };
+    render(<UzumOrders api={api} />);
+    expect(await screen.findByText(/Выдача отменена\. Продажа сохранена; возврат не выполнен/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Отклонить' })).toBeNull();
+    expect(screen.queryByText(/Отмена ожидает обработки/)).toBeNull();
+  });
   it('accepts and updates to ready action without inventing courier buttons', async () => {
     const api = { list: vi.fn().mockResolvedValue({ enabled: true, data: [row], meta: { total: 1 } }), decide: vi.fn().mockResolvedValue({ order: { ...row, status: 'ACCEPTED_BY_RESTAURANT', actions: ['ready', 'reject'] } }) };
     render(<UzumOrders api={api} />);

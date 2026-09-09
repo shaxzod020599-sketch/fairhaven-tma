@@ -31,6 +31,18 @@ test('final status edits every tracked card and clears keyboard, failed edit rem
   for (const call of edits) assert.deepEqual(call.payload.reply_markup.inline_keyboard, []);
   assert.ok(edits[0].payload.text.includes('READY'));
 });
+test('cancelled fulfillment card retains sale accounting and never claims a refund', () => {
+  const f = fixture();
+  f.row.status = 'sold'; f.row.soldAt = at;
+  f.row.uzum.fulfillmentCancelledAt = at;
+  f.row.uzum.reconciliationRequired = true;
+  f.row.uzum.cancelRequested = { at };
+  const text = render(f.row, at);
+  assert.match(text, /CANCELLED/);
+  assert.match(text, /Выдача отменена\. Продажа сохранена; возврат не выполнен/);
+  assert.equal(text.includes('Ожидается обработка отмены'), false);
+  assert.deepEqual(keyboard(f.row, at).inline_keyboard, []);
+});
 test('disabled notifier sends nothing and Unicode hostile long cards stay bounded and escaped', async () => {
   const f = fixture();
   const disabled = createNotifier({ Model: f.Model, enabled: () => false, send: async () => { throw new Error('must not send'); } });
