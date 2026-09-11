@@ -1,6 +1,10 @@
 import { apiRequest } from './client';
 
 export const connectionsApi = {
+  connectionDetails: () => apiRequest('/channels/connections'),
+  saveConnectionPlace: (body) => apiRequest('/channels/connections/place', { method: 'PUT', body }),
+  revealConnection: (id) => apiRequest(`/channels/connections/${encodeURIComponent(id)}/reveal`, { method: 'POST', body: {} }),
+  restoreConnection: (id, body) => apiRequest(`/channels/connections/${encodeURIComponent(id)}/secret`, { method: 'PUT', body }),
   syncStatus: () => apiRequest('/channels/sync'),
   triggerSync: () => apiRequest('/channels/sync', { method: 'POST' }),
   settings: () => apiRequest('/channels/settings'),

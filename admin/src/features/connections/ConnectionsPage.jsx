@@ -9,6 +9,7 @@ import { Field } from '../../ui/Field';
 import { useToast } from '../../ui/ToastProvider';
 import { MedicalkaPartnerDialog } from './MedicalkaPartnerDialog';
 import { MedicalkaWizard } from './MedicalkaWizard';
+import { RetailConnectionDetails } from './RetailConnectionDetails';
 
 /**
  * Подключения — техническая страница, написанная для нетехнического оператора.
@@ -136,7 +137,7 @@ function OAuthCredentialsDialog({ channel, mode, api, onClose, onSaved }) {
       width="620px"
     >
       {pair ? <>
-        <div className="fh-secret-warning"><b>Скопируйте сейчас.</b> Данные показываются один раз. После закрытия окна увидеть секрет снова нельзя.</div>
+        <div className="fh-secret-warning"><b>Сохраните данные безопасно.</b> Если на сервере настроено защищённое хранение, копия также доступна в разделе «Данные подключения». Не публикуйте секрет.</div>
         <div className="fh-key-grid">
           {['clientId', 'clientSecret'].map((field) => {
             const label = field === 'clientId' ? 'Client ID' : 'Client secret';
@@ -186,6 +187,7 @@ export function ConnectionsPage({ api = connectionsApi }) {
   const [partnerSummary, setPartnerSummary] = useState({ activeEnvironment: '', profiles: [] });
   const [uzum, setUzum] = useState(null);
   const [yandex, setYandex] = useState(false);
+  const [details, setDetails] = useState(false);
   const [revoking, setRevoking] = useState(null);
   const [busy, setBusy] = useState(false);
   const revokePending = useRef(false);
@@ -268,6 +270,12 @@ export function ConnectionsPage({ api = connectionsApi }) {
         <Button onClick={load}>Проверить связь</Button>
       </header>
 
+      <Card>
+        <h2>Доступы Uzum и Yandex</h2>
+        <p>Host, Client ID, Client secret и общий Place для передачи партнёрам. Действующие ключи не заменяются.</p>
+        <Button onClick={() => setDetails(true)}>Данные подключения</Button>
+      </Card>
+      {details && <RetailConnectionDetails api={api} onClose={() => setDetails(false)} />}
       <section className="fh-connection-grid">
         <Card className="fh-connection-card">
           <div className="fh-connection-card__top">

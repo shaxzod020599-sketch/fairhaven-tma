@@ -40,6 +40,7 @@ const internalLimiter = process.env.DISABLE_RATE_LIMIT === 'true'
   });
 
 router.use(internalLimiter, requireInternalToken);
+router.use('/connections', require('../retail/connections'));
 router.use('/uzum', require('../uzum/internal'));
 router.use('/yandex', require('../yandex/internal'));
 
@@ -553,11 +554,12 @@ router.post('/keys', async (req, res) => {
       label,
       active: true,
       ...(clientId ? { clientId } : {}),
+      ...require('../retail/credentials').encryptedFields(secret, channel, clientId),
     });
 
     logger.info('channel key issued', { channel, kind, id: String(record._id), label });
 
-    // The only time this value exists outside the caller's screen.
+    // Medicalka remains one-time; OAuth may have a protected handoff copy.
     res.json({
       id: String(record._id),
       channel,
@@ -619,6 +621,7 @@ router.post('/keys/import', async (req, res) => {
       prefix: clientId.slice(0, 8),
       last4: clientSecret.slice(-4),
       label: label || 'выдан Uzum',
+      ...require('../retail/credentials').encryptedFields(clientSecret, channel, clientId),
       active: true,
     });
 

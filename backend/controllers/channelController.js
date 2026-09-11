@@ -702,8 +702,8 @@ exports.issueKey = async (req, res) => {
     }
 
     console.log(`[channels] ${req.admin?.telegramId || 'admin'} issued a ${channel} ${kind} key`);
-    // The secret travels exactly once, in this response. It is not stored here
-    // and cannot be read back from anywhere.
+    // This proxy does not persist secrets. The hub may retain an encrypted
+    // OAuth copy for the separately authenticated retail handoff surface.
     res.json({
       success: true,
       data: { ...publicKey(data), ...(kind === 'oauth' ? { clientSecret: data.clientSecret } : { key: data.key }) },

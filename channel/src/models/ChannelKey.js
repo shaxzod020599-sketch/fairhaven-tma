@@ -10,7 +10,9 @@ const { defineModel } = require('../db');
  * orders. They are separate records here so either can be rotated alone, and so
  * a leaked read token can never place an order.
  *
- * Only the SHA-256 of a key is stored. The keys are 256 bits of CSPRNG output
+ * Authentication uses only the SHA-256 of a key. OAuth credentials may also
+ * have an encrypted admin-only handoff copy; Medicalka never does.
+ * The keys are 256 bits of CSPRNG output
  * rather than anything a human chose, so a slow password KDF buys nothing —
  * there is no dictionary to run. Lookup is by hash, which also means the stored
  * value cannot be compared against character by character.
@@ -19,6 +21,7 @@ const channelKeySchema = new mongoose.Schema({
   channel: { type: String, required: true, index: true },   // 'medicalka' | 'uzum' | 'yandex'
   kind: { type: String, required: true },                   // 'token' | 'secret' | 'oauth'
   hash: { type: String, required: true, unique: true },
+  encryptedSecret: { type: String, select: false },
   /**
    * The public half of an OAuth client credential.
    *

@@ -85,6 +85,7 @@ const adminExportLimiter = build({
 });
 
 module.exports = {
+  retailCredentialLimiter: build({ windowMs: 15 * 60 * 1000, max: 30 }),
   adminExportLimiter,
   adminLoginLimiter,
   adminPollLimiter,

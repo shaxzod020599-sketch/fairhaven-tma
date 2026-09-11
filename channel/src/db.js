@@ -25,6 +25,7 @@ const OWNED_COLLECTIONS = new Set([
   'billztokens',
   'synclogs',
   'channelkeys',
+  'retailconnections',
   'channelcounters',
   'channelorders',
   'medicalkaapprovals',

@@ -16,6 +16,7 @@ const {
   adminLoginLimiter,
   adminPollLimiter,
   adminExportLimiter,
+  retailCredentialLimiter,
   uploadLimiter,
 } = require('../middleware/rateLimit');
 const adminHostGate = require('../middleware/adminHostGate');
@@ -159,6 +160,11 @@ router.post('/channels/medicalka/partner/mode', medicalka.setPartnerMode);
 // Marketplace credentials. The secret is returned once, by the POST that
 // creates it, and is not stored on this side at all.
 router.get('/channels/keys', channels.listKeys);
+const retailConnections = require('../controllers/retailConnectionController');
+router.get('/channels/connections', retailConnections.list);
+router.put('/channels/connections/place', retailConnections.savePlace);
+router.put('/channels/connections/:id/secret', retailCredentialLimiter, retailConnections.restore);
+router.post('/channels/connections/:id/reveal', retailCredentialLimiter, retailConnections.reveal);
 router.post('/channels/keys', channels.issueKey);
 router.post('/channels/keys/pair', channels.issueKeyPair);
 // Uzum hands us its client_id/client_secret rather than the other way round;

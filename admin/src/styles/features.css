@@ -188,6 +188,10 @@
 .fh-excel-report { display: block !important; }.fh-excel-report > div { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }.fh-excel-report strong { padding: 12px; border-radius: 10px; background: var(--fh-canvas); text-align: center; }.fh-excel-report strong.is-danger { background: var(--fh-danger-wash); color: var(--fh-danger); }.fh-excel-report ul { margin: 14px 0 0; padding-left: 20px; color: var(--fh-danger); font-size: 13px; }
 
 /* Connections */
+.fh-connections { min-width: 0; }
+.fh-connections > *, .fh-connections .fh-connection-card { min-width: 0; }
+.fh-connections .fh-connection-card p { overflow-wrap: anywhere; }
+.fh-connections .fh-tax-card__fields { grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
 .fh-connection-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .fh-connection-card { min-height: 286px; display: flex; flex-direction: column; align-items: flex-start; padding: 24px; }
 .fh-connection-card--billz { border-color: var(--fh-burgundy-line); background: var(--fh-burgundy-tint); }
