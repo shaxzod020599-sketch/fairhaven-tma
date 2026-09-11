@@ -31,3 +31,15 @@ Independent code/security review approved the application changes and secure res
 2. Minimum implementation: existing Connections UI and authentication models extended; no second panel or bot.
 3. Changes trace to credential display, restoration, scoped layout, tests and deployment evidence.
 4. Verification uses isolated tests and local browser fixtures; production operational claims require separate release checks.
+
+## Production release — 2026-09-11
+
+- Installed application commit `12bd7df002c8cb920c2ce4c883ae462fabafaa2b`, fast-forward from `9ebbdc7`. Restarted only `fairhaven` and `channel-hub`; no nginx or environment change was needed.
+- Admin verification rerun: 169/169 tests in31files and production build passed. Secure transport tests:10/10. Desktop/mobile browser fixture passed again with no external/API escapes or page errors. Backend/channel result remains912/912 from the preceding completed run.
+- Restored the already-issued Uzum secret once through the reviewed stdin-only transport. A read-only server check decrypted its stored copy inside the process and confirmed its hash matches the existing authentication record. Authentication fingerprint was unchanged. No secret was printed, committed or written to plaintext configuration.
+- Set common handoff Place to the existing bundle's `6d2c8ecc-e818-4812-9b34-146c6f312f56`. Runtime mappings and both marketplace enable flags remain unchanged/disabled. There are no active Yandex keys yet; the panel's explicit creation action remains available.
+- All six active Medicalka credentials retain the baseline fingerprint. Root/channel environment files and the pre-existing modified admin lockfile retain their baseline hashes. The encrypted Mac vault is unchanged.
+- Backend health returned `status: ok` using the allowed public Host with curl; channel health returned200 with `writeEnabled: false`. The Node fetch-based backend check returned421 under the existing Host guard; no guard was weakened. Production admin browser access was not used.
+- Installed admin index SHA-256: `3d6706dabaeee485d09a560d034545d2f79f9956a8689c33c3727186d79bc8b1`.
+- Recovery assets: `/home/movixa-bridge2/fairhaven-connections-release-20260911.6efDLr` contains prior admin build and dirty lockfile backup. Existing hashed admin assets were retained. The optional encrypted OAuth field and new metadata collection are additive; older authentication ignores both.
+- No real orders, inventory movements, payments or Telegram test messages were performed. Partner credentials were not sent externally.
