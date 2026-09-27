@@ -1,0 +1,28 @@
+{
+  "name": "fairhaven-motion",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Fairhaven Health — 15s brand motion reel (Remotion)",
+  "scripts": {
+    "studio": "remotion studio",
+    "soundtrack": "python3 scripts/soundtrack.py",
+    "assets": "python3 scripts/prepare_assets.py",
+    "render": "remotion render FairhavenReel out/fairhaven-reel.mp4",
+    "still": "remotion still FairhavenReel"
+  },
+  "dependencies": {
+    "@react-three/fiber": "8.18.0",
+    "@remotion/cli": "4.0.529",
+    "@remotion/google-fonts": "4.0.529",
+    "@remotion/three": "4.0.529",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.529",
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.3",
+    "@types/three": "0.170.0",
+    "typescript": "5.6.3"
+  }
+}
