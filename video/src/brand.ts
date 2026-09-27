@@ -20,7 +20,7 @@ export const T = {
   n2003: 586,
   n100: 648,
   finale: 720,
-  dotLand: 840,
+  dotLand: 810, // 13.5 s — pearl lands in the "i" on beat 27
 } as const;
 
 // Palette — Fairhaven Health label system (berry = women, blue = men) + site plum.

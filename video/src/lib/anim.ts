@@ -56,7 +56,7 @@ export const springAt = (frame: number, start: number, cfg: {damping?: number; s
   spring({frame: frame - start, fps: FPS, config: {damping: 16, stiffness: 140, mass: 0.9, ...cfg}});
 
 // Heartbeat: "lub" + softer "dub" 0.267 s later. Shared timing with scripts/soundtrack.py.
-export const HEARTBEATS = [-0.02, 1.0, 2.0, 12.25];
+export const HEARTBEATS = [0.05, 1.0, 2.0, 12.25];
 const env = (x: number, decay: number) => (x < 0 ? 0 : (1 - Math.exp(-x / 0.012)) * Math.exp(-x / decay));
 export const heartbeat = (tSec: number) => {
   let v = 0;
