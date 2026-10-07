@@ -102,13 +102,13 @@ it.each([
   expect(screen.queryByText('private upstream detail')).not.toBeInTheDocument();
 });
 
-it('shows missing per-SKU fiscal codes and does not equate Yandex stock with launch readiness', async () => {
+it('explains shop-wide fiscal codes and nominal measure and does not equate Yandex stock with launch readiness', async () => {
   stubRequests(undefined, { ...product, channels: { ...product.channels, yandex: { enabled: true, price: 73000, minStock: 0, forceStatus: 'auto', live: true } } });
   render(<ProductsPage />);
   const row = await yandexRow();
   expect(within(row).queryByText('Сейчас в продаже')).not.toBeInTheDocument();
-  expect(within(row).getByText(/Для Yandex заполните ИКПУ и код упаковки у товара/)).toBeInTheDocument();
-  expect(within(row).getByText(/Укажите реальный вес или объём упаковки и тип штрихкода/)).toBeInTheDocument();
+  expect(within(row).getByText(/Для Yandex применяются общие ИКПУ и код упаковки магазина/)).toBeInTheDocument();
+  expect(within(row).getByText(/Yandex получит его из названия, иначе 100 г/)).toBeInTheDocument();
 });
 
 const savedYandex = { enabled: false, price: 73000, oldPrice: 79000, minStock: 4, forceStatus: 'out', measure: { unit: 'MLT', value: 250 }, barcodeType: 'code128b' };
@@ -167,7 +167,7 @@ it('clears measurement with null and barcode type with empty string, leaving pri
   expect(controls.queryByRole('alert')).not.toBeInTheDocument();
   expect(controls.getByRole('spinbutton', { name: /Вес или объём упаковки/ })).toHaveValue(null);
   expect(controls.getByRole('combobox', { name: /Единица измерения/ })).toHaveValue('');
-  expect(controls.getByText(/Укажите реальный вес или объём упаковки и тип штрихкода/)).toBeInTheDocument();
+  expect(controls.getByText(/Yandex получит его из названия, иначе 100 г/)).toBeInTheDocument();
   expect(JSON.parse(fetch.mock.calls.find(([, options]) => options.method === 'PATCH')[1].body)).toEqual({ enabled: false, price: 73000, forceStatus: 'out', minStock: 4, measure: null, barcodeType: '' });
 });
 

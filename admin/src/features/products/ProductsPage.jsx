@@ -103,11 +103,10 @@ function ChannelRow({ product, definition, onSave }) {
           ? <Badge tone="neutral">{value.enabled ? 'Выбран для Yandex' : 'Не выбран'}</Badge>
           : <Badge tone={value.live ? 'success' : 'neutral'}>{value.live ? 'Сейчас в продаже' : 'Сейчас скрыт'}</Badge>}
         {yandex && (!product.mxikCode?.trim() || !product.packageCode?.trim())
-          && <small>Для Yandex заполните ИКПУ и код упаковки у товара. Общие коды не применяются.</small>}
+          && <small>Для Yandex применяются общие ИКПУ и код упаковки магазина.</small>}
         {yandex && (!['GRM', 'MLT'].includes(value.measure?.unit)
-          || !Number.isSafeInteger(value.measure?.value) || value.measure.value <= 0
-          || !YANDEX_BARCODE_TYPES.includes(value.barcodeType))
-          && <small>Укажите реальный вес или объём упаковки и тип штрихкода: без них товар не готов для Yandex.</small>}
+          || !Number.isSafeInteger(value.measure?.value) || value.measure.value <= 0)
+          && <small>Вес или объём не указан: Yandex получит его из названия, иначе 100 г. Тип штрихкода определяется сам.</small>}
       </div>
 
       <label className="fh-channel-field">

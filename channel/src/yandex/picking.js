@@ -1,5 +1,5 @@
 const catalog = require('../core/catalog');
-const { compositionItem } = require('../adapters/yandex/serializers');
+const { compositionItem, loadDefaults } = require('../adapters/yandex/serializers');
 
 function failure(code = 'yandex_invalid_items', status = 422) {
   return Object.assign(new Error(code), { code, status });
@@ -18,7 +18,7 @@ function validateItems(items) {
 }
 async function eligible(id, quantity) {
   const entry = await catalog.findForChannel('yandex', id);
-  const published = entry && compositionItem(entry);
+  const published = entry && compositionItem(entry, await loadDefaults());
   // An operator's forced-in publication is not proof of physical stock.
   const availableQuantity = entry && catalog.isAvailable(entry.card, entry.mirror, 'yandex')
     ? Math.floor(catalog.sellableStock(entry.card, entry.mirror, 'yandex')) : 0;
@@ -39,7 +39,7 @@ async function resolve(row, requested) {
     const entry = await eligible(item.billzProductId, item.quantity);
     const quote = original.get(item.billzProductId);
     items.push({ billzProductId: item.billzProductId, quantity: item.quantity,
-      name: quote ? quote.name || '' : entry.name, unitPrice: quote ? quote.price : entry.unitPrice });
+      name: quote?.name || entry.name, unitPrice: quote ? quote.price : entry.unitPrice });
   }
   return { items, totalAmount: total(items) };
 }
@@ -54,9 +54,10 @@ async function products({ search = '', limit = 30 } = {}) {
     throw failure('yandex_invalid_query');
   }
   const page = await catalog.listForChannel('yandex', { search: search.trim(), limit: Number.MAX_SAFE_INTEGER });
+  const defaults = await loadDefaults();
   const items = [];
   for (const entry of page.items) {
-    const item = compositionItem(entry);
+    const item = compositionItem(entry, defaults);
     const availableQuantity = Math.floor(catalog.sellableStock(entry.card, entry.mirror, 'yandex'));
     if (!item || availableQuantity < 1 || !catalog.isAvailable(entry.card, entry.mirror, 'yandex')) continue;
     items.push({ billzProductId: item.id, name: item.name, unitPrice: item.price, availableQuantity });

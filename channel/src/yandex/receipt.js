@@ -3,6 +3,21 @@ const { isDeepStrictEqual } = require('node:util');
 const ChannelOrder = require('../models/ChannelOrder');
 const contract = require('../adapters/yandex/contract');
 
+// Yandex may omit items[].name; staff then need our own product name on the
+// Telegram card and in the panel, not a Billz id. Best effort: receipt never fails on it.
+async function catalogNames(items) {
+  const catalog = require('../core/catalog');
+  const names = new Map();
+  for (const { id, name } of items) {
+    if (name || names.has(id)) continue;
+    try {
+      const entry = await catalog.findForChannel('yandex', id);
+      names.set(id, String(entry?.card?.name || entry?.card?.nameUz || entry?.mirror?.name || '').trim().slice(0, 300));
+    } catch (_) { names.set(id, ''); }
+  }
+  return names;
+}
+
 async function receive(body, placeId) {
   const Model = ChannelOrder();
   // Unique indexes must exist before concurrent first receipts can be accepted.
@@ -11,6 +26,7 @@ async function receive(body, placeId) {
   const snapshot = contract.snapshot(body, placeId);
   let record = await Model.findOne(filter).lean();
   if (!record) {
+    const names = await catalogNames(body.items);
     try {
       const now = new Date();
       record = await Model.findOneAndUpdate(filter, { $setOnInsert: {
@@ -23,7 +39,7 @@ async function receive(body, placeId) {
         'yandex.cancelRequested': null, 'yandex.operation': null, 'yandex.cancellationPending': false,
         'yandex.reconciliationRequired': false, 'yandex.audit': [], 'yandex.decisions': {}, 'yandex.accountingStage': '',
         customer: { name: body.deliveryInfo.clientName || '', phone: body.deliveryInfo.phoneNumber || '' },
-        items: body.items.map((item) => ({ billzProductId: item.id, name: item.name || '', quantity: item.quantity, unitPrice: item.price })),
+        items: body.items.map((item) => ({ billzProductId: item.id, name: item.name || names.get(item.id) || '', quantity: item.quantity, unitPrice: item.price })),
         totalAmount: body.paymentInfo.itemsCost, createdAt: now, updatedAt: now,
       } }, { upsert: true, new: true, runValidators: true, timestamps: false }).lean();
     } catch (err) {

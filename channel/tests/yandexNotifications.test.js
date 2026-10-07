@@ -55,6 +55,36 @@ test('partial send failure persists recipients and retry skips already delivered
   assert.equal(stored.yandex.notification.messages.length, 2);
   assert.equal(stored.yandex.notification.token, '');
 });
+test('Yandex-side status changes reach each admin once as a reply to the card', async () => {
+  const input = await row(); const calls = []; let replyFails = false;
+  const worker = notifier({ send: async (method, payload) => {
+    calls.push({ method, payload });
+    if (replyFails && payload.reply_parameters) return null;
+    return { message_id: payload.message_id || Number(payload.chat_id) + 1 };
+  } });
+  await worker.deliver(input);
+  assert.deepEqual((await read(input)).yandex.notification.messages.map((m) => +new Date(m.announcedAt)), [+at, +at]);
+  let tick = 0;
+  const event = async (action, outcome, extra = {}) => Order.updateOne({ _id: input._id }, {
+    $set: { 'yandex.notification.pending': true, ...extra }, $inc: { 'yandex.revision': 1 },
+    $push: { 'yandex.audit': { action, actor: { type: action === 'accept' ? 'admin' : 'yandex' }, reason: 'нет курьера', at: new Date(+at + (tick += 1000)), outcome } } });
+  const replies = () => calls.filter((c) => c.payload.reply_parameters).map((c) => [c.payload.chat_id, c.payload.reply_parameters.message_id, c.payload.text]);
+  calls.length = 0; await event('accept', 'completed'); await worker.deliver(input);
+  assert.deepEqual(replies(), []);
+  calls.length = 0; replyFails = true;
+  await event('TAKEN_BY_COURIER', 'received', { 'yandex.fulfillmentStatus': 'TAKEN_BY_COURIER' }); await worker.deliver(input);
+  assert.equal((await read(input)).yandex.notification.pending, true);
+  calls.length = 0; replyFails = false; await worker.deliver(input);
+  assert.deepEqual(calls.map((c) => c.method), ['sendMessage', 'sendMessage']);
+  assert.deepEqual(replies().map(([chat, id]) => [chat, id]), [['77', 78], ['88', 89]]);
+  assert.match(replies()[0][2], /курьер забрал заказ/);
+  calls.length = 0; await Order.updateOne({ _id: input._id }, { $set: { 'yandex.notification.pending': true }, $inc: { 'yandex.revision': 1 } });
+  await worker.deliver(input); assert.deepEqual(replies(), []);
+  calls.length = 0;
+  await event('reject', 'requested', { 'yandex.fulfillmentStatus': 'CANCELLED', 'yandex.cancelRequested': { at } }); await worker.deliver(input);
+  assert.equal(replies().length, 2); assert.match(replies()[0][2], /Yandex отменил заказ[^]*Причина: нет курьера/);
+  assert.equal((await read(input)).yandex.notification.pending, false);
+});
 test('partial edit failure retries only failed recipient with latest status and no actions', async () => {
   const input = await row(); let fail = false; const calls = [];
   const worker = notifier({ send: async (method, payload) => {

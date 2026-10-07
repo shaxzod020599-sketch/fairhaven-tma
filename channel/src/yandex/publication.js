@@ -3,8 +3,10 @@ const YandexPublishedItem = require('../models/YandexPublishedItem');
 const S = require('../adapters/yandex/serializers');
 
 async function current() {
-  const page = await catalog.listForChannel('yandex', { skip: 0, limit: Number.MAX_SAFE_INTEGER });
-  return page.items.map((entry) => ({ ...entry, item: S.compositionItem(entry) }))
+  const [page, defaults] = await Promise.all([
+    catalog.listForChannel('yandex', { skip: 0, limit: Number.MAX_SAFE_INTEGER }), S.loadDefaults(),
+  ]);
+  return page.items.map((entry) => ({ ...entry, item: S.compositionItem(entry, defaults) }))
     .filter((entry) => entry.item).sort((a, b) => a.item.id.localeCompare(b.item.id));
 }
 

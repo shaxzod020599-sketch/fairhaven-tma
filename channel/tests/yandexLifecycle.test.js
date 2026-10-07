@@ -328,6 +328,14 @@ test('phase-one upgrade preserves original input and exposes safe defaults', asy
   assert.deepEqual((await raw(id)).rawIn, body); assert.equal((await call('POST', '/yandex/order', body)).body.orderId, id);
 });
 
+test('lines Yandex sends without a name carry the catalogue name into the order and edits', async () => {
+  await seed();
+  const { id } = await receive(incoming([{ id: 'p', price: 80, quantity: 2 }, { id: 'unknown', price: 5, quantity: 1 }]));
+  assert.deepEqual((await raw(id)).items.map((item) => item.name), ['Catalog p', '']);
+  assert.equal((await edit(id, [{ billzProductId: 'p', quantity: 1 }])).status, 200);
+  assert.deepEqual((await raw(id)).items.map(({ name, unitPrice }) => [name, unitPrice]), [['Catalog p', 80]]);
+});
+
 test('unknown lines can be removed; invalid pieces, duplicates, prices, publication and totals cannot be accepted', async () => {
   await seed(); const { id } = await receive(incoming([{ id: 'unknown', price: 2, quantity: 0.5 }]));
   for (const items of [[{ billzProductId: 'p', quantity: 1.5 }], [{ billzProductId: 'p', quantity: 0 }],
@@ -338,7 +346,7 @@ test('unknown lines can be removed; invalid pieces, duplicates, prices, publicat
   assert.equal((await decision(id, 'accept')).status, 409);
   const rev = (await raw(id)).yandex.itemsRevision;
   assert.equal((await edit(id, [{ billzProductId: 'p', quantity: 1 }], rev)).status, 200);
-  await cards.updateOne({ billzProductId: 'p' }, { $set: { mxikCode: '' } });
+  await cards.updateOne({ billzProductId: 'p' }, { $set: { barcode: '' } });
   assert.equal((await decision(id, 'accept')).status, 409); assert.equal((await raw(id)).billz.attempts, 0);
 });
 

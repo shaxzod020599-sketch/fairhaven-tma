@@ -153,7 +153,7 @@ test('Yandex credential fields, grant and scope are required and runtime signing
 test('composition serializes mandatory Yandex fields with independent SKU prices and regional fiscal data', async () => {
   await seed(); await seed('sku-two', { yandex: { price: 345, measure: { unit: 'MLT', value: 100 } } });
   const res = await composition(); assert.equal(res.status, 200); assert.match(res.type, /^application\/json/);
-  assert.deepEqual(res.body.categories, [{ id: 'vitamins', name: 'vitamins' }]);
+  assert.deepEqual(res.body.categories, [{ id: 'vitamins', name: 'Vitaminlar' }]);
   assert.deepEqual(res.body.items[0], { id: 'sku-one', categoryId: 'vitamins', name: 'UZ sku-one',
     description: { general: 'SKU description' }, price: 120.5, vendorCode: 'vendor-sku-one',
     barcode: { type: 'ean13', value: '4601234567893', weightEncoding: 'none' }, measure: { unit: 'GRM', value: 250 },
@@ -175,9 +175,8 @@ test('composition pagination reports totalCount and rejects ambiguous or invalid
 for (const [label, change] of [
   ['disabled', { 'channels.yandex.enabled': false }], ['unlinked', { billzProductId: '' }],
   ['missing image', { imageUrl: '' }], ['stale price', { 'channels.yandex.price': 0 }],
-  ['missing measure', { 'channels.yandex.measure': null }], ['invalid measure', { 'channels.yandex.measure.value': 1.5 }],
-  ['missing barcode type', { 'channels.yandex.barcodeType': '' }], ['invalid barcode type', { 'channels.yandex.barcodeType': 'made-up' }],
-  ['missing mxik', { mxikCode: '' }], ['missing package code', { packageCode: '' }],
+  ['invalid measure', { 'channels.yandex.measure.value': 1.5 }], ['missing barcode', { barcode: '' }],
+  ['invalid barcode type', { 'channels.yandex.barcodeType': 'made-up' }],
 ]) {
   test(`ledger emits explicit zero for ${label}, including forced-in products`, async () => {
     await seed('sku-one', { yandex: { forceStatus: 'in' } });
@@ -187,6 +186,33 @@ for (const [label, change] of [
     assert.deepEqual((await availability()).body.items, [{ id: 'sku-one', stock: 0 }]);
   });
 }
+
+test('missing measure, barcode type and fiscal codes fall back to the shop defaults', async () => {
+  const SettingView = require('../src/models/SettingView');
+  const bare = { yandex: { measure: null, barcodeType: '' }, card: { mxikCode: '', packageCode: '' } };
+  await seed('sku-one', { ...bare, card: { ...bare.card, name: 'PROTEIN 432 ГР' } });
+  await seed('sku-two', { ...bare, card: { ...bare.card, barcode: '12345670' } });
+  await db.getConnection().collection('settings').insertOne({ key: 'channels.defaultMxikCode', value: '09999999999999999' });
+  SettingView.clearCache();
+  try {
+    const [one, two] = (await composition()).body.items;
+    assert.deepEqual([one.measure, one.barcode.type, one.serviceCodesUz], [{ unit: 'GRM', value: 432 }, 'ean13',
+      { mxikCodeUz: '09999999999999999', packageCodeUz: config.defaultPackageCode }]);
+    assert.deepEqual([two.measure, two.barcode.type], [{ unit: 'GRM', value: 100 }, 'eanx']);
+  } finally {
+    await db.getConnection().collection('settings').deleteMany({}); SettingView.clearCache();
+  }
+});
+
+test('barcode type and package measure are derived from the product itself', () => {
+  const { barcodeTypeFor, measureFor } = require('../src/adapters/yandex/serializers');
+  assert.deepEqual(['4601234567893', '12345670', '012345678905', '14601234567890', 'ABC-1', '1234567890'].map(barcodeTypeFor),
+    ['ean13', 'eanx', 'upca', 'itf14', 'code128', 'code128']);
+  assert.deepEqual(measureFor({}, 'КРЕМ ДЛЯ РУК 50 МЛ'), { unit: 'MLT', value: 50 });
+  assert.deepEqual(measureFor({}, 'Tea 20g'), { unit: 'GRM', value: 20 });
+  for (const name of ['ОМЕГА-3 1000МГ 60 КАПС', 'B12 1000 МКГ', 'D3 5000 IU', '']) assert.deepEqual(measureFor({}, name), { unit: 'GRM', value: 100 });
+  assert.deepEqual(measureFor({ measure: { unit: 'MLT', value: 7 } }, 'Tea 20g'), { unit: 'MLT', value: 7 });
+});
 
 for (const reason of ['card deleted', 'mirror deleted', 'upstream tombstone', 'weighted', 'image file removed']) {
   test(`historical availability survives ${reason}`, async () => {

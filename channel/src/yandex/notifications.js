@@ -50,6 +50,19 @@ function render(row, at = new Date()) {
   if (shortened) text += '\n… Полный состав — в панели.';
   return `${text}\n<a href="https://admin.fairhaven.uz/orders">Открыть панель · изменить состав</a>`;
 }
+const YANDEX_EVENTS = {
+  TAKEN_BY_COURIER: '🚚 Yandex: курьер забрал заказ',
+  DELIVERED: '✅ Yandex: заказ доставлен',
+  reject: '❌ Yandex отменил заказ',
+};
+/** Changes Yandex itself reported, oldest first; admin decisions are already on the card. */
+function yandexEvents(row) {
+  return (row.yandex?.audit || []).filter((entry) => entry?.actor?.type === 'yandex' && entry.at
+    && Object.hasOwn(YANDEX_EVENTS, entry.action) && ['received', 'requested'].includes(entry.outcome))
+    .map((entry) => ({ at: new Date(entry.at), text: [`${YANDEX_EVENTS[entry.action]} · ${escaped(row.externalId, 240)}`,
+      entry.action === 'reject' && entry.reason ? `Причина: ${escaped(entry.reason, 300)}` : ''].filter(Boolean).join('\n') }))
+    .sort((a, b) => a.at - b.at);
+}
 function isEnabled() {
   const config = require('../config');
   return config.yandex.enabled && config.telegram.enabled && Boolean(config.telegram.botToken);
@@ -128,29 +141,55 @@ function createNotifier({ Model = require('../models/ChannelOrder')(), AdminMode
         const deadline = allowed ? presentationRetry(row, presentedAt) : null;
         if (deadline && (!nextPresentationAt || deadline < nextPresentationAt)) nextPresentationAt = deadline;
         const key = allowed ? createHash('sha256').update(JSON.stringify([text, markup])).digest('hex') : '';
-        if (allowed && stored?.key === key) continue;
+        // Card edits are silent in Telegram, so Yandex-side changes also get a
+        // short reply. A card's first presentation already shows earlier events.
+        const since = stored?.announcedAt ? +new Date(stored.announcedAt) : null;
+        const fresh = allowed && since !== null ? yandexEvents(row).filter((event) => +event.at > since) : [];
+        if (allowed && stored?.key === key && !fresh.length) continue;
         try {
-          const result = await send(!allowed ? 'editMessageReplyMarkup' : stored ? 'editMessageText' : 'sendMessage', {
-            chat_id: chatId, ...(stored ? { message_id: stored.messageId } : {}), reply_markup: markup,
-            ...(allowed ? { text, parse_mode: 'HTML', disable_web_page_preview: true } : {}),
-          });
-          if (!positive(result?.message_id)) {
-            failed = true;
-            const retryAt = positive(result?.retryAfterMs) ? new Date(+now() + result.retryAfterMs) : null;
-            if (retryAt && Number.isFinite(+retryAt)) {
-              // Cooldown survives revision resets without acknowledging their pending work.
-              const cooled = await Model.updateOne(owned(), { $max: { 'yandex.notification.cooldownUntil': retryAt } });
-              if (!cooled.matchedCount) return;
-              retryNotBefore = +retryAt;
-              break; // Flood control also defers remaining recipients; no inline retry or sleep.
+          let messageId = stored?.messageId;
+          if (!(allowed && stored?.key === key)) {
+            const result = await send(!allowed ? 'editMessageReplyMarkup' : stored ? 'editMessageText' : 'sendMessage', {
+              chat_id: chatId, ...(stored ? { message_id: stored.messageId } : {}), reply_markup: markup,
+              ...(allowed ? { text, parse_mode: 'HTML', disable_web_page_preview: true } : {}),
+            });
+            if (!positive(result?.message_id)) {
+              failed = true;
+              const retryAt = positive(result?.retryAfterMs) ? new Date(+now() + result.retryAfterMs) : null;
+              if (retryAt && Number.isFinite(+retryAt)) {
+                // Cooldown survives revision resets without acknowledging their pending work.
+                const cooled = await Model.updateOne(owned(), { $max: { 'yandex.notification.cooldownUntil': retryAt } });
+                if (!cooled.matchedCount) return;
+                retryNotBefore = +retryAt;
+                break; // Flood control also defers remaining recipients; no inline retry or sleep.
+              }
+              continue;
             }
-            continue;
+            messageId = result.message_id;
+          }
+          let announcedAt = since === null ? presentedAt : new Date(since);
+          let cooledUntil = null;
+          for (const event of fresh) {
+            const reply = await send('sendMessage', { chat_id: chatId, text: event.text, parse_mode: 'HTML',
+              reply_parameters: { message_id: messageId, allow_sending_without_reply: true } });
+            if (!positive(reply?.message_id)) {
+              failed = true;
+              if (positive(reply?.retryAfterMs)) cooledUntil = new Date(+now() + reply.retryAfterMs);
+              break;
+            }
+            announcedAt = event.at;
           }
           const updated = messages.filter((message) => message.chatId !== chatId);
-          if (allowed) updated.push({ chatId, messageId: result.message_id, key });
+          if (allowed) updated.push({ chatId, messageId, key, announcedAt });
           // An external send/DB-ack crash can duplicate a card; callbacks have separate financial fencing.
           const saved = await Model.updateOne(owned(), { $set: { 'yandex.notification.messages': updated } });
           if (!saved.matchedCount) return;
+          if (cooledUntil) {
+            const cooled = await Model.updateOne(owned(), { $max: { 'yandex.notification.cooldownUntil': cooledUntil } });
+            if (!cooled.matchedCount) return;
+            retryNotBefore = +cooledUntil;
+            break;
+          }
         } catch (_) { failed = true; }
       }
       await Model.updateOne({ ...owned(), 'yandex.revision': revision }, { $set: {
@@ -187,4 +226,4 @@ function start({ notifier } = {}) {
   };
   void run(); const timer = setInterval(run, 5000); timer.unref?.(); return timer;
 }
-module.exports = { createNotifier, encodeCallback, keyboard, render, sendTelegram, start };
+module.exports = { createNotifier, encodeCallback, keyboard, render, sendTelegram, start, yandexEvents };
