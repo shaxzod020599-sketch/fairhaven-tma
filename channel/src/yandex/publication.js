@@ -26,6 +26,11 @@ async function composition(placeId, { limit, offset }) {
   return S.composition(items, entries.length);
 }
 
+/** The same published assortment and prices composition reports. */
+async function prices(vat) {
+  return S.prices((await current()).map((entry) => entry.item), vat);
+}
+
 async function availability(placeId) {
   const entries = await current();
   await remember(placeId, entries.map((entry) => entry.item));
@@ -36,4 +41,4 @@ async function availability(placeId) {
     .sort((a, b) => a.id.localeCompare(b.id)) };
 }
 
-module.exports = { composition, availability };
+module.exports = { composition, availability, prices };

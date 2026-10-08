@@ -164,6 +164,20 @@ test('composition serializes mandatory Yandex fields with independent SKU prices
   assert.equal(await db.getConnection().collection('yandexpublisheditems').countDocuments({ placeId: 'place-one' }), 2);
 });
 
+test('prices report the published assortment with its prices and the configured VAT', async () => {
+  await seed(); await seed('sku-two', { yandex: { price: 345, oldPrice: 400 } }); await seed('hidden', { yandex: { enabled: false } });
+  const res = await call('GET', '/yandex/nomenclature/place-one/prices');
+  assert.equal(res.status, 200); assert.match(res.type, /^application\/json/);
+  assert.deepEqual(res.body, { items: [{ id: 'sku-one', price: 120.5, vat: -1 }, { id: 'sku-two', price: 345, vat: -1, oldPrice: 400 }] });
+  error(await call('GET', '/yandex/nomenclature/other-place/prices'), 404);
+  assert.equal((await call('GET', '/yandex/nomenclature/place-one/prices', { bearer: '' })).status, 401);
+  const saved = config.yandex.vat;
+  try {
+    config.yandex.vat = 12; error(await call('GET', '/yandex/nomenclature/place-one/prices'), 500);
+    config.yandex.vat = 20; assert.equal((await call('GET', '/yandex/nomenclature/place-one/prices')).body.items[0].vat, 20);
+  } finally { config.yandex.vat = saved; }
+});
+
 test('composition pagination reports totalCount and rejects ambiguous or invalid limits', async () => {
   await seed(); await seed('sku-two');
   const res = await call('GET', '/yandex/nomenclature/place-one/composition?limit=1&offset=1');

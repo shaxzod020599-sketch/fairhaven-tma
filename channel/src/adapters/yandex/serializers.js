@@ -84,6 +84,12 @@ function composition(items, totalCount) {
   return { categories, items, totalCount };
 }
 
+// Rates partner.nomenclature.prices.get accepts; -1 is "no VAT", 0 is invalid.
+const VAT_RATES = new Set([22, 20, 10, 7, 5, -1]);
+function prices(items, vat) {
+  return { items: items.map(({ id, price, oldPrice }) => ({ id, price, vat, ...(oldPrice !== undefined ? { oldPrice } : {}) })) };
+}
+
 function order(record) {
   return { discriminator: 'yandex', eatsId: record.externalId,
     items: record.items.map((item) => ({ id: item.billzProductId, price: item.unitPrice, quantity: item.quantity })) };
@@ -94,4 +100,4 @@ function orderStatus(record) {
     ...(record.updatedAt || record.createdAt ? { updatedAt: new Date(record.updatedAt || record.createdAt).toISOString() } : {}) };
 }
 
-module.exports = { SETTING_KEYS, defaultsFrom, loadDefaults, barcodeTypeFor, measureFor, compositionItem, composition, order, orderStatus };
+module.exports = { SETTING_KEYS, VAT_RATES, defaultsFrom, loadDefaults, barcodeTypeFor, measureFor, compositionItem, composition, prices, order, orderStatus };

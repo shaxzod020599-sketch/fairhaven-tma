@@ -50,6 +50,13 @@ router.get('/nomenclature/:placeId/availability', async (req, res, next) => {
     return res.json(await publication.availability(config.yandex.placeId));
   } catch (err) { return next(err); }
 });
+router.get('/nomenclature/:placeId/prices', async (req, res, next) => {
+  try {
+    if (!checkPlace(req, res)) return;
+    if (!S.VAT_RATES.has(config.yandex.vat)) return fail(res, 500, 'Integration is not configured');
+    return res.json(await publication.prices(config.yandex.vat));
+  } catch (err) { return next(err); }
+});
 router.post('/order', async (req, res, next) => {
   try {
     if (!config.yandex.placeId) return fail(res, 500, 'Integration is not configured');

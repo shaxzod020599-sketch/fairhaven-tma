@@ -120,6 +120,8 @@ const config = {
     enabled: bool('YANDEX_ENABLED', false),
     placeId: process.env.YANDEX_PLACE_ID || '',
     tokenSigningKey: process.env.YANDEX_TOKEN_SIGNING_KEY || '',
+    // VAT percent the prices method reports for every item; -1 means "no VAT".
+    vat: Number(process.env.YANDEX_VAT ?? -1),
   },
 
   // Marketplaces need two tax codes per product for the fiscal receipt: the
