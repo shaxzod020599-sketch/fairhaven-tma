@@ -178,6 +178,18 @@ test('prices report the published assortment with its prices and the configured 
   } finally { config.yandex.vat = saved; }
 });
 
+test('every Yandex response declares exactly application/json, as partner acceptance checks', async () => {
+  await seed();
+  const created = await call('POST', '/yandex/order', { body: incoming(), type: 'application/vnd.eats.order.v2+json' });
+  const id = created.body.orderId;
+  const responses = [await oauth(), await oauth('yandex', { client_secret: 'wrong' }), created, await composition(), await availability(),
+    await call('GET', '/yandex/nomenclature/place-one/prices'), await call('GET', `/yandex/order/${id}`), await call('GET', `/yandex/order/${id}/status`),
+    await call('GET', '/yandex/order/unknown/status'), await call('GET', '/yandex/order/unknown/status', { bearer: '' }),
+    await call('POST', '/yandex/order', { raw: '{bad json' })];
+  assert.deepEqual(responses.map((res) => res.status), [200, 401, 200, 200, 200, 200, 200, 200, 404, 401, 400]);
+  responses.forEach((res, index) => assert.equal(res.type, 'application/json', `response ${index}`));
+});
+
 test('composition pagination reports totalCount and rejects ambiguous or invalid limits', async () => {
   await seed(); await seed('sku-two');
   const res = await call('GET', '/yandex/nomenclature/place-one/composition?limit=1&offset=1');

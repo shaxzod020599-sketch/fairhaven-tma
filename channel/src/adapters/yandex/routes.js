@@ -10,7 +10,18 @@ const contract = require('./contract');
 const S = require('./serializers');
 
 const router = express.Router();
-router.use((_req, res, next) => { res.locals.channelErrorContract = 'yandex'; next(); });
+router.use((_req, res, next) => {
+  res.locals.channelErrorContract = 'yandex';
+  // Yandex acceptance requires exactly `Content-Type: application/json`, while
+  // Express appends `; charset=utf-8` (res.set and string bodies both add it).
+  // The raw header plus a Buffer body keeps the type exact; this covers success,
+  // auth, rate-limit and error responses alike.
+  res.json = function exactJson(body) {
+    this.setHeader('Content-Type', 'application/json');
+    return this.send(Buffer.from(JSON.stringify(body)));
+  };
+  next();
+});
 router.use(express.json({ type: ['application/json', 'application/vnd.eats.order.v2+json', 'application/vnd.eats.order.status.v1+json'], limit: '256kb' }));
 router.use(authFailureLimiter);
 router.use(express.urlencoded({ extended: false, limit: '16kb' }));
