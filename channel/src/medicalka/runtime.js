@@ -5,7 +5,9 @@ const MedicalkaSubOrder = require('../models/MedicalkaSubOrder');
 const notify = require('../notify/telegram');
 const { MedicalkaPartnerClient } = require('./partnerClient');
 const { createApprovalService } = require('./approvals');
+const { createHoldService } = require('./holds');
 const { startNotificationWorker } = require('./notificationWorker');
+const { createProductLinks } = require('./productLinks');
 const { createSubOrderService } = require('./subOrders');
 const {
   ENVIRONMENTS,
@@ -112,16 +114,35 @@ function createRuntimeContext({ profile, credentials }) {
   };
   let approvalService = null;
   let subOrderService = null;
+  let holdService = null;
   let pollTimer = null;
   let historyTimer = null;
   let notificationTimer = null;
   let subOrderTimer = null;
 
   function initializeServices() {
+    const links = createProductLinks();
+    // Only production touches Billz; staging approvals stay observations.
+    const production = environment === 'production';
+    if (!holdService) {
+      holdService = createHoldService({
+        ApprovalModel,
+        SubOrderModel,
+        links,
+        placingEnabled: () => production && profile.processingMode === 'live' && config.billzWriteEnabled === true,
+        // Releases keep running after a switch back to observe mode, so no
+        // reservation is stranded by it.
+        writesEnabled: () => production && config.billzWriteEnabled === true,
+        ttlMs: config.medicalkaPartner.holdTtlMs,
+      });
+    }
     if (!approvalService) {
       approvalService = createApprovalService({
         client,
         Model: ApprovalModel,
+        onPending: async (approval) => {
+          if (production) await links.learn(approval.items);
+        },
         onNew: async (approval) => {
           if (typeof notify.announceMedicalkaApproval === 'function') {
             await notify.announceMedicalkaApproval(approval, { ApprovalModel });
@@ -143,6 +164,7 @@ function createRuntimeContext({ profile, credentials }) {
         environment,
         processingMode: profile.processingMode,
         billzWriteEnabled: () => config.billzWriteEnabled,
+        holds: holdService,
         onChanged: async (subOrder) => {
           if (typeof notify.announceMedicalkaSubOrder === 'function') {
             await notify.announceMedicalkaSubOrder(subOrder, { Model: SubOrderModel });
@@ -281,7 +303,20 @@ function createRuntimeContext({ profile, credentials }) {
     if (!stored) throw runtimeError('medicalka_approval_not_found', 404);
     initializeServices();
     const result = await approvalService.respond(stored.externalId, decision);
+    // Reserve in Billz right after Medicalka confirmed, without holding up the
+    // admin's answer; the history sweep retries anything this misses.
+    if (result.approval?.status === 'accepted') setImmediate(() => sweepHoldsOnce().catch(() => {}));
     return { ...result, approval: cleanApproval(result.approval) };
+  }
+
+  async function sweepHoldsOnce() {
+    initializeServices();
+    try {
+      return await holdService.sweepOnce();
+    } catch (err) {
+      logger.warn('medicalka hold sweep failed', { environment, code: String(err?.code || 'medicalka_hold_sweep_failed') });
+      throw err;
+    }
   }
 
   async function pollOnce() {
@@ -337,8 +372,11 @@ function createRuntimeContext({ profile, credentials }) {
     pollOnce().catch(() => {});
     pollTimer = setInterval(() => pollOnce().catch(() => {}), config.medicalkaPartner.pollMs);
     pollTimer.unref?.();
+    // Holds are checked after each history sync, which is what links an
+    // approval to its paid order — and also when Medicalka is unreachable.
     historyTimer = setInterval(
-      () => reconcileOnce().catch(() => {}), config.medicalkaPartner.historyPollMs
+      () => reconcileOnce().catch(() => {}).finally(() => sweepHoldsOnce().catch(() => {})),
+      config.medicalkaPartner.historyPollMs
     );
     historyTimer.unref?.();
     notificationTimer = startNotificationWorker({

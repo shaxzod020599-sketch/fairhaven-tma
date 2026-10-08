@@ -108,6 +108,7 @@ function createApprovalService({
   Model = MedicalkaApproval(),
   onNew = async () => {},
   onDecision = async () => {},
+  onPending = async () => {},
   now = () => new Date(),
   schedule = (job) => setImmediate(job),
 } = {}) {
@@ -268,6 +269,7 @@ function createApprovalService({
       stored = await settleFinalOperation(stored, seenAt);
     }
     if (announce && stored.status === 'pending' && stored.requiresAction && stored.checkoutActive) {
+      try { await onPending(stored); } catch (_) { /* never blocks the approval sync */ }
       scheduleNotifications();
     }
     const becameFinal = FINAL_STATUSES.has(stored.status)

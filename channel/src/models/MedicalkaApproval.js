@@ -82,9 +82,20 @@ const approvalSchema = new mongoose.Schema({
     lastError: { type: String, default: '' },
     lastSuccessAt: { type: Date, default: null },
   },
+  // Billz reservation taken when the approval is accepted; the paid sub-order
+  // turns it into the sale, and a checkout that ends unpaid releases it.
+  hold: {
+    state: { type: String, default: '' },
+    channelOrderId: { type: String, default: '' },
+    startedAt: { type: Date, default: null },
+    placedAt: { type: Date, default: null },
+    missingProductIds: { type: [String], default: undefined },
+    lastError: { type: String, default: '' },
+  },
 }, { timestamps: true });
 
 approvalSchema.index({ status: 1, deadlineAt: 1 });
+approvalSchema.index({ 'hold.state': 1 });
 
 const SCOPES = Object.freeze({
   production: { modelName: 'MedicalkaApproval', collection: 'medicalkaapprovals' },

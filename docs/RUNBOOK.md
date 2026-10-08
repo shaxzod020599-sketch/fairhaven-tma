@@ -336,8 +336,17 @@ Approval oqimi:
    tashlanadi. Har bir xabar retry/backoff va finalization holatini saqlaydi. Mustaqil
    `MEDICALKA_NOTIFICATION_POLL_MS` timer Medicalka API ishlamasa ham retry qiladi.
 
-Approve Billz ostatokni kamaytirmaydi. Medicalka `paid` yoki
-`payment_confirmed` sub-order berganda sotuv chegarasi boshlanadi. Observe
+Live rejimda approve Billz'da tovarni band qiladi (otlojka, Yandex'dagidek):
+ostatok qabul qilingan zahoti kamayadi. Medicalka `paid` yoki
+`payment_confirmed` sub-order berganda shu band sotuvga aylanadi. Mijoz
+to'lamasa (checkout bekor/rad bo'lsa yoki `MEDICALKA_HOLD_TTL_MS`, standart
+2 soat ichida to'lanmasa) band avtomatik bo'shaydi. Medicalka zayavka va
+sub-order'da bizning product ID'ni emas, o'z ID'sini yuboradi: birinchi
+zayavkada u biz Medicalka'ga bergan aniq nom bo'yicha bitta tovarga bog'lanadi
+(`billzproducts.medicalkaSourceIds`), keyin shu bog'lanish ishlatiladi. Nom
+hech bir tovarga yoki bir nechtasiga to'g'ri kelsa bog'lanmaydi va band
+olinmaydi (`hold.state=unmapped`). Band holati `medicalkaapprovals.hold`da.
+Observe
 rejimida payment/courier/refund holati admin va bitta Telegram lifecycle kartasida
 yangilanadi, lekin mapping yoki Billz write bajarilmaydi. Production profil
 `live` va global `BILLZ_WRITE_ENABLED=true` bo'lgandagina sotuv yoziladi. Shu

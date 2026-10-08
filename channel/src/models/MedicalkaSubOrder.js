@@ -5,6 +5,7 @@ const itemSchema = new mongoose.Schema({
   itemId: { type: String, default: '' },
   productExternalId: { type: mongoose.Schema.Types.Mixed, default: null },
   productId: { type: String, default: '' },
+  sourceProductId: { type: String, default: '' },
   name: { type: String, default: '' },
   quantity: { type: Number, default: 0 },
   unitPrice: { type: Number, default: 0 },

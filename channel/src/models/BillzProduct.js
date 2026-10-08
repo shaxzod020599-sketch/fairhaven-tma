@@ -46,6 +46,9 @@ const billzProductSchema = new mongoose.Schema({
   // Medicalka's contract types product ids as integers. Allocated once, on
   // first publication, and then stable for the life of the product.
   medicalkaId: { type: Number, default: null, index: true, sparse: true },
+  // Medicalka's own product ids, which its approvals and paid orders carry
+  // instead of ours. See medicalka/productLinks.js.
+  medicalkaSourceIds: { type: [String], default: undefined, index: true },
 
   deletedInBillz: { type: Boolean, default: false, index: true },
   syncedAt: { type: Date, default: null },

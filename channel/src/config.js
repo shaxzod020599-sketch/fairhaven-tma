@@ -97,6 +97,8 @@ const config = {
     subOrderPollMs: number('MEDICALKA_SUBORDER_POLL_MS', 15000),
     subOrderHistoryPollMs: number('MEDICALKA_SUBORDER_HISTORY_POLL_MS', 300000),
     subOrderHistoryDays: number('MEDICALKA_SUBORDER_HISTORY_DAYS', 180),
+    // How long an accepted approval keeps its Billz reservation unpaid.
+    holdTtlMs: number('MEDICALKA_HOLD_TTL_MS', 2 * 60 * 60 * 1000),
     timeoutMs: number('MEDICALKA_PARTNER_TIMEOUT_MS', 8000),
     maxResponseBytes: number('MEDICALKA_PARTNER_MAX_RESPONSE_BYTES', 1024 * 1024),
     credentialsEncryptionKey: process.env.MEDICALKA_CREDENTIALS_ENCRYPTION_KEY || '',

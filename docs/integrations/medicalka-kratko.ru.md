@@ -63,8 +63,9 @@ POST /orders/{order_id}/status         смена статуса (`wc_order_id` 
 
 При `BILLZ_WRITE_ENABLED=false` legacy `POST /orders` не оформляет продажу и
 возвращает `503 mk_unavailable`. Основной поток заказов идёт через partner API:
-сначала pharmacy approval, затем после оплаты — `paid` sub-order. Само
-подтверждение заявки остаток в Billz не уменьшает.
+сначала pharmacy approval, затем после оплаты — `paid` sub-order. Подтверждение
+заявки резервирует товар в Billz, оплата превращает резерв в продажу, а
+неоплаченный checkout резерв снимает.
 
 ## Заказ
 

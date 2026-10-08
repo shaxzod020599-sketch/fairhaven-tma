@@ -4,6 +4,7 @@ const BillzProduct = require('../models/BillzProduct');
 const ChannelOrder = require('../models/ChannelOrder');
 const MedicalkaSubOrder = require('../models/MedicalkaSubOrder');
 const orders = require('../core/orders');
+const { linkedProducts } = require('./productLinks');
 
 const OPERATION_LEASE_MS = 60 * 1000;
 const REFUND_STATUSES = new Set(['cancelled', 'rejected', 'refunded', 'failed', 'returned']);
@@ -70,6 +71,8 @@ function normalizeSubOrder(raw, seenAt = new Date()) {
         itemId: text(item?.id || item?.item_id || item?.product?.id),
         productExternalId: sourceProductId(item),
         productId: text(item?.product_id),
+        // Medicalka's own product id: the link to ours when no external id is sent.
+        sourceProductId: text(item?.product?.id || item?.product_id),
         name: text(item?.product_name || item?.name || item?.product?.name),
         quantity: number(item?.quantity),
         unitPrice: number(item?.unit_price || item?.price),
@@ -162,6 +165,7 @@ function createSubOrderService({
   environment = 'production',
   processingMode = 'observe',
   billzWriteEnabled = () => config.billzWriteEnabled,
+  holds = null,
   onChanged = async () => {},
 } = {}) {
   let polling = false;
@@ -318,9 +322,13 @@ function createSubOrderService({
       ? await ProductModel.find({ medicalkaId: { $in: wanted } }).lean()
       : [];
     const byId = new Map(mirrors.map((row) => [Number(row.medicalkaId), row]));
+    const bySource = await linkedProducts(ProductModel, stored.items
+      .filter((item) => !byId.has(Number(item.productExternalId)))
+      .map((item) => item.sourceProductId));
+    const mirrorFor = (item) => byId.get(Number(item.productExternalId)) || bySource.get(item.sourceProductId);
     const missing = [...new Set(stored.items
-      .filter((item) => !item.productExternalId || !byId.has(Number(item.productExternalId)))
-      .map((item) => text(item.productExternalId || item.productId || 'unknown')))];
+      .filter((item) => !mirrorFor(item))
+      .map((item) => text(item.productExternalId || item.sourceProductId || item.productId || 'unknown')))];
     if (missing.length) {
       return Model.findOneAndUpdate({ _id: stored._id }, {
         $set: {
@@ -334,7 +342,7 @@ function createSubOrderService({
     }
 
     const mappedItems = stored.items.map((item) => {
-      const mirror = byId.get(Number(item.productExternalId));
+      const mirror = mirrorFor(item);
       return {
         billzProductId: mirror.billzProductId,
         name: item.name || mirror.name,
@@ -350,9 +358,22 @@ function createSubOrderService({
       },
     }, { new: true }).lean();
 
+    // The reservation taken when the approval was accepted becomes this sale;
+    // a lookup that fails waits for the next poll rather than selling twice.
+    const externalId = stored.orderId || stored.externalId;
+    let held = 'none';
+    if (holds) {
+      try { held = await holds.adopt(stored, mappedItems, externalId); } catch (_) { held = 'wait'; }
+    }
+    if (held === 'wait') {
+      return Model.findOneAndUpdate({ _id: stored._id }, {
+        $set: { 'sale.state': 'waiting_hold', 'sale.lastError': '' },
+      }, { new: true }).lean();
+    }
+
     try {
       const accepted = await orderService.acceptOrder('medicalka', {
-        externalId: stored.orderId || stored.externalId,
+        externalId,
         items: mappedItems,
         totalAmount: stored.subtotal,
         customer: {
