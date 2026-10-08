@@ -1,6 +1,6 @@
 const { randomUUID, createHash } = require('node:crypto');
-const COMMAND = { accept: 'a', cooking: 'c', ready: 'r', reject: 'x' };
-const LABEL = { accept: '✅ Принять', cooking: '🍳 Готовится', ready: '📦 Готов', reject: '❌ Отклонить' };
+const COMMAND = { accept: 'a', cooking: 'c', ready: 'r', reject: 'x', edit: 'e' };
+const LABEL = { accept: '✅ Принять', cooking: '🍳 Готовится', ready: '📦 Готов', reject: '❌ Отклонить', edit: '✏️ Изменить состав' };
 const positive = (number) => Number.isSafeInteger(number) && number > 0;
 const LEASE_MS = 120000;
 const RETRY_MS = 15000;
@@ -11,7 +11,9 @@ function encodeCallback(id, action, revision, itemsRevision) {
 }
 function keyboard(row, at = new Date()) {
   const clean = require('./lifecycle').cleanOrder(row, at);
-  return { inline_keyboard: clean.actions.flatMap((action) => {
+  // The bot opens its own picking message; the composition stays editable until acceptance.
+  const editable = clean.actions.length > 0 && !clean.itemsFrozen && ['received', 'failed'].includes(clean.accountingStatus);
+  return { inline_keyboard: [...(editable ? ['edit'] : []), ...clean.actions].flatMap((action) => {
     const callback = encodeCallback(clean.id, action, clean.revision, clean.itemsRevision);
     return callback ? [[{ text: LABEL[action], callback_data: callback }]] : [];
   }) };

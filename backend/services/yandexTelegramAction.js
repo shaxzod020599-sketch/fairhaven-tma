@@ -1,10 +1,11 @@
 const User = require('../models/User');
 const channelHub = require('../utils/channelHub');
 const { actorFor, safeCode, validId, decisionBody } = require('../controllers/yandexController');
-const ACTION = { a: 'accept', c: 'cooking', r: 'ready', x: 'reject' };
+const { MESSAGES: EDITOR_MESSAGES, parseEditorCallback, createYandexTelegramEditor } = require('./yandexTelegramEditor');
+const ACTION = { a: 'accept', c: 'cooking', r: 'ready', x: 'reject', e: 'edit' };
 function parseCallback(value) {
   if (typeof value !== 'string' || Buffer.byteLength(value) > 64) return null;
-  const match = /^ya:([acrx]):([a-f\d]{32}):([1-9a-z][0-9a-z]{0,10}):([1-9a-z][0-9a-z]{0,10})$/.exec(value);
+  const match = /^ya:([acrxe]):([a-f\d]{32}):([1-9a-z][0-9a-z]{0,10}):([1-9a-z][0-9a-z]{0,10})$/.exec(value);
   if (!match || match[0] !== value) return null;
   const [, command, compact, revision, itemsRevision] = match;
   const expectedRevision = parseInt(revision, 36); const expectedItemsRevision = parseInt(itemsRevision, 36);
@@ -42,12 +43,25 @@ const MESSAGES = {
   yandex_cancelled: 'Заказ отменён',
   yandex_unavailable: 'Товара уже нет в наличии',
   yandex_empty_items: 'Состав пуст. Откройте панель.',
+  yandex_items_locked: 'Состав уже зафиксирован',
 };
-function registerYandexActions(bot, { actionService = createYandexTelegramAction() } = {}) {
+function registerYandexActions(bot, { actionService = createYandexTelegramAction(), editor = createYandexTelegramEditor() } = {}) {
+  const editorFailure = (ctx, error) => ctx.answerCbQuery(EDITOR_MESSAGES[error?.code] || MESSAGES[error?.code] || 'Сервис временно недоступен');
+  bot.action(/^ye:/, async (ctx) => {
+    const input = parseEditorCallback(ctx.callbackQuery?.data);
+    if (!input) return ctx.answerCbQuery('Кнопка устарела. Откройте заказ снова.');
+    if (ctx.chat?.type !== 'private' || ctx.chat.id !== ctx.from?.id) return ctx.answerCbQuery(MESSAGES.yandex_forbidden);
+    try { return await editor.handle(ctx, input); } catch (error) { return editorFailure(ctx, error); }
+  });
+  // Registered before the bot's general text handler; other text passes through.
+  bot.on('text', editor.search);
   bot.action(/^ya:/, async (ctx) => {
     const input = parseCallback(ctx.callbackQuery?.data);
     if (!input) return ctx.answerCbQuery('Кнопка устарела. Откройте панель.');
     if (ctx.chat?.type !== 'private' || ctx.chat.id !== ctx.from?.id) return ctx.answerCbQuery(MESSAGES.yandex_forbidden);
+    if (input.action === 'edit') {
+      try { return await editor.open(ctx, input.orderId); } catch (error) { return editorFailure(ctx, error); }
+    }
     try {
       const result = await actionService.respond({ ...input, telegramId: ctx.from.id,
         ...(input.action === 'reject' ? { reason: 'Отклонено администратором в Telegram' } : {}) });

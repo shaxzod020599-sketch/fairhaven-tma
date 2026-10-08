@@ -296,6 +296,9 @@ test('cards bound escaped HTML entities and Unicode while retaining status, tota
   const plain = text.replace(/<a href="https:\/\/admin\.fairhaven\.uz\/orders">[^<]+<\/a>/, '').replace(/&amp;|&lt;|&gt;/g, '');
   assert.doesNotMatch(plain, /[<>&]/);
   assert.ok(keyboard(input, at).inline_keyboard.some((r) => r[0].text.includes('Принять')));
+  assert.deepEqual(keyboard(input, at).inline_keyboard[0].map(({ text }) => text), ['✏️ Изменить состав']);
+  assert.match(keyboard(input, at).inline_keyboard[0][0].callback_data, /^ya:e:[a-f\d]{32}:[\da-z]+:[\da-z]+$/);
+  assert.ok(!keyboard({ ...input, yandex: { ...input.yandex, itemsFrozen: true } }, at).inline_keyboard.some((r) => r[0].callback_data.startsWith('ya:e:')));
   config.billzWriteEnabled = false; assert.match(render(input, at), /отключ/);
   assert.ok(!keyboard(input, at).inline_keyboard.some((r) => r[0].callback_data?.startsWith('ya:a:')));
   input.yandex.cancellationPending = true; assert.match(render(input, at), /отмен/);

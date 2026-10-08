@@ -54,7 +54,7 @@ test('callbacks acknowledge stale/disabled/pending/reconciliation errors once wi
   let pattern; let handler; let code = 'yandex_revision_conflict'; let calls = 0;
   const service = createYandexTelegramAction({ UserModel: { findOne: async () => ({ role: 'admin', telegramId: 77 }) },
     hub: { requestInternal: async () => { calls += 1; return { ok: false, body: { error: code } }; } } });
-  registerYandexActions({ action: (p, h) => { pattern = p; handler = h; } }, { actionService: service });
+  registerYandexActions({ action: (p, h) => { pattern = p; handler = h; }, on: () => {} }, { actionService: service });
   const answers = [];
   const ctx = { from: { id: 77 }, chat: { type: 'private', id: 77 }, callbackQuery: { data: `ya:a:${compact}:5:3` },
     answerCbQuery: async (text) => { answers.push(text); },
@@ -75,7 +75,7 @@ test('callbacks acknowledge stale/disabled/pending/reconciliation errors once wi
 });
 test('reject callback uses explicit bounded Telegram-admin reason; success only acknowledges', async () => {
   const { registerYandexActions } = serviceModule(); let handler; let input; let answer;
-  registerYandexActions({ action: (_p, h) => { handler = h; } }, { actionService: {
+  registerYandexActions({ action: (_p, h) => { handler = h; }, on: () => {} }, { actionService: {
     respond: async (value) => { input = value; return { ok: true }; },
   } });
   await handler({ from: { id: 77 }, chat: { type: 'private', id: 77 }, callbackQuery: { data: `ya:x:${compact}:5:3` },
