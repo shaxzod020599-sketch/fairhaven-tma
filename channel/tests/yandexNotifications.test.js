@@ -100,7 +100,7 @@ test('partial edit failure retries only failed recipient with latest status and 
   assert.deepEqual(calls.map((c) => [c.method, c.payload.chat_id]), [['editMessageText', '77'], ['editMessageText', '88'], ['editMessageText', '77']]);
   assert.equal((await read(input)).yandex.notification.pending, false);
   for (const call of calls) {
-    assert.match(call.payload.text, /READY/); assert.match(call.payload.text, /sold/);
+    assert.match(call.payload.text, /Статус: 📦 Готов/); assert.match(call.payload.text, /Billz: продано/);
     assert.deepEqual(call.payload.reply_markup.inline_keyboard, []);
   }
 });
@@ -291,10 +291,13 @@ test('cards bound escaped HTML entities and Unicode while retaining status, tota
   const text = render(input, at);
   assert.ok(text.length < 4000); assert.equal(text.isWellFormed(), true);
   assert.match(text, /&lt;&gt;&amp;😀/); assert.doesNotMatch(text, /<script>/);
-  assert.match(text, /Yandex/); assert.match(text, /NEW/); assert.match(text, /received/); assert.match(text, /200 UZS/);
+  assert.match(text, /Заказ Yandex/); assert.match(text, /Статус: 🆕 Новый/); assert.match(text, /Billz: товар ещё не списан/);
+  assert.match(text, /Итого: <b>200 UZS<\/b>/); assert.match(text, /— 2 шт × 100 UZS/); assert.match(text, /Полный состав — в панели/);
   assert.match(text, /<a href="https:\/\/admin\.fairhaven\.uz\/orders">[^<]+<\/a>/);
-  const plain = text.replace(/<a href="https:\/\/admin\.fairhaven\.uz\/orders">[^<]+<\/a>/, '').replace(/&amp;|&lt;|&gt;/g, '');
+  const plain = text.replace(/<a href="https:\/\/admin\.fairhaven\.uz\/orders">[^<]+<\/a>/, '').replace(/<\/?b>/g, '').replace(/&amp;|&lt;|&gt;/g, '');
   assert.doesNotMatch(plain, /[<>&]/);
+  const small = render({ ...(await row()), totalAmount: 1234567.5 }, at);
+  assert.match(small, /Итого: <b>1 234 567,5 UZS<\/b>/); assert.match(small, /«✏️ Изменить состав»/);
   assert.ok(keyboard(input, at).inline_keyboard.some((r) => r[0].text.includes('Принять')));
   assert.deepEqual(keyboard(input, at).inline_keyboard[0].map(({ text }) => text), ['✏️ Изменить состав']);
   assert.match(keyboard(input, at).inline_keyboard[0][0].callback_data, /^ya:e:[a-f\d]{32}:[\da-z]+:[\da-z]+$/);
@@ -485,7 +488,7 @@ test('actual lifecycle revision reset keeps persisted cooldown across notifier r
   assert.equal(f.calls.length, 1, 'lifecycle pending reset must retain Telegram not-before');
   assert.deepEqual(await read(input), changed);
   time = +at + 60000; await restarted.drainOnce();
-  assert.equal(f.calls.length, 3); assert.match(f.calls.at(-1).payload.text, /TAKEN_BY_COURIER/);
+  assert.equal(f.calls.length, 3); assert.match(f.calls.at(-1).payload.text, /Статус: 🚚 У курьера/);
   assert.equal((await read(input)).yandex.revision, 2); assert.deepEqual(effects, []);
 });
 test('cooldown persistence is monotonic when longer deadline arrives during in-flight response', async (t) => {

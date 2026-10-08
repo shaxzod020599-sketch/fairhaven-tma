@@ -10,10 +10,12 @@ const { actorFor, safeCode } = require('../controllers/yandexController');
  * Yandex and the durable order cards see it; this message only mirrors it.
  */
 const PAGE = 8;
-// Three buttons per line; Telegram caps an inline keyboard at 100 buttons.
-const MAX_LINES = 30;
+// Up to four buttons per line (its name row, then ➖ ➕ 🗑) plus three closing
+// ones; Telegram caps an inline keyboard at 100 buttons.
+const MAX_LINES = 24;
 const TTL_MS = 30 * 60 * 1000;
 const REASON = 'Изменено в Telegram';
+const SAVED = { m: 'Убрана 1 шт', p: 'Добавлена 1 шт', d: 'Товар удалён из заказа', a: 'Товар добавлен в заказ' };
 const MESSAGES = {
   yandex_forbidden: 'Доступ запрещён',
   yandex_disabled: 'Yandex отключён',
@@ -51,11 +53,12 @@ function parseEditorCallback(value) {
   if (typeof value !== 'string' || Buffer.byteLength(value) > 64) return null;
   const pick = /^ye:a:([\w-]{8})$/.exec(value);
   if (pick) return { op: 'a', key: pick[1] };
-  const match = /^ye:([mpdlsfb]):([a-f\d]{32}):([\da-z]{1,11})(?::([\da-z]{1,3}))?$/.exec(value);
+  // i = a line's name button, q = asks before d deletes that line.
+  const match = /^ye:([mpdqilsfb]):([a-f\d]{32}):([\da-z]{1,11})(?::([\da-z]{1,3}))?$/.exec(value);
   if (!match) return null;
   const [, op, id, revision, arg] = match;
   const itemsRevision = number(revision); const index = arg === undefined ? null : number(arg);
-  if (!itemsRevision || (arg !== undefined && index === null) || ('mpdl'.includes(op) !== (arg !== undefined))) return null;
+  if (!itemsRevision || (arg !== undefined && index === null) || ('mpdqil'.includes(op) !== (arg !== undefined))) return null;
   return { op, orderId: expand(id), itemsRevision, ...(index === null ? {} : { index }) };
 }
 
@@ -76,22 +79,41 @@ function editable(order) {
 }
 const button = (text, data) => ({ text, callback_data: data });
 
-function editorView(order, { closed = false } = {}) {
+const nameOf = (item) => item.name || item.billzProductId;
+
+/** `confirm` is the line whose 🗑 was tapped: its buttons turn into «yes, delete» / «keep it». */
+function editorView(order, { closed = false, confirm = null } = {}) {
   const open = !closed && editable(order);
+  const asking = open ? order.items[confirm] : null;
   const data = (op, arg) => `ye:${op}:${compact(order.id)}:${order.itemsRevision.toString(36)}${arg === undefined ? '' : `:${arg.toString(36)}`}`;
-  const lines = [`✏️ <b>Состав · Yandex ${escape(short(order.externalId, 80))}</b>`, ''];
-  order.items.forEach((item, index) => lines.push(`${index + 1}. ${escape(short(item.name || item.billzProductId, 120))} — ${item.quantity} × ${money(item.unitPrice)}`));
-  if (!order.items.length) lines.push('Состав пуст: добавьте товар или отклоните заказ.');
-  lines.push('', `Итого: <b>${money(order.totalAmount)}</b>`);
-  if (open && order.items.length > MAX_LINES) lines.push(`Строки после ${MAX_LINES}-й меняются в панели.`);
-  lines.push(closed ? '✅ Редактор закрыт. Состав сохранён.'
-    : open ? 'Изменения сразу видит Yandex. Состав фиксируется кнопкой «Принять».' : '🔒 Состав зафиксирован. Изменения недоступны.');
+  const lines = [`✏️ <b>Состав заказа Yandex ${escape(short(order.externalId, 80))}</b>`, ''];
+  order.items.forEach((item, index) => lines.push(`${index + 1}. <b>${escape(short(nameOf(item), 120))}</b>`,
+    `      ${item.quantity} шт × ${money(item.unitPrice)} = ${money(item.quantity * item.unitPrice)}`));
+  if (!order.items.length) lines.push('В заказе не осталось товаров: добавьте товар или отклоните заказ.');
+  lines.push('', `Итого: <b>${money(order.totalAmount)}</b>`, '');
+  if (closed) {
+    lines.push('✅ Готово, состав сохранён.');
+    if (order.actions?.includes('accept')) lines.push('Теперь нажмите «✅ Принять» в карточке заказа.');
+  } else if (!open) {
+    lines.push('🔒 Состав зафиксирован: заказ уже принят или закрыт. Изменить нельзя.');
+  } else {
+    if (asking) lines.push(`❓ <b>Удалить «${escape(short(nameOf(asking), 120))}» из заказа?</b>`, 'Нажмите «✅ Да, удалить» или «↩️ Не удалять».', '');
+    lines.push('<b>Как изменить</b> — кнопки под названием товара:', '➖ 1 шт — на одну штуку меньше', '➕ 1 шт — на одну штуку больше',
+      '🗑 Удалить — убрать товар из заказа целиком', '',
+      'Каждое нажатие сразу сохраняется и видно Yandex. Закончили — нажмите «✅ Готово», затем «✅ Принять» в карточке заказа.');
+    if (order.items.length > MAX_LINES) lines.push(`Товары после ${MAX_LINES}-го меняются в панели.`);
+  }
   const text = lines.join('\n');
   if (!open) return { text: short(text, 4000), markup: { inline_keyboard: [] } };
-  const rows = order.items.slice(0, MAX_LINES).map((_item, index) => [
-    button(`➖ ${index + 1}`, data('m', index)), button(`➕ ${index + 1}`, data('p', index)), button(`🗑 ${index + 1}`, data('d', index)),
+  const rows = order.items.slice(0, MAX_LINES).flatMap((item, index) => [
+    [button(`📦 ${index + 1}. ${short(nameOf(item), 36)} · ${item.quantity} шт`, data('i', index))],
+    item === asking ? [button('✅ Да, удалить', data('d', index)), button('↩️ Не удалять', data('b'))] : [
+      // The last piece leaves only through 🗑, so ➖ never silently removes a product.
+      ...(item.quantity > 1 ? [button('➖ 1 шт', data('m', index))] : []),
+      button('➕ 1 шт', data('p', index)), button('🗑 Удалить', data('q', index)),
+    ],
   ]);
-  rows.push([button('➕ Добавить товар', data('l', 0)), button('🔍 Поиск', data('s'))], [button('✅ Готово', data('f'))]);
+  rows.push([button('➕ Добавить товар', data('l', 0)), button('🔍 Найти товар', data('s'))], [button('✅ Готово', data('f'))]);
   return { text: short(text, 4000), markup: { inline_keyboard: rows } };
 }
 
@@ -102,13 +124,13 @@ function productsView(order, products, { page = 0, search = '', pick }) {
   const shown = search ? products.slice(0, PAGE * 2) : products.slice(current * PAGE, current * PAGE + PAGE);
   const lines = [`➕ <b>Добавить в заказ Yandex ${escape(short(order.externalId, 80))}</b>`,
     search ? `Поиск: «${escape(short(search, 120))}»` : `Страница ${current + 1} из ${pages}`];
-  if (!shown.length) lines.push('Доступных товаров не найдено.');
+  lines.push(shown.length ? 'Нажмите на товар — он добавится в заказ (1 шт).' : 'Доступных товаров не найдено.');
   const rows = shown.map((product) => [button(`${short(product.name, 40)} · ${money(product.unitPrice)}`, `ye:a:${pick(product)}`)]);
   const nav = [];
   if (!search && current > 0) nav.push(button('◀️', data('l', current - 1)));
   if (!search && current < pages - 1) nav.push(button('▶️', data('l', current + 1)));
   if (nav.length) rows.push(nav);
-  rows.push([button('🔍 Поиск', data('s')), button('⬅️ К составу', data('b'))]);
+  rows.push([button('🔍 Найти товар', data('s')), button('⬅️ К составу', data('b'))]);
   return { text: lines.join('\n'), markup: { inline_keyboard: rows } };
 }
 
@@ -154,7 +176,7 @@ function createYandexTelegramEditor({ UserModel = User, hub = channelHub, picks 
     const card = ctx.callbackQuery?.message?.message_id;
     await ctx.reply(view.text, { parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: view.markup,
       ...(card ? { reply_parameters: { message_id: card, allow_sending_without_reply: true } } : {}) });
-    return ctx.answerCbQuery('Редактор состава открыт');
+    return ctx.answerCbQuery('Состав открыт — сообщение ниже');
   }
 
   async function handle(ctx, input) {
@@ -193,13 +215,18 @@ function createYandexTelegramEditor({ UserModel = User, hub = channelHub, picks 
     } else {
       const line = items[target.index];
       if (!line) { await show(ctx, editorView(order)); return ctx.answerCbQuery(MESSAGES.yandex_items_revision_conflict); }
-      if (target.op === 'm' && line.quantity <= 1) return ctx.answerCbQuery('Минимум 1 шт. Чтобы убрать строку, нажмите 🗑');
+      const shown = order.items[target.index];
+      if (target.op === 'i') {
+        return ctx.answerCbQuery(short(`${nameOf(shown)}: ${shown.quantity} шт × ${money(shown.unitPrice)}. Кнопки под названием меняют этот товар.`, 200));
+      }
+      if (target.op === 'q') { await show(ctx, editorView(order, { confirm: target.index })); return ctx.answerCbQuery('Подтвердите удаление кнопкой ниже'); }
+      if (target.op === 'm' && line.quantity <= 1) return ctx.answerCbQuery('Осталась 1 шт. Чтобы убрать товар, нажмите «🗑 Удалить»');
       items = target.op === 'd' ? items.filter((item) => item !== line)
         : items.map((item) => item === line ? { ...item, quantity: item.quantity + (target.op === 'p' ? 1 : -1) } : item);
     }
     const result = await save(order, items, actor);
     await show(ctx, editorView(result.order || await load(order.id)));
-    return ctx.answerCbQuery(result.order ? 'Сохранено' : MESSAGES[result.code] || 'Не удалось сохранить. Проверьте заказ в панели.');
+    return ctx.answerCbQuery(result.order ? SAVED[target.op] : MESSAGES[result.code] || 'Не удалось сохранить. Проверьте заказ в панели.');
   }
 
   /** A typed reply to the search prompt; any other text continues to the bot's own handlers. */

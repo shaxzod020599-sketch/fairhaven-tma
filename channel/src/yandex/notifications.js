@@ -9,11 +9,11 @@ function encodeCallback(id, action, revision, itemsRevision) {
     || typeof action !== 'string' || !Object.hasOwn(COMMAND, action) || !positive(revision) || !positive(itemsRevision)) return null;
   return `ya:${COMMAND[action]}:${id.replace(/-/g, '').toLowerCase()}:${revision.toString(36)}:${itemsRevision.toString(36)}`;
 }
+// The bot opens its own picking message; the composition stays editable until acceptance.
+const editable = (clean) => clean.actions.length > 0 && !clean.itemsFrozen && ['received', 'failed'].includes(clean.accountingStatus);
 function keyboard(row, at = new Date()) {
   const clean = require('./lifecycle').cleanOrder(row, at);
-  // The bot opens its own picking message; the composition stays editable until acceptance.
-  const editable = clean.actions.length > 0 && !clean.itemsFrozen && ['received', 'failed'].includes(clean.accountingStatus);
-  return { inline_keyboard: [...(editable ? ['edit'] : []), ...clean.actions].flatMap((action) => {
+  return { inline_keyboard: [...(editable(clean) ? ['edit'] : []), ...clean.actions].flatMap((action) => {
     const callback = encodeCallback(clean.id, action, clean.revision, clean.itemsRevision);
     return callback ? [[{ text: LABEL[action], callback_data: callback }]] : [];
   }) };
@@ -29,28 +29,46 @@ function escaped(value, limit) {
   }
   return text;
 }
+function money(value) {
+  const [whole, fraction] = String(Math.round(Number(value) * 100) / 100 || 0).split('.');
+  return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}${fraction ? `,${fraction}` : ''} UZS`;
+}
+const STATUS = {
+  NEW: '🆕 Новый — ждёт решения', ACCEPTED_BY_RESTAURANT: '✅ Принят', COOKING: '🍳 Собирается', READY: '📦 Готов, ждёт курьера',
+  TAKEN_BY_COURIER: '🚚 У курьера', DELIVERED: '🏁 Доставлен', CANCELLED: '❌ Отменён',
+};
+const STOCK = {
+  received: 'товар ещё не списан', reserved: 'товар отложен под заказ', sold: 'продано, товар списан',
+  cancelled: 'резерв снят, товар вернулся в продажу', failed: '⚠️ ошибка — проверьте заказ в панели',
+};
 function render(row, at = new Date()) {
   const clean = require('./lifecycle').cleanOrder(row, at);
+  const customer = [escaped(clean.customer.name, 200), escaped(clean.customer.phone, 60)].filter(Boolean).join(', ');
   const lines = [
-    `🛵 Yandex · ${escaped(clean.externalId, 240)}`,
-    `Выполнение: ${escaped(clean.status, 64)}`,
-    `Учёт: ${escaped(clean.accountingStatus, 64)}`,
+    `🛵 <b>Заказ Yandex ${escaped(clean.externalId, 240)}</b>`,
+    `Статус: ${STATUS[clean.status] || escaped(clean.status, 64)}`,
+    `Billz: ${STOCK[clean.accountingStatus] || escaped(clean.accountingStatus, 64)}`,
+    customer ? `👤 ${customer}` : '',
     !clean.enabled ? '⚠️ Yandex отключён' : '',
     !clean.accountingEnabled ? '⚠️ Учёт отключён' : '',
     clean.reconciliationRequired ? '⚠️ Нужна сверка учёта. Откройте панель.' : '',
-    clean.inProgress ? 'Решение обрабатывается' : '',
-    clean.cancellationPending ? 'Ожидается обработка отмены' : '',
-    `Итого: ${escaped(clean.totalAmount, 40)} UZS`,
-    escaped(clean.customer.name, 200), escaped(clean.customer.phone, 60),
+    clean.inProgress ? '⏳ Решение обрабатывается' : '',
+    clean.cancellationPending ? '⏳ Ожидается обработка отмены' : '',
   ].filter(Boolean);
-  let text = lines.join('\n'); let shortened = false;
+  let text = `${lines.join('\n')}\n\n<b>Состав:</b>`; let shortened = false;
   for (const item of clean.items) {
-    const line = `\n• ${escaped(item.name || item.billzProductId, 300)} × ${escaped(item.quantity, 24)} — ${escaped(item.unitPrice, 40)} UZS`;
-    if (text.length + line.length > 3750) { shortened = true; break; }
+    const line = `\n• ${escaped(item.name || item.billzProductId, 300)} — ${escaped(item.quantity, 24)} шт × ${money(item.unitPrice)}`;
+    if (text.length + line.length > 3500) { shortened = true; break; }
     text += line;
   }
   if (shortened) text += '\n… Полный состав — в панели.';
-  return `${text}\n<a href="https://admin.fairhaven.uz/orders">Открыть панель · изменить состав</a>`;
+  text += `\nИтого: <b>${money(clean.totalAmount)}</b>`;
+  if (clean.actions.includes('accept')) {
+    text += editable(clean)
+      ? '\n\n👉 Проверьте состав. Нужно убрать или добавить товар — «✏️ Изменить состав». Потом нажмите «✅ Принять».'
+      : '\n\n👉 Проверьте состав и нажмите «✅ Принять».';
+  } else if (clean.actions.includes('ready')) text += '\n\n👉 Когда заказ собран, нажмите «📦 Готов».';
+  return `${text}\n<a href="https://admin.fairhaven.uz/orders">Открыть в панели</a>`;
 }
 const YANDEX_EVENTS = {
   TAKEN_BY_COURIER: '🚚 Yandex: курьер забрал заказ',

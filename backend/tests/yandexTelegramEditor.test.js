@@ -59,60 +59,88 @@ function setup({ role = 'admin', current = order() } = {}) {
 }
 const keyboard = (view) => (view.options.reply_markup.inline_keyboard || []).flat();
 const find = (view, label) => keyboard(view).find((button) => button.text === label)?.callback_data;
+// A product's buttons sit in the row right under its name row.
+function under(view, name, label) {
+  const rows = view.options.reply_markup.inline_keyboard;
+  const at = rows.findIndex((row) => row.length === 1 && row[0].text.includes(` ${name} · `));
+  return at < 0 ? undefined : rows[at + 1]?.find((button) => button.text === label)?.callback_data;
+}
 const saves = (hub) => hub.calls.filter(([method]) => method === 'PUT');
 
 test('editor callbacks are strict and every button fits Telegram 64 bytes', () => {
   const { parseEditorCallback, editorView } = require('../services/yandexTelegramEditor');
   assert.deepEqual(parseEditorCallback(`ye:m:${compact}:1:0`), { op: 'm', orderId: id, itemsRevision: 1, index: 0 });
+  assert.deepEqual(parseEditorCallback(`ye:q:${compact}:1:2`), { op: 'q', orderId: id, itemsRevision: 1, index: 2 });
+  assert.deepEqual(parseEditorCallback(`ye:i:${compact}:1:0`), { op: 'i', orderId: id, itemsRevision: 1, index: 0 });
   assert.deepEqual(parseEditorCallback(`ye:f:${compact}:z`), { op: 'f', orderId: id, itemsRevision: 35 });
   assert.deepEqual(parseEditorCallback('ye:a:Ab-_0123'), { op: 'a', key: 'Ab-_0123' });
-  for (const value of [`ye:m:${compact}:1`, `ye:f:${compact}:1:0`, `ye:m:${compact}:0:0`, `ye:m:${compact}:01:0`, `ye:m:${compact}:1:00`,
+  for (const value of [`ye:m:${compact}:1`, `ye:q:${compact}:1`, `ye:f:${compact}:1:0`, `ye:m:${compact}:0:0`, `ye:m:${compact}:01:0`, `ye:m:${compact}:1:00`,
     `ye:x:${compact}:1:0`, `ye:m:${compact.toUpperCase()}:1:0`, `ye:m:${compact}:1:0\n`, 'ye:a:short', null, 'ye:' + 'x'.repeat(80)]) {
     assert.equal(parseEditorCallback(value), null, String(value));
   }
-  const many = order({ itemsRevision: Number.MAX_SAFE_INTEGER, items: Array.from({ length: 40 }, (_, index) => ({ billzProductId: `p${index}`, name: `Товар ${index}`, quantity: 1, unitPrice: 1 })) });
+  const many = order({ itemsRevision: Number.MAX_SAFE_INTEGER, items: Array.from({ length: 40 }, (_, index) => ({ billzProductId: `p${index}`, name: `Товар ${index}`, quantity: 2, unitPrice: 1 })) });
   const view = editorView(many);
   const buttons = view.markup.inline_keyboard.flat();
   assert.ok(buttons.length <= 100); assert.ok(buttons.every((button) => Buffer.byteLength(button.callback_data) <= 64));
   assert.ok(buttons.every((button) => parseEditorCallback(button.callback_data)));
-  assert.match(view.text, /после 30-й/);
+  assert.match(view.text, /после 24-го/);
+  // Every product gets its own name row, then plainly worded buttons; the last piece has no ➖.
+  assert.deepEqual(editorView(order()).markup.inline_keyboard.map((row) => row.map(({ text }) => text)), [
+    ['📦 1. Витамин C · 2 шт'], ['➖ 1 шт', '➕ 1 шт', '🗑 Удалить'], ['📦 2. Омега-3 · 1 шт'], ['➕ 1 шт', '🗑 Удалить'],
+    ['➕ Добавить товар', '🔍 Найти товар'], ['✅ Готово'],
+  ]);
+  assert.match(editorView(order()).text, /🗑 Удалить — убрать товар из заказа целиком/);
   assert.deepEqual(editorView(order({ itemsFrozen: true })).markup, { inline_keyboard: [] });
   assert.match(editorView(order({ itemsFrozen: true })).text, /зафиксирован/);
   assert.match(editorView(order({ items: [{ billzProductId: 'p', name: '<b>&', quantity: 1, unitPrice: 1 }] })).text, /&lt;b&gt;&amp;/);
 });
 
-test('card button opens a picking message; minus, plus and delete save at once through the hub', async () => {
+test('card button opens a picking message; minus, plus and a confirmed delete save at once through the hub', async () => {
   const { hub, tap } = setup();
   const opened = await tap(`ya:e:${compact}:5:1`);
   assert.equal(opened.replies.length, 1); assert.equal(opened.replies[0].options.reply_parameters.message_id, 500);
-  assert.match(opened.replies[0].text, /Витамин C — 2 × 120 000 UZS/); assert.match(opened.replies[0].text, /Итого: <b>540 000 UZS/);
+  assert.match(opened.replies[0].text, /Витамин C<\/b>\n\s+2 шт × 120 000 UZS = 240 000 UZS/); assert.match(opened.replies[0].text, /Итого: <b>540 000 UZS/);
   let view = opened.replies[0];
-  const minus = await tap(find(view, '➖ 1'));
+  const minus = await tap(under(view, 'Витамин C', '➖ 1 шт'));
   assert.deepEqual(saves(hub)[0][2].body, { items: [{ billzProductId: 'p1', quantity: 1 }, { billzProductId: 'p2', quantity: 1 }],
     expectedItemsRevision: 1, reason: 'Изменено в Telegram', actor: { type: 'telegram', telegramId: 77, name: 'Ali' } });
-  assert.equal(minus.answers[0], 'Сохранено'); view = minus.edits[0]; assert.match(view.text, /Витамин C — 1 ×/);
-  const floor = await tap(find(view, '➖ 1'));
-  assert.match(floor.answers[0], /Минимум 1/); assert.equal(saves(hub).length, 1);
-  const plus = await tap(find(view, '➕ 2')); view = plus.edits[0];
+  assert.equal(minus.answers[0], 'Убрана 1 шт'); view = minus.edits[0]; assert.match(view.text, /1 шт × 120 000 UZS = 120 000 UZS/);
+  assert.equal(under(view, 'Витамин C', '➖ 1 шт'), undefined);
+  const floor = await tap(`ye:m:${compact}:2:0`);
+  assert.match(floor.answers[0], /Осталась 1 шт.*🗑 Удалить/); assert.equal(saves(hub).length, 1);
+  const plus = await tap(under(view, 'Омега-3', '➕ 1 шт')); view = plus.edits[0];
+  assert.equal(plus.answers[0], 'Добавлена 1 шт');
   assert.deepEqual(saves(hub)[1][2].body.items, [{ billzProductId: 'p1', quantity: 1 }, { billzProductId: 'p2', quantity: 2 }]);
-  const removed = await tap(find(view, '🗑 1')); view = removed.edits[0];
-  assert.deepEqual(saves(hub)[2][2].body.items, [{ billzProductId: 'p2', quantity: 2 }]);
+  const info = await tap(keyboard(view).find((button) => button.text.startsWith('📦 2. Омега-3')).callback_data);
+  assert.match(info.answers[0], /^Омега-3: 2 шт × 300 000 UZS/); assert.equal(info.edits.length, 0);
+  // 🗑 only asks; the order changes on «✅ Да, удалить», and «↩️ Не удалять» keeps it.
+  const ask = await tap(under(view, 'Витамин C', '🗑 Удалить'));
+  assert.equal(saves(hub).length, 2); assert.match(ask.edits[0].text, /Удалить «Витамин C» из заказа\?/);
+  assert.equal(under(ask.edits[0], 'Омега-3', '🗑 Удалить') !== undefined, true);
+  const kept = await tap(under(ask.edits[0], 'Витамин C', '↩️ Не удалять'));
+  assert.equal(saves(hub).length, 2); assert.doesNotMatch(kept.edits[0].text, /Удалить «/);
+  const asked = (await tap(under(kept.edits[0], 'Витамин C', '🗑 Удалить'))).edits[0];
+  const removed = await tap(under(asked, 'Витамин C', '✅ Да, удалить')); view = removed.edits[0];
+  assert.deepEqual(saves(hub)[2][2].body.items, [{ billzProductId: 'p2', quantity: 2 }]); assert.equal(removed.answers[0], 'Товар удалён из заказа');
   assert.doesNotMatch(view.text, /Витамин C/); assert.match(view.text, /Итого: <b>600 000 UZS/);
   const done = await tap(find(view, '✅ Готово'));
-  assert.deepEqual(done.edits[0].options.reply_markup, { inline_keyboard: [] }); assert.match(done.edits[0].text, /Редактор закрыт/);
+  assert.deepEqual(done.edits[0].options.reply_markup, { inline_keyboard: [] });
+  assert.match(done.edits[0].text, /Готово, состав сохранён/); assert.match(done.edits[0].text, /нажмите «✅ Принять»/);
 });
 
 test('stale buttons, stock limits and other admins never save a guessed composition', async () => {
   const { hub, state, tap } = setup();
   const first = (await tap(`ya:e:${compact}:5:1`)).replies[0];
-  await tap(find(first, '➕ 1'));
-  const stale = await tap(find(first, '🗑 2'));
-  assert.equal(saves(hub).length, 1); assert.match(stale.answers[0], /Состав изменился/); assert.match(stale.edits[0].text, /Витамин C — 3 ×/);
+  await tap(under(first, 'Витамин C', '➕ 1 шт'));
+  const stale = await tap(under(first, 'Омега-3', '🗑 Удалить'));
+  assert.equal(saves(hub).length, 1); assert.match(stale.answers[0], /Состав изменился/); assert.match(stale.edits[0].text, /3 шт × 120 000/);
+  const staleDelete = await tap(`ye:d:${compact}:1:1`);
+  assert.equal(saves(hub).length, 1); assert.match(staleDelete.answers[0], /Состав изменился/);
   state.order = { ...state.order, items: [{ ...state.order.items[0], quantity: 5 }] };
-  const limit = await tap(find(stale.edits[0], '➕ 1'));
+  const limit = await tap(under(stale.edits[0], 'Витамин C', '➕ 1 шт'));
   assert.equal(limit.answers[0], 'Столько нет в наличии'); assert.equal(state.order.items[0].quantity, 5);
   state.role = 'user';
-  const denied = await tap(find(limit.edits[0], '➖ 1'));
+  const denied = await tap(under(limit.edits[0], 'Витамин C', '➖ 1 шт'));
   assert.equal(denied.answers[0], 'Доступ запрещён'); assert.equal(saves(hub).length, 2);
 });
 
@@ -124,8 +152,9 @@ test('catalogue page and typed search add products that are not yet in the order
   assert.ok(!keyboard(list).some((button) => /Витамин|Омега/.test(button.text)));
   assert.equal((await tap(find(list, 'Цинк · 50 000 UZS'), 88)).answers[0], 'Кнопка устарела. Откройте список снова.');
   const added = await tap(find(list, 'Цинк · 50 000 UZS'));
-  assert.deepEqual(saves(hub)[0][2].body.items.at(-1), { billzProductId: 'p3', quantity: 1 }); assert.match(added.edits[0].text, /Цинк — 1 × 50 000/);
-  const prompt = await tap(find(added.edits[0], '🔍 Поиск'));
+  assert.deepEqual(saves(hub)[0][2].body.items.at(-1), { billzProductId: 'p3', quantity: 1 }); assert.match(added.edits[0].text, /Цинк<\/b>\n\s+1 шт × 50 000/);
+  assert.equal(added.answers[0], 'Товар добавлен в заказ');
+  const prompt = await tap(find(added.edits[0], '🔍 Найти товар'));
   assert.equal(prompt.replies[0].options.reply_markup.force_reply, true);
   assert.equal((await type({ text: 'привет' })).passed, true);
   assert.equal((await type({ text: 'маг', reply_to_message: { message_id: 901 } }, 88)).passed, true);
@@ -145,7 +174,7 @@ test('accepted or locked orders open no editor and refuse further picking', asyn
   state.order = order();
   const editor = (await tap(`ya:e:${compact}:5:1`)).replies[0];
   state.order = { ...state.order, itemsFrozen: true, accountingStatus: 'reserved' };
-  const late = await tap(find(editor, '🗑 1'));
+  const late = await tap(under(editor, 'Витамин C', '🗑 Удалить'));
   assert.equal(late.answers[0], 'Состав уже зафиксирован'); assert.deepEqual(late.edits[0].options.reply_markup, { inline_keyboard: [] });
   assert.equal(saves(hub).length, 0);
 });
