@@ -173,8 +173,8 @@ test('prices report the published assortment with its prices and the configured 
   assert.equal((await call('GET', '/yandex/nomenclature/place-one/prices', { bearer: '' })).status, 401);
   const saved = config.yandex.vat;
   try {
-    config.yandex.vat = 12; error(await call('GET', '/yandex/nomenclature/place-one/prices'), 500);
-    config.yandex.vat = 20; assert.equal((await call('GET', '/yandex/nomenclature/place-one/prices')).body.items[0].vat, 20);
+    for (const vat of [0, 13, NaN]) { config.yandex.vat = vat; error(await call('GET', '/yandex/nomenclature/place-one/prices'), 500); }
+    config.yandex.vat = 12; assert.equal((await call('GET', '/yandex/nomenclature/place-one/prices')).body.items[0].vat, 12);
   } finally { config.yandex.vat = saved; }
 });
 

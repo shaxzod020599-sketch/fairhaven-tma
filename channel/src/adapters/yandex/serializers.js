@@ -85,7 +85,8 @@ function composition(items, totalCount) {
 }
 
 // Rates partner.nomenclature.prices.get accepts; -1 is "no VAT", 0 is invalid.
-const VAT_RATES = new Set([22, 20, 10, 7, 5, -1]);
+// 12 is Uzbekistan's rate: not in the docs, but Yandex accepts it (2026-10-08).
+const VAT_RATES = new Set([22, 20, 12, 10, 7, 5, -1]);
 function prices(items, vat) {
   return { items: items.map(({ id, price, oldPrice }) => ({ id, price, vat, ...(oldPrice !== undefined ? { oldPrice } : {}) })) };
 }
