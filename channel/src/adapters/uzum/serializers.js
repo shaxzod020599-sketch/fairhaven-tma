@@ -1,5 +1,6 @@
 const config = require('../../config');
 const catalog = require('../../core/catalog');
+const { measureFor } = require('../../core/measure');
 const images = require('../../media/images');
 const statuses = require('./statuses');
 
@@ -41,11 +42,12 @@ function serviceCodes(card, defaults) {
 }
 
 /**
- * Measurement. Every Billz product in this catalogue is sold by the piece —
- * none are weighed — so `isCatchWeight` is false and the unit is a count.
+ * Package measure of one piece. Every Billz product in this catalogue is sold by
+ * the piece — none are weighed — so `isCatchWeight` stays false; the measure is
+ * what one piece holds. Uzum rejected items sent without a unit (2026-10-29).
  */
-function measure() {
-  return { value: 1 };
+function measure(card = {}, mirror = {}) {
+  return measureFor(card.channels?.yandex || {}, card.name || mirror.name);
 }
 
 // Only piece units can be sold truthfully by the current reservation adapter.
@@ -73,7 +75,7 @@ function compositionItem({ card, mirror }, defaults) {
     ...(oldPrice > price ? { oldPrice } : {}),
     vendorCode: card.sku || mirror.sku || '',
     barcode: { value: String(card.barcode || mirror.barcode || ''), weightEncoding: 'none' },
-    measure: measure(mirror),
+    measure: measure(card, mirror),
     isCatchWeight: false,
     images: images.imagesFor(card),
     ...(serviceCodes(card, defaults) ? { serviceCodesUz: serviceCodes(card, defaults) } : {}),

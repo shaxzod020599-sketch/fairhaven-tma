@@ -22,7 +22,7 @@ OAuth advertises the documented `read write` scope; legacy signed-token verifica
 The existing `/restaurants` extension is not part of this YAML's route list.
 
 Composition uses description.general, a singular barcode object with value and weightEncoding=none, and omits parentId for root categories.
-Piece measure is value=1 with unit omitted: the schema permits only GRM/MLT units, neither of which describes a piece.
+Measure is the package size of one piece, always with a unit (Uzum asked for it on 2026-10-29; the schema permits only GRM/MLT): the operator's measure saved with the Yandex settings when set, otherwise taken from the name when printed there ("50 мл", "150 г"), otherwise a nominal 100 GRM — the same rule as Yandex (`channel/src/core/measure.js`). Goods stay sold by the piece: isCatchWeight=false.
 Unmapped weighted/volume units and product identifiers longer than 64 characters are held back in both composition and availability. Recognized piece units are empty legacy unit, шт, шт., pcs, pc, piece, pieces and dona.
 Long or normalized category identifiers get a deterministic SHA256 suffix; category identifiers remain within 64 characters.
 Existing image policy, stock/reserved/pending/minStock calculation, channel pricing and tax defaults are retained.

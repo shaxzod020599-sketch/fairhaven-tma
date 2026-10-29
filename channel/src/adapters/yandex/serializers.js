@@ -1,4 +1,5 @@
 const catalog = require('../../core/catalog');
+const { measureFor } = require('../../core/measure');
 const images = require('../../media/images');
 
 const PIECE_UNITS = new Set(['', 'шт', 'шт.', 'pcs', 'pc', 'piece', 'pieces', 'dona']);
@@ -10,10 +11,6 @@ const CATEGORY_NAMES = {
   supplements: 'Qo‘shimchalar', vitamins: 'Vitaminlar', hygiene: 'Gigiyena',
   cosmetics: 'Kosmetika', parapharmaceuticals: 'Parafarmatsevtika', drinks: 'Ichimliklar',
 };
-// Every product is sold by the piece, but Yandex still requires a package
-// measure. Owner decision 2026-10-07: take it from the name when printed there,
-// otherwise a nominal 100 g that operators can correct per product in the panel.
-const NOMINAL_MEASURE = { unit: 'GRM', value: 100 };
 const SETTING_KEYS = ['channels.defaultMxikCode', 'channels.defaultPackageCode'];
 
 function string(value) { return typeof value === 'string' ? value.trim() : ''; }
@@ -38,13 +35,6 @@ async function loadDefaults() {
 function barcodeTypeFor(barcode) {
   if (!/^\d+$/.test(barcode)) return 'code128';
   return ({ 8: 'eanx', 12: 'upca', 13: 'ean13', 14: 'itf14' })[barcode.length] || 'code128';
-}
-
-function measureFor(settings, name) {
-  if (settings.measure) return settings.measure;
-  const printed = /(\d{1,5})\s*(ГР|Г|GR|G|МЛ|ML)(?![\p{L}])/iu.exec(name || '');
-  if (!printed || Number(printed[1]) <= 0) return NOMINAL_MEASURE;
-  return { unit: /^(МЛ|ML)$/i.test(printed[2]) ? 'MLT' : 'GRM', value: Number(printed[1]) };
 }
 
 /** Null means delisted, even when an operator forced availability in. */

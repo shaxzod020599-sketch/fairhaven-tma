@@ -8,13 +8,21 @@ process.env.BILLZ_PAYMENT_TYPE_ID = 'test-payment';
 const S = require('../src/adapters/uzum/serializers');
 const { schema, response } = require('./uzumSchema');
 const entry = { card: { category: 'Vitamins', channels: { uzum: { enabled: true, price: 20 } } }, mirror: { billzProductId: 'p1', measurementUnit: 'шт', stock: 8, reservedQty: 2, pendingQty: 1 } };
-test('catalogue conforms to original YAML without fabricating piece weight', () => {
+test('catalogue conforms to original YAML and names a measure unit', () => {
   const body = S.composition([entry], {});
   schema('PickerNomenclatureV1', body);
-  assert.deepEqual(body.items[0].measure, { value: 1 });
+  assert.deepEqual(body.items[0].measure, { unit: 'GRM', value: 100 });
+  assert.equal(body.items[0].isCatchWeight, false);
   assert.deepEqual(body.items[0].barcode, { value: '', weightEncoding: 'none' });
   schema('NomenclatureAvailabilityV1', S.availability([entry]));
   assert.equal(S.availability([entry]).items[0].stock, 5);
+});
+test('measure comes from the name, else the operator setting Yandex shares', () => {
+  const item = (card) => S.composition([{ ...entry, card: { ...entry.card, ...card } }], {}).items[0];
+  assert.deepEqual(item({ name: 'КРЕМ ДЛЯ РУК 50 МЛ' }).measure, { unit: 'MLT', value: 50 });
+  assert.deepEqual(item({ name: 'Tea 150 г' }).measure, { unit: 'GRM', value: 150 });
+  const corrected = { ...entry.card.channels, yandex: { measure: { unit: 'GRM', value: 75 } } };
+  assert.deepEqual(item({ name: 'Tea 150 г', channels: corrected }).measure, { unit: 'GRM', value: 75 });
 });
 test('long category ids remain bounded and distinct', () => {
   const a = S.categoryIdFor({ category: 'a'.repeat(80) + 'x' });
