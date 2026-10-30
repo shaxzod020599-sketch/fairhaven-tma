@@ -5,9 +5,9 @@ const Setting = require('../models/Setting');
 const SiteContent = require('../models/SiteContent');
 const { SURFACES } = require('../utils/surfaces');
 const seo = require('../utils/seoPages');
-
 // Same rule as the shop: only an explicit `approved: false` hides a product.
-const LISTED = { approved: { $ne: false } };
+const { LISTED } = require('../utils/publicProduct');
+
 const LIST_FIELDS = 'name price tags updatedAt';
 const OBJECT_ID = /^[a-f0-9]{24}$/i;
 
