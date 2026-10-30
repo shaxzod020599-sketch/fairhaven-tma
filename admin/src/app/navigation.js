@@ -10,6 +10,6 @@ export const NAV_ITEMS = [
   { path: '/promos', label: 'Промокоды', icon: 'gift' },
   { path: '/collections', label: 'Подборки', icon: 'stack' },
   { path: '/gallery', label: 'Галерея', icon: 'image' },
-  { path: '/activity', label: 'История', icon: 'shield' },
+  { path: '/activity', label: 'История', icon: 'history' },
   { path: '/settings', label: 'Настройки', icon: 'settings' },
 ];

@@ -1,7 +1,9 @@
 const money = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
 
+// Non-breaking spaces keep an amount on one line: «3 145 000» and «сум» must
+// never be split across lines in a narrow card.
 export function formatMoney(value) {
-  return `${money.format(Number(value) || 0).replace(/\u00a0/g, ' ')} сум`;
+  return `${money.format(Number(value) || 0).replace(/[\u00a0\u202f ]/g, '\u00a0')}\u00a0сум`;
 }
 
 export function formatNumber(value) {

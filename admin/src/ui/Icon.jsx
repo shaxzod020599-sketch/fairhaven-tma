@@ -9,6 +9,7 @@ const paths = {
   plug: <><path d="M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4" /></>,
   users: <><circle cx="9" cy="8" r="3" /><path d="M3 20c0-4 2-6 6-6s6 2 6 6M16 6a3 3 0 0 1 0 6M17 14c3 0 4 2 4 5" /></>,
   shield: <><path d="M12 3 20 6v6c0 5-3 8-8 10-5-2-8-5-8-10V6z" /><path d="m9 12 2 2 4-5" /></>,
+  history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5M12 7v5l3 2" /></>,
   gift: <><path d="M4 10h16v10H4zM3 7h18v3H3zM12 7v13M8 7c-3 0-3-4 0-4 2 0 4 4 4 4m4 0c3 0 3-4 0-4-2 0-4 4-4 4" /></>,
   stack: <><path d="m12 3 9 5-9 5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5" /></>,
   settings: <><circle cx="12" cy="12" r="3" /><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2" /></>,

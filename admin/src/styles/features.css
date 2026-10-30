@@ -537,13 +537,15 @@
 .fh-settings-card label b { font-size: 14px; }
 .fh-settings-card label small { color: var(--fh-muted); font-size: 12px; }
 
-/* Customer and admin cards: the whole row is a button, so without this it kept
-   the browser's default chrome and collapsed name/phone/id onto one line. */
-.fh-person-card button { width: 100%; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 14px; border: 0; padding: 4px; background: none; font: inherit; text-align: left; cursor: pointer; border-radius: var(--fh-radius-sm); transition: background var(--fh-fast); }
-.fh-person-card button:hover { background: var(--fh-burgundy-wash); }
-.fh-person-card button > span:nth-child(2) { min-width: 0; display: grid; gap: 2px; }
-.fh-person-card button b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fh-person-card button small { color: var(--fh-muted); font-size: 12px; }
+/* Customer cards: the whole row is a button, so without this it kept the
+   browser's default chrome and collapsed name/phone/id onto one line. Direct
+   child only — a descendant selector also restyled the admin card's
+   «Снять доступ» button into a 300px borderless block. */
+.fh-person-card > button { width: 100%; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 14px; border: 0; padding: 4px; background: none; font: inherit; text-align: left; cursor: pointer; border-radius: var(--fh-radius-sm); transition: background var(--fh-fast); }
+.fh-person-card > button:hover { background: var(--fh-burgundy-wash); }
+.fh-person-card > button > span:nth-child(2) { min-width: 0; display: grid; gap: 2px; }
+.fh-person-card > button b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fh-person-card > button small { color: var(--fh-muted); font-size: 12px; }
 
 /* The Billz picker is the screen an operator must use before any stock number
    can appear. It shipped as unstyled default buttons with run-together text. */
@@ -566,4 +568,68 @@
 @media (max-width: 1280px) {
   .fh-source-overview { grid-template-columns: minmax(0, 1fr); }
   .fh-source-overview__billz { grid-template-columns: minmax(0, 1fr) auto; }
+}
+
+
+/* ── Text that fell onto a second line, got clipped or pushed the page wide ─ */
+
+/* A grid's implicit column sizes to its widest child, so one wide product card
+   stretched the whole page to ~730px on a phone. Pin the column to the screen. */
+.fh-page { grid-template-columns: minmax(0, 1fr); }
+
+/* Button labels never break in two («Создать доступ / Uzum»); rows of buttons
+   wrap as whole buttons instead. */
+.fh-button { white-space: nowrap; }
+.fh-workbench__footer, .fh-dialog-actions, .fh-connection-actions { flex-wrap: wrap; }
+
+/* Admin cards: the row inside the card had no layout at all, so the name,
+   username and ID ran together. «Снять доступ» sits under the details — beside
+   them it left the name ~100px in a three-column grid. */
+.fh-admin-card > div { width: 100%; display: grid; grid-template-columns: 46px minmax(0, 1fr); align-items: start; gap: 8px 14px; }
+.fh-admin-card .fh-button { grid-column: 2; justify-self: start; }
+.fh-admin-card .fh-person-card__avatar { margin-bottom: 0; }
+.fh-admin-card > div > span:nth-child(2) { min-width: 0; display: grid; gap: 2px; }
+.fh-admin-card b { overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.fh-admin-card small { color: var(--fh-muted); font-size: 12px; overflow-wrap: anywhere; }
+
+/* Customer cards: the status badge took the right column and left the name
+   ~90px («Dilnoza Ka…»). The badge now sits under the contact lines. */
+.fh-person-card > button { grid-template-columns: 46px minmax(0, 1fr); align-items: start; }
+.fh-person-card > button > .fh-badge { grid-column: 2; justify-self: start; }
+
+/* Top products: a long name was squeezed into ~80px next to the totals on a
+   phone; the totals now drop below the name when there is no room. */
+.fh-top-list li { flex-wrap: wrap; }
+.fh-top-list li > span { flex: 1 1 160px; min-width: 0; }
+
+/* Low-stock links on the dashboard had no styling — only buttons did. */
+.fh-simple-list a { display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--fh-line-soft); padding: 14px; background: white; color: var(--fh-ink); text-decoration: none; }
+.fh-simple-list a:hover { background: var(--fh-burgundy-wash); }
+.fh-simple-list a > span { min-width: 0; }
+.fh-simple-list a b { display: block; }
+
+/* Billz health card: the date and its label each wrapped onto two lines in
+   the 260px column. A slightly wider column fits both. */
+.fh-billz-analytics__grid { grid-template-columns: minmax(0, 1.4fr) minmax(340px, .6fr); }
+.fh-billz-health dd { white-space: nowrap; }
+
+@media (max-width: 850px) {
+  .fh-billz-analytics__grid { grid-template-columns: 1fr; }
+  .fh-product-card__price { flex-wrap: wrap; gap: 10px; }
+}
+
+@media (max-width: 620px) {
+  /* «Администраторы» at 43px is wider than a phone's workspace. */
+  .fh-page-head h1 { font-size: clamp(30px, 9.6vw, 43px); overflow-wrap: break-word; }
+  /* The ≤1280px two-column rule above won over the phone rule; restore it. */
+  .fh-source-overview__billz { grid-template-columns: 1fr; }
+  .fh-billz-health dl > div { flex-wrap: wrap; row-gap: 2px; }
+  .fh-billz-health dd { margin-left: auto; }
+}
+
+@media (max-width: 520px) {
+  /* Two KPI columns leave ~110px — «3 145 000 сум» cannot fit. One per row. */
+  .fh-metric-ledger, .fh-sales-metrics { grid-template-columns: 1fr; }
+  .fh-metric-ledger__item, .fh-metric-ledger__item:nth-child(n), .fh-sales-metrics > div, .fh-sales-metrics > div:nth-child(n) { border-right: 0; border-bottom: 1px solid var(--fh-line); }
+  .fh-metric-ledger__item:last-child, .fh-sales-metrics > div:last-child { border-bottom: 0; }
 }
