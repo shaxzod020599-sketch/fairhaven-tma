@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useI18n } from '../i18n/index.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import Breadcrumbs from '../components/Breadcrumbs.jsx';
+import { useSeo } from '../seo/useSeo.js';
 
 const FAQS_RU = [
   {
@@ -71,6 +72,7 @@ const FAQS_UZ = [
 ];
 
 export default function FAQ() {
+  useSeo();
   const { t, lang } = useI18n();
   const { get } = useSettings();
   const faqs = lang === 'uz' ? FAQS_UZ : FAQS_RU;

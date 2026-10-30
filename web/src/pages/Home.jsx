@@ -11,6 +11,7 @@ import { useI18n } from '../i18n/index.jsx';
 import { useSiteContent } from '../context/SiteContentContext.jsx';
 import TestimonialCascade from '../components/home/TestimonialCascade.jsx';
 import { scrollBus, resetScrollBus } from '../components/home/scrollBus.js';
+import { useSeo } from '../seo/useSeo.js';
 
 // The Three.js scene is split out of the main chunk; only capable desktops load it.
 const Scene3D = lazy(() => import('../components/home/Scene3D.jsx'));
@@ -131,6 +132,7 @@ function useJourneyDriver(rootRef, enabled) {
  * No catalogue sections here by design — every service lives in the header.
  */
 export default function Home() {
+  useSeo();
   const { t, lang } = useI18n();
   const content = useSiteContent();
   const heroCopy = content.hero[lang] || content.hero.ru;

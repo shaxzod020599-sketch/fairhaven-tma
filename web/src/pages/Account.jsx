@@ -7,6 +7,7 @@ import { fetchMyOrders } from '../api.js';
 import { formatPrice } from '../helpers.js';
 import Breadcrumbs from '../components/Breadcrumbs.jsx';
 import { User as UserIcon } from '../components/Icons.jsx';
+import { useSeo } from '../seo/useSeo.js';
 
 const STATUS_KEYS = {
   pending: 'statusPending',
@@ -180,6 +181,7 @@ function OrdersList() {
 }
 
 export default function Account() {
+  useSeo();
   const { t } = useI18n();
   const { user, isLoading, logout } = useAuth();
 

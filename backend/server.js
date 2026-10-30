@@ -17,6 +17,7 @@ const userRoutes = require('./routes/userRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const publicRoutes = require('./routes/publicRoutes');
 const webRoutes = require('./routes/webRoutes');
+const seoController = require('./controllers/seoController');
 const oferta = require('./legal/oferta');
 const { FAIRHAVEN_PRODUCTS } = require('./seed/products');
 const {
@@ -146,11 +147,20 @@ app.get(['/admin', '/admin/*'], (req, res, next) => {
   return res.redirect(302, destination);
 });
 
+// Built from the live catalogue; the static web/public/sitemap.xml stays as
+// nginx's fallback while the backend is down.
+app.get('/sitemap.xml', (req, res, next) => {
+  if (surfaceForHost(req.hostname)?.key !== 'public') return next();
+  return seoController.sitemap(req, res, next);
+});
+
 // Three standalone builds, selected by exact host. One surface can never fall
 // through into another surface's assets or index.html.
 const staticBySurface = new Map(SURFACES.map((surface) => [
   surface.key,
   express.static(surface.dist, {
+    // The public index.html is rendered per URL (seoController), never served raw.
+    index: surface.key === 'public' ? false : 'index.html',
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.html')) {
         res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
@@ -170,7 +180,7 @@ app.use((req, res, next) => {
 });
 
 // SPA fallback — serve the selected surface index.html with no-cache.
-app.get('*', (req, res) => {
+app.get('*', (req, res, next) => {
   if (
     req.path.startsWith('/api') ||
     req.path.startsWith('/legal') ||
@@ -184,6 +194,7 @@ app.get('*', (req, res) => {
   res.set('Expires', '0');
   const surface = surfaceForHost(req.hostname);
   if (!surface) return res.status(421).json({ success: false, error: 'host_not_allowed' });
+  if (surface.key === 'public') return seoController.renderPage(req, res, next);
   return res.sendFile(path.join(surface.dist, 'index.html'));
 });
 

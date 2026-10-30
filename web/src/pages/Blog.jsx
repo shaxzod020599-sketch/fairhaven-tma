@@ -4,27 +4,24 @@ import { useI18n } from '../i18n/index.jsx';
 import Breadcrumbs from '../components/Breadcrumbs.jsx';
 import { Flower, Baby, Bottle, Sprout, Leaf, User } from '../components/Icons.jsx';
 import { useSiteContent } from '../context/SiteContentContext.jsx';
+import { GUIDES } from '../content/guides.js';
+import { useSeo } from '../seo/useSeo.js';
 
-const POSTS_RU = [
-  { slug: 'fertility-guide', title: 'Как подготовиться к зачатию: гайд по фертильности', read: 7, tag: 'Фертильность', Icon: Flower, excerpt: 'Питание, витамины и образ жизни, которые повышают шансы на зачатие.' },
-  { slug: 'prenatal-vitamins', title: 'Какие витамины нужны при беременности', read: 5, tag: 'Беременность', Icon: Baby, excerpt: 'Фолиевая кислота, железо, DHA — что действительно важно в каждом триместре.' },
-  { slug: 'lactation-support', title: '5 способов увеличить лактацию', read: 6, tag: 'Лактация', Icon: Bottle, excerpt: 'Питание, питьевой режим и добавки, которые помогают кормящим мамам.' },
-  { slug: 'mens-fertility', title: 'Мужская фертильность: на что обратить внимание', read: 6, tag: 'Фертильность', Icon: Sprout, excerpt: 'Как образ жизни и добавки влияют на качество спермы.' },
-];
-
-const POSTS_UZ = [
-  { slug: 'fertility-guide', title: 'Homilador bo‘lishga tayyorgarlik: fertillik bo‘yicha qo‘llanma', read: 7, tag: 'Fertillik', Icon: Flower, excerpt: 'Homilador bo‘lish imkoniyatini oshiradigan ovqatlanish, vitaminlar va turmush tarzi.' },
-  { slug: 'prenatal-vitamins', title: 'Homiladorlikda qaysi vitaminlar kerak', read: 5, tag: 'Homiladorlik', Icon: Baby, excerpt: 'Folat kislota, temir, DHA — har trimestrda nima muhim.' },
-  { slug: 'lactation-support', title: 'Emizishni oshirishning 5 usuli', read: 6, tag: 'Emizish', Icon: Bottle, excerpt: "Emizikli onalarga yordam beradigan ovqatlanish, suv taqchilligi va qo'shimchalar." },
-  { slug: 'mens-fertility', title: "Erkak fertilligi: nimalarga e'tibor berish kerak", read: 6, tag: 'Fertillik', Icon: Sprout, excerpt: "Turmush tarzi va qo'shimchalar urug' sifatiga qanday ta'sir qiladi." },
-];
-
-const CONTENT_ICONS = { 'brand-story': Leaf, 'family-story': Baby, 'doctor-interview': User };
+const POST_ICONS = {
+  'brand-story': Leaf,
+  'family-story': Baby,
+  'doctor-interview': User,
+  'fertility-guide': Flower,
+  'prenatal-vitamins': Baby,
+  'lactation-support': Bottle,
+  'mens-fertility': Sprout,
+};
 
 export default function Blog() {
   const { t, lang } = useI18n();
   const content = useSiteContent();
-  const managed = content.blog.map((post) => {
+  useSeo();
+  const posts = [...content.blog, ...GUIDES].map((post) => {
     const loc = lang === 'uz' ? post.uz : post.ru;
     return {
       slug: post.slug,
@@ -32,10 +29,9 @@ export default function Blog() {
       tag: loc.tag,
       title: loc.title,
       excerpt: loc.excerpt,
-      Icon: CONTENT_ICONS[post.slug] || Leaf,
+      Icon: POST_ICONS[post.slug] || Leaf,
     };
   });
-  const posts = [...managed, ...(lang === 'uz' ? POSTS_UZ : POSTS_RU)];
 
   return (
     <div className="blog-page">

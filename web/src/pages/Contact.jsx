@@ -3,8 +3,10 @@ import { useI18n } from '../i18n/index.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import Breadcrumbs from '../components/Breadcrumbs.jsx';
 import { Phone, Telegram, ArrowRight } from '../components/Icons.jsx';
+import { useSeo } from '../seo/useSeo.js';
 
 export default function Contact() {
+  useSeo();
   const { t } = useI18n();
   const { get } = useSettings();
   const [form, setForm] = useState({ name: '', phone: '', message: '' });

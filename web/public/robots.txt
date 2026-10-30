@@ -4,5 +4,6 @@ Disallow: /admin
 Disallow: /account
 Disallow: /checkout
 Disallow: /cart
+Disallow: /order/
 
 Sitemap: https://fairhaven.uz/sitemap.xml

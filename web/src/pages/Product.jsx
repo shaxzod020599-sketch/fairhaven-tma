@@ -13,6 +13,7 @@ import {
   productDescription,
 } from '../helpers.js';
 import { Bottle } from '../components/Icons.jsx';
+import { useSeo } from '../seo/useSeo.js';
 
 export default function Product({ onOpenCart }) {
   const { id } = useParams();
@@ -54,6 +55,8 @@ export default function Product({ onOpenCart }) {
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
   }, [id]);
+
+  useSeo(loading || (product && product._id !== id) ? null : { product });
 
   if (loading) {
     return (

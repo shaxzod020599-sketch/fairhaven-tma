@@ -6,6 +6,7 @@ import ProductCard from '../components/ProductCard.jsx';
 import Breadcrumbs from '../components/Breadcrumbs.jsx';
 import { LIFE_STAGES } from '../helpers.js';
 import { Sprout } from '../components/Icons.jsx';
+import { useSeo } from '../seo/useSeo.js';
 
 const CATEGORIES = [
   { key: 'supplements', ru: 'Добавки', uz: "Qo'shimchalar" },
@@ -33,6 +34,14 @@ export default function Shop() {
   const stageMeta = useMemo(
     () => LIFE_STAGES.find((s) => s.slug === stage) || null,
     [stage]
+  );
+
+  // A life-stage page with no products stays out of search results.
+  const narrowed = Boolean(catFilter || availableOnly || querySearch || tagFilter);
+  useSeo(
+    stage && !stageMeta ? { notFound: true }
+      : stageMeta && loading ? null
+      : { empty: Boolean(stageMeta) && !narrowed && products.length === 0 }
   );
 
   // Header mega-menu navigates with ?category= — follow those changes.

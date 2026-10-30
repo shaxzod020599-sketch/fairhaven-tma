@@ -2,8 +2,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../i18n/index.jsx';
 import { Leaf } from '../components/Icons.jsx';
+import { useSeo } from '../seo/useSeo.js';
 
 export default function NotFound() {
+  useSeo({ notFound: true });
   const { t } = useI18n();
   return (
     <div className="container not-found">

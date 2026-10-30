@@ -4,6 +4,7 @@ import { useI18n } from '../i18n/index.jsx';
 import OurDifference from '../components/OurDifference.jsx';
 import Breadcrumbs from '../components/Breadcrumbs.jsx';
 import { Flower, Baby, Bottle, Leaf } from '../components/Icons.jsx';
+import { useSeo } from '../seo/useSeo.js';
 
 const LIFECYCLE_RU = [
   { Icon: Flower, label: 'Планирование' },
@@ -20,6 +21,7 @@ const LIFECYCLE_UZ = [
 ];
 
 export default function About() {
+  useSeo();
   const { t, lang } = useI18n();
   const cycle = lang === 'uz' ? LIFECYCLE_UZ : LIFECYCLE_RU;
 

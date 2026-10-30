@@ -9,10 +9,12 @@ import { formatPrice } from '../helpers.js';
 import Breadcrumbs from '../components/Breadcrumbs.jsx';
 import YandexMapPicker from '../components/YandexMapPicker.jsx';
 import { Cart as CartIcon, Bottle } from '../components/Icons.jsx';
+import { useSeo } from '../seo/useSeo.js';
 
 const DELIVERY_FEE = 25000;
 
 export default function Checkout() {
+  useSeo();
   const { t, lang } = useI18n();
   const { items, subtotal, clear, appliedPromo } = useCart();
   const { get } = useSettings();

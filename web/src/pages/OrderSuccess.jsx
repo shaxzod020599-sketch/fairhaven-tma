@@ -4,8 +4,10 @@ import { fetchOrder } from '../api.js';
 import { useI18n } from '../i18n/index.jsx';
 import { formatPrice } from '../helpers.js';
 import { Check } from '../components/Icons.jsx';
+import { useSeo } from '../seo/useSeo.js';
 
 export default function OrderSuccess() {
+  useSeo();
   const { id } = useParams();
   const { t } = useI18n();
   const [order, setOrder] = useState(null);

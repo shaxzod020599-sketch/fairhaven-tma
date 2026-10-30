@@ -4,6 +4,7 @@ import { useI18n } from '../i18n/index.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { fetchSiteContent, saveSiteContent, adminUploadImage, adminUploadVideo } from '../api.js';
 import { DEFAULT_CONTENT, mergeContent } from '../content/defaults.js';
+import { useSeo } from '../seo/useSeo.js';
 
 /**
  * Site admin — Telegram-simple: a list of sections on the left, one focused
@@ -107,6 +108,7 @@ function LangTabs({ lang, setLang }) {
 }
 
 export default function AdminPanel() {
+  useSeo();
   const { t } = useI18n();
   const { user, isLoading } = useAuth();
   const [data, setData] = useState(null);

@@ -441,6 +441,48 @@ Ochiq bronlar Billz'da o'z muddati bilan bo'shaydi.
 
 ---
 
+## 11. fairhaven.uz — Google uchun sahifalar
+
+Har bir sahifa (mahsulot, katalog, blog) o'z sarlavhasi, tavsifi, canonical
+manzili va tuzilgan ma'lumoti (JSON-LD) bilan backend'dan beriladi; noma'lum
+manzil 404 qaytaradi; `/sitemap.xml` jonli katalogdan quriladi. Matnlar:
+`web/src/seo/pages.json`, qoidalar: `web/src/seo/meta.js`.
+
+Sayt build'i va nginx nusxasi bitta bo'lishi shart:
+
+```bash
+cd ~/fairhaven-tma/web && npm ci && npm run build && rsync -a dist/ /var/www/fairhaven-web/
+```
+
+`.env` ga (backend HTML'ni nginx bergan build'dan oladi):
+
+```
+PUBLIC_WEB_DIST=/var/www/fairhaven-web
+```
+
+nginx: `/etc/nginx/snippets/fairhaven-web-common.conf` dagi
+`location / { try_files $uri /index.html; }` qatori
+`deploy/nginx/fairhaven-web-seo.conf` bloklari bilan almashtiriladi, keyin
+`sudo nginx -t && sudo systemctl reload nginx` va `pm2 restart fairhaven`.
+
+**Tekshirish:**
+
+```bash
+curl -s -A Googlebot https://fairhaven.uz/shop | grep -o '<title>[^<]*'
+```
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://fairhaven.uz/bunday-sahifa-yoq
+```
+
+Birinchisi katalog sarlavhasini, ikkinchisi `404` ni ko'rsatishi kerak.
+
+**Orqaga qaytarish:** snippet'dagi `location /` ni eski qatorga qaytarib,
+`nginx -t` va reload. Backend ishlamay qolsa ham nginx o'zi eski statik
+sahifani beradi.
+
+---
+
 ## Xavfsizlik bayroqlari
 
 Hammasi **o'chirilgan holatda** keladi. Har birini alohida, tekshirib yoqing.
