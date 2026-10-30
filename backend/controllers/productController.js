@@ -1,11 +1,14 @@
 const Product = require('../models/Product');
 const Order = require('../models/Order');
 const { sendError } = require('../utils/http');
+const { LISTED, PUBLIC_SELECT, PUBLIC_PROJECTION } = require('../utils/publicProduct');
+
+// The GET handlers below are public; see utils/publicProduct.js.
 
 exports.getAll = async (req, res) => {
   try {
     const { category, search, available } = req.query;
-    const filter = {};
+    const filter = { ...LISTED };
 
     if (category) filter.category = category;
     if (available !== undefined) filter.isAvailable = available === 'true';
@@ -17,7 +20,7 @@ exports.getAll = async (req, res) => {
       ];
     }
 
-    const products = await Product.find(filter).sort({ createdAt: -1 });
+    const products = await Product.find(filter).select(PUBLIC_SELECT).sort({ createdAt: -1 }).lean();
     res.json({ success: true, data: products });
   } catch (err) {
     sendError(res, 500, err);
@@ -26,7 +29,7 @@ exports.getAll = async (req, res) => {
 
 exports.getById = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findOne({ _id: req.params.id, ...LISTED }).select(PUBLIC_SELECT).lean();
     if (!product) {
       return res.status(404).json({ success: false, error: 'Product not found' });
     }
@@ -99,7 +102,7 @@ exports.toggleAvailability = async (req, res) => {
 /**
  * Top N most-ordered products. Aggregates over all orders (any status).
  * Falls back to the N most-recently-added available products when nothing
- * has been ordered yet.
+ * has been ordered yet. Order counts stay internal: only the products go out.
  */
 exports.getPopular = async (req, res) => {
   try {
@@ -125,17 +128,9 @@ exports.getPopular = async (req, res) => {
         },
       },
       { $unwind: '$product' },
-      { $match: { 'product.isAvailable': true } },
-      {
-        $replaceRoot: {
-          newRoot: {
-            $mergeObjects: [
-              '$product',
-              { orderCount: '$orderCount', totalQty: '$totalQty' },
-            ],
-          },
-        },
-      },
+      { $match: { 'product.isAvailable': true, 'product.approved': LISTED.approved } },
+      { $replaceRoot: { newRoot: '$product' } },
+      { $project: PUBLIC_PROJECTION },
     ]);
 
     if (aggregated.length >= limit) {
@@ -146,11 +141,14 @@ exports.getPopular = async (req, res) => {
     const existingIds = aggregated.map((p) => p._id);
     const needed = limit - aggregated.length;
     const filler = await Product.find({
+      ...LISTED,
       isAvailable: true,
       _id: { $nin: existingIds },
     })
+      .select(PUBLIC_SELECT)
       .sort({ createdAt: -1 })
-      .limit(needed);
+      .limit(needed)
+      .lean();
 
     return res.json({ success: true, data: [...aggregated, ...filler] });
   } catch (err) {
@@ -160,7 +158,7 @@ exports.getPopular = async (req, res) => {
 
 exports.getCategories = async (_req, res) => {
   try {
-    const categories = await Product.distinct('category');
+    const categories = await Product.distinct('category', LISTED);
     res.json({ success: true, data: categories });
   } catch (err) {
     sendError(res, 500, err);

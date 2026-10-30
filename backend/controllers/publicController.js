@@ -1,6 +1,7 @@
 const Collection = require('../models/Collection');
 const Setting = require('../models/Setting');
 const { sendError } = require('../utils/http');
+const { PUBLIC_SELECT } = require('../utils/publicProduct');
 
 const PUBLIC_SETTING_KEYS = [
   'support_phone',
@@ -27,7 +28,8 @@ exports.listCollections = async (_req, res) => {
 exports.getCollection = async (req, res) => {
   try {
     const c = await Collection.findById(req.params.id)
-      .populate('productIds');
+      .populate('productIds', PUBLIC_SELECT)
+      .lean();
     if (!c || !c.visible) {
       return res.status(404).json({ success: false, error: 'not_found' });
     }
