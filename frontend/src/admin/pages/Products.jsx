@@ -19,6 +19,34 @@ const CATEGORIES = [
   { key: 'drinks', label: 'Напитки' },
 ];
 
+// Shop-site shelves (keys match backend/utils/catalog/taxonomy.js).
+const NEEDS = [
+  { key: 'fertility', label: 'Планирование и зачатие' },
+  { key: 'pregnancy', label: 'Беременность и кормление' },
+  { key: 'women', label: 'Женское здоровье' },
+  { key: 'men', label: 'Мужское здоровье' },
+  { key: 'beauty', label: 'Кожа, волосы, ногти' },
+  { key: 'sleep', label: 'Сон и стресс' },
+  { key: 'immunity', label: 'Иммунитет и энергия' },
+  { key: 'heart', label: 'Сердце и мозг' },
+  { key: 'digestion', label: 'Пищеварение' },
+  { key: 'metabolism', label: 'Обмен веществ' },
+  { key: 'kids', label: 'Детям' },
+  { key: 'bones', label: 'Кости и суставы' },
+];
+const KINDS = [
+  { key: 'vitamins', label: 'Витамины' },
+  { key: 'minerals', label: 'Минералы' },
+  { key: 'omega', label: 'Омега-3' },
+  { key: 'collagen', label: 'Коллаген' },
+  { key: 'inositol', label: 'Инозитол' },
+  { key: 'herbal', label: 'Растительные средства' },
+  { key: 'enzymes', label: 'Ферменты и пробиотики' },
+  { key: 'intimate', label: 'Интимная гигиена' },
+];
+const needLabel = (k) => NEEDS.find((n) => n.key === k)?.label || k;
+const kindLabel = (k) => KINDS.find((n) => n.key === k)?.label || k;
+
 function fmtPrice(n) {
   return (Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' UZS';
 }
@@ -307,6 +335,14 @@ function ProductEditor({ product, onClose, onSaved }) {
   const [images, setImages] = useState(Array.isArray(product?.images) ? product.images : []);
   const [isAvailable, setIsAvailable] = useState(product?.isAvailable !== false);
   const [tags, setTags] = useState((product?.tags || []).join(', '));
+  // Empty means "computed by the site from the name"; the computed value is
+  // shown under each field (autoTaxonomy, sent with admin product responses).
+  const [displayName, setDisplayName] = useState(product?.displayName || '');
+  const [displayNameUz, setDisplayNameUz] = useState(product?.displayNameUz || '');
+  const [needs, setNeeds] = useState(Array.isArray(product?.needs) ? product.needs : []);
+  const [kind, setKind] = useState(product?.kind || '');
+  const auto = product?.autoTaxonomy || null;
+  const toggleNeed = (key) => setNeeds((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
@@ -346,6 +382,10 @@ function ProductEditor({ product, onClose, onSaved }) {
       images: images.filter(Boolean),
       isAvailable,
       tags: tags.split(',').map((s) => s.trim()).filter(Boolean),
+      displayName: displayName.trim(),
+      displayNameUz: displayNameUz.trim(),
+      needs,
+      kind,
       // Born linked: stock then follows Billz from the first sync, instead of
       // waiting for someone to remember the linking step on another page.
       ...(isNew && billzPick ? {
@@ -527,6 +567,59 @@ function ProductEditor({ product, onClose, onSaved }) {
         <div style={{ gridColumn: '1 / -1' }}>
           <label className="ap-label">Теги (через запятую)</label>
           <input className="ap-input" value={tags} onChange={(e) => setTags(e.target.value)} />
+        </div>
+        <div>
+          <label className="ap-label">Название для сайта (RU)</label>
+          <input
+            className="ap-input"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            maxLength={200}
+            placeholder={auto?.title || 'Пусто — по названию товара'}
+          />
+          <div className="ap-muted-sm ap-field-hint">
+            {auto?.title ? `Авто: ${auto.title}` : 'Пусто — сайт составит название сам'}
+          </div>
+        </div>
+        <div>
+          <label className="ap-label">Название для сайта (UZ)</label>
+          <input
+            className="ap-input"
+            value={displayNameUz}
+            onChange={(e) => setDisplayNameUz(e.target.value)}
+            maxLength={200}
+            placeholder={auto?.titleUz || 'Пусто — как на русском'}
+          />
+          <div className="ap-muted-sm ap-field-hint">
+            {auto?.titleUz ? `Авто: ${auto.titleUz}` : 'Авто нет: узбекское название пустое или на кириллице — сайт покажет русское'}
+          </div>
+        </div>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <label className="ap-label">Цели здоровья</label>
+          <div className="ap-discount-presets" role="group" aria-label="Цели здоровья">
+            {NEEDS.map((n) => (
+              <button
+                key={n.key}
+                type="button"
+                className={`ap-discount-preset ${needs.includes(n.key) ? 'active' : ''}`}
+                aria-pressed={needs.includes(n.key)}
+                onClick={() => toggleNeed(n.key)}
+              >
+                {n.label}
+              </button>
+            ))}
+          </div>
+          <div className="ap-muted-sm ap-field-hint">
+            {needs.length ? 'Выбрано вручную. Снимите все, чтобы вернуть авто. ' : 'Не выбрано — работает авто. '}
+            {auto ? `Авто: ${auto.needs.length ? auto.needs.map(needLabel).join(', ') : 'нет'}` : ''}
+          </div>
+        </div>
+        <div>
+          <label className="ap-label">Вид продукта</label>
+          <select className="ap-input ap-select" value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="">Авто{auto?.kind ? ` (${kindLabel(auto.kind)})` : ''}</option>
+            {KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
+          </select>
         </div>
       </div>
 

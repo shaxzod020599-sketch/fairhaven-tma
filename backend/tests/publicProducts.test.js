@@ -182,3 +182,109 @@ test('a public collection carries only public product fields', async () => {
   body.data.productIds.forEach(assertPublic);
   assert.equal(body.data.productIds[0].name, 'Prenatal Multi');
 });
+
+test('every public product carries the shop-site title, brand and shelves', async () => {
+  const { body } = await get('/api/products');
+  const linked = body.data.find((p) => p._id === ids.linked);
+  assert.equal(linked.title, 'Prenatal Multi');
+  assert.equal(linked.brandName, 'Fairhaven Health');
+  assert.equal(linked.brandSlug, 'fairhaven-health');
+  assert.equal(typeof linked.spec, 'string');
+  assert.ok(Array.isArray(linked.needs));
+  assert.equal(typeof linked.kind, 'string');
+  for (const product of body.data) {
+    for (const key of ['title', 'titleUz', 'spec', 'specUz', 'brandName', 'brandSlug', 'needs', 'kind']) {
+      assert.notEqual(product[key], undefined, `${key} missing on ${product.name}`);
+    }
+  }
+});
+
+test('stored admin overrides win over the computed values', async () => {
+  const custom = await Product.create({
+    name: 'МАГНИЙ ЦИТРАТ 200 МГ ТАБЛ. №60 SOLGAR',
+    brand: 'SOLGAR',
+    price: 90_000,
+    category: 'supplements',
+    displayName: 'Магний цитрат',
+    displayNameUz: 'Magniy sitrat',
+    needs: ['bones'],
+    kind: 'vitamins',
+  });
+  const auto = await Product.create({
+    name: 'МАГНИЙ ЦИТРАТ 400 МГ ТАБЛ. №60 SOLGAR', brand: 'SOLGAR', price: 90_000, category: 'supplements',
+  });
+  try {
+    const one = (await get(`/api/products/${custom._id}`)).body.data;
+    assertPublic(one);
+    assert.deepEqual(
+      { title: one.title, titleUz: one.titleUz, needs: one.needs, kind: one.kind, brandSlug: one.brandSlug },
+      { title: 'Магний цитрат', titleUz: 'Magniy sitrat', needs: ['bones'], kind: 'vitamins', brandSlug: 'solgar' },
+    );
+    const computed = (await get(`/api/products/${auto._id}`)).body.data;
+    assert.equal(computed.kind, 'minerals');
+    assert.ok(computed.needs.includes('sleep'));
+    assert.ok(!/SOLGAR/i.test(computed.title));
+  } finally {
+    await Product.deleteMany({ _id: { $in: [custom._id, auto._id] } });
+  }
+});
+
+test('the taxonomy counts listed products by goal, kind and brand', async () => {
+  require('../controllers/productController')._internal.clearTaxonomyCache();
+  const { status, body } = await get('/api/products/taxonomy');
+  assert.equal(status, 200);
+  assert.equal(body.data.total, 2, 'the unapproved product is not counted');
+  assert.deepEqual(body.data.needs.map((n) => n.key), [
+    'fertility', 'pregnancy', 'women', 'men', 'beauty', 'sleep',
+    'immunity', 'heart', 'digestion', 'metabolism', 'kids', 'bones',
+  ]);
+  assert.deepEqual(body.data.kinds.map((k) => k.key), [
+    'vitamins', 'minerals', 'omega', 'collagen', 'inositol', 'herbal', 'enzymes', 'intimate',
+  ]);
+  assert.equal(body.data.kinds.reduce((sum, k) => sum + k.count, 0), 2);
+  assert.deepEqual(body.data.brands, [{ slug: 'fairhaven-health', name: 'Fairhaven Health', count: 1, country: 'US' }]);
+});
+
+test('limit=500 returns the whole catalogue', async () => {
+  const extra = await Product.insertMany(Array.from({ length: 120 }, (_, i) => ({
+    name: `Bulk ${i}`, price: 1000, category: 'vitamins',
+  })));
+  try {
+    const { body } = await get('/api/products?limit=500');
+    assert.equal(body.data.length, 122);
+  } finally {
+    await Product.deleteMany({ _id: { $in: extra.map((p) => p._id) } });
+  }
+});
+
+test('search treats its text literally', async () => {
+  const bad = await get('/api/products?search=(');
+  assert.equal(bad.status, 200);
+  assert.deepEqual(bad.body.data, []);
+  const dot = await get('/api/products?search=.');
+  assert.deepEqual(dot.body.data, [], 'a dot is not a wildcard');
+});
+
+test('a malformed id is a 404 JSON answer, not a server error', async () => {
+  for (const path of ['/api/products/not-an-id', `/api/public/collections/not-an-id`]) {
+    const res = await get(path);
+    assert.equal(res.status, 404, path);
+    assert.equal(res.body.success, false);
+  }
+});
+
+test('the collection list hides unapproved products and internal fields', async () => {
+  const mixed = await Collection.create({ name: 'Mixed', productIds: [ids.linked, ids.pending] });
+  try {
+    const { status, body } = await get('/api/public/collections');
+    assert.equal(status, 200);
+    const found = body.data.find((c) => String(c._id) === String(mixed._id));
+    assert.deepEqual(found.productIds.map((p) => String(p._id)), [ids.linked]);
+    found.productIds.forEach(assertPublic);
+
+    const one = (await get(`/api/public/collections/${mixed._id}`)).body.data;
+    assert.deepEqual(one.productIds.map((p) => String(p._id)), [ids.linked]);
+  } finally {
+    await Collection.deleteOne({ _id: mixed._id });
+  }
+});

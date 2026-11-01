@@ -6,6 +6,7 @@ const adminAuth = require('../middleware/adminAuth');
 router.get('/', ctrl.getAll);
 router.get('/popular', ctrl.getPopular);
 router.get('/categories', ctrl.getCategories);
+router.get('/taxonomy', ctrl.getTaxonomy);
 router.get('/:id', ctrl.getById);
 router.post('/', adminAuth, ctrl.create);
 router.put('/:id', adminAuth, ctrl.update);

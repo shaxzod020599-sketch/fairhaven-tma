@@ -37,7 +37,7 @@ function escapeHtml(value) {
 
 let shared = null;
 
-/** The site's own ES modules (meta rules, blog posts, life stages), loaded once. */
+/** The site's own ES modules (meta rules, blog posts), loaded once. */
 function loadShared() {
   if (!shared) {
     const load = (file) => import(pathToFileURL(path.join(WEB_SRC, file)).href);
@@ -45,13 +45,11 @@ function loadShared() {
       load('seo/meta.js'),
       load('content/defaults.js'),
       load('content/guides.js'),
-      load('helpers.js'),
     ])
-      .then(([meta, defaults, guides, helpers]) => ({
+      .then(([meta, defaults, guides]) => ({
         meta,
         defaultPosts: defaults.DEFAULT_CONTENT.blog,
         guides: guides.GUIDES,
-        stages: helpers.LIFE_STAGES,
       }))
       .catch((err) => {
         shared = null;
@@ -87,8 +85,10 @@ function injectTemplate(template, head, body = '') {
 function breadcrumbs(meta) {
   const trail = [['Главная', '/']];
   if (/^\/(shop|product)\//.test(meta.path)) trail.push(['Каталог', '/shop']);
-  if (meta.path.startsWith('/learn/')) trail.push(['Блог', '/learn']);
-  trail.push([meta.h1 || meta.title, meta.path]);
+  if (meta.path.startsWith('/brands/')) trail.push(['Бренды', '/brands']);
+  if (meta.path.startsWith('/learn/')) trail.push(['Журнал', '/learn']);
+  // The canonical path, so a legacy URL never ends up in the trail.
+  trail.push([meta.h1 || meta.title, meta.canonical ? meta.canonical.slice(PAGES.origin.length) : meta.path]);
   return {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
@@ -117,17 +117,17 @@ function organization(phone) {
 }
 
 function productData(site, meta, product) {
-  const { cleanText, clip, productImages } = site.meta;
+  const { cleanText, clip, undash, productImages, productTitle, productBrand } = site.meta;
   const images = productImages(PAGES, product);
   const data = {
     '@context': 'https://schema.org',
     '@type': 'Product',
-    name: cleanText(product.name),
-    description: clip(product.description, 5000) || meta.description,
+    name: productTitle(product),
+    description: undash(clip(product.description, 5000)) || meta.description,
     image: images.length ? images : [meta.image],
     url: meta.canonical,
   };
-  if (cleanText(product.brand)) data.brand = { '@type': 'Brand', name: cleanText(product.brand) };
+  if (productBrand(product)) data.brand = { '@type': 'Brand', name: productBrand(product) };
   if (cleanText(product.sku)) data.sku = cleanText(product.sku);
   if (/^(\d{8}|\d{12,14})$/.test(product.barcode || '')) data.gtin = product.barcode;
   if (Number(product.price) > 0) {
@@ -164,8 +164,26 @@ function articleData(meta) {
   };
 }
 
-/** JSON-LD blocks for an indexable page; none for 404s and private pages. */
-function structuredData(site, meta, { product, phone } = {}) {
+/** The products a goal or brand page lists, in the order shown. */
+function itemList(site, products) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    numberOfItems: products.length,
+    itemListElement: products.map((p, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      url: `${PAGES.origin}/product/${p._id}`,
+      name: site.meta.productLabel(p),
+    })),
+  };
+}
+
+/**
+ * JSON-LD blocks for an indexable page; none for 404s and private pages.
+ * `products` is the list of a goal or brand page.
+ */
+function structuredData(site, meta, { product, phone, products } = {}) {
   if (meta.status !== 200 || meta.robots.startsWith('noindex')) return [];
   if (meta.path === '/') {
     return [
@@ -175,10 +193,17 @@ function structuredData(site, meta, { product, phone } = {}) {
   }
   if (meta.type === 'product' && product) return [productData(site, meta, product), breadcrumbs(meta)];
   if (meta.type === 'article') return [articleData(meta), breadcrumbs(meta)];
+  if (products?.length) return [itemList(site, products), breadcrumbs(meta)];
   return [breadcrumbs(meta)];
 }
 
 const link = (href, text) => `<a href="${escapeHtml(href)}">${escapeHtml(text)}</a>`;
+
+function productItem(site, p) {
+  const { productLabel, formatSum } = site.meta;
+  const price = Number(p.price) > 0 ? ` · ${escapeHtml(formatSum(p.price))}` : '';
+  return `<li>${link(`/product/${p._id}`, productLabel(p))}${price}</li>`;
+}
 
 /**
  * Plain HTML of the page for crawlers, rendered inside #root. React replaces
@@ -186,17 +211,21 @@ const link = (href, text) => `<a href="${escapeHtml(href)}">${escapeHtml(text)}<
  * links and prices the app shows.
  */
 function renderSnapshot(site, meta, ctx = {}) {
-  const { cleanText, formatSum, productImages, postCopy } = site.meta;
-  const nav = [['/shop', 'Каталог'], ['/learn', 'Блог'], ['/about', 'О компании'], ['/contact', 'Контакты'], ['/faq', 'Вопросы и ответы']];
+  const { cleanText, formatSum, productImages, productLabel, productBrand, postCopy, itemCount } = site.meta;
+  const nav = [['/shop', 'Каталог'], ['/brands', 'Бренды'], ['/brands/fairhaven-health', 'Fairhaven Health'], ['/learn', 'Журнал'], ['/about', 'О магазине'], ['/contact', 'Контакты'], ['/faq', 'Вопросы и ответы']];
   const main = [`<h1>${escapeHtml(meta.h1 || meta.title)}</h1>`];
 
   if (ctx.product) {
     const p = ctx.product;
     const image = productImages(PAGES, p)[0];
-    if (image) main.push(`<img src="${escapeHtml(image)}" alt="${escapeHtml(cleanText(p.name))}" />`);
+    if (image) main.push(`<img src="${escapeHtml(image)}" alt="${escapeHtml(productLabel(p))}" />`);
+    if (cleanText(p.spec)) main.push(`<p>${escapeHtml(cleanText(p.spec))}</p>`);
     if (Number(p.price) > 0) main.push(`<p>Цена: ${escapeHtml(formatSum(p.price))}</p>`);
     main.push(`<p>${p.isAvailable === false ? 'Нет в наличии' : 'В наличии'}</p>`);
-    if (cleanText(p.brand)) main.push(`<p>Бренд: ${escapeHtml(cleanText(p.brand))}</p>`);
+    if (productBrand(p)) {
+      const brand = p.brandSlug ? link(`/brands/${p.brandSlug}`, productBrand(p)) : escapeHtml(productBrand(p));
+      main.push(`<p>Бренд: ${brand}</p>`);
+    }
     String(p.description || '').split(/\n+/).map(cleanText).filter(Boolean)
       .forEach((para) => main.push(`<p>${escapeHtml(para)}</p>`));
   } else if (ctx.post) {
@@ -207,19 +236,21 @@ function renderSnapshot(site, meta, ctx = {}) {
   }
 
   if (ctx.phone) main.push(`<p>Телефон: ${escapeHtml(ctx.phone)}</p>`);
-  if (ctx.stages?.length) {
-    main.push(`<h2>Подбор по этапу</h2><ul>${ctx.stages.map((s) => `<li>${link(s.path, s.h1)}</li>`).join('')}</ul>`);
+  if (ctx.needs?.length) {
+    const items = ctx.needs.map((n) => `<li>${link(n.path, n.h1)} · ${escapeHtml(itemCount(n.count))}</li>`);
+    main.push(`<h2>Цели здоровья</h2><ul>${items.join('')}</ul>`);
+  }
+  if (ctx.brands?.length) {
+    const items = ctx.brands.map((b) => `<li>${link(`/brands/${b.slug}`, b.name)} · ${escapeHtml(itemCount(b.count))}</li>`);
+    main.push(`<h2>Бренды</h2><ul>${items.join('')}</ul>`);
   }
   if (ctx.products?.length) {
-    const items = ctx.products.map((p) => (
-      `<li>${link(`/product/${p._id}`, cleanText(p.name))}${Number(p.price) > 0 ? ` — ${escapeHtml(formatSum(p.price))}` : ''}</li>`
-    ));
-    main.push(`<h2>Товары</h2><ul>${items.join('')}</ul>`);
+    main.push(`<h2>Товары</h2><ul>${ctx.products.map((p) => productItem(site, p)).join('')}</ul>`);
   }
   if (ctx.posts?.length) {
     const items = ctx.posts.map((post) => {
       const copy = postCopy(post);
-      return `<li>${link(`/learn/${post.slug}`, cleanText(copy.title))}${copy.excerpt ? ` — ${escapeHtml(cleanText(copy.excerpt))}` : ''}</li>`;
+      return `<li>${link(`/learn/${post.slug}`, cleanText(copy.title))}${copy.excerpt ? ` · ${escapeHtml(cleanText(copy.excerpt))}` : ''}</li>`;
     });
     main.push(`<h2>Статьи</h2><ul>${items.join('')}</ul>`);
   }

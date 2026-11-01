@@ -325,6 +325,7 @@ body:has(.ap-shell.embedded) { padding-bottom: 0; }
 
 .ap-muted { color: var(--ink-soft); }
 .ap-muted-sm { color: var(--ink-soft); font-size: 0.78rem; }
+.ap-field-hint { margin-top: 4px; }
 
 .ap-card {
   background: var(--paper-warm);

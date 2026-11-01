@@ -7,6 +7,8 @@ const PromoCode = require('../models/PromoCode');
 const { resolveAdminAny: resolveAdmin } = require('../middleware/adminAuthUnified');
 const { errorLabel, sendError } = require('../utils/http');
 const { withTelegramRetry } = require('../utils/telegramRetry');
+const { autoCatalog } = require('../utils/publicProduct');
+const { NEED_KEYS, KIND_KEYS } = require('../utils/catalog/taxonomy');
 
 // ───────────────────────────────────────────────────────────────────────────
 // whoami — lightweight check frontend uses to decide "admin UI or login?"
@@ -265,7 +267,7 @@ exports.listProducts = async (req, res) => {
       Product.countDocuments(filter),
     ]);
 
-    res.json({ success: true, data: products, meta: { total, page, limit } });
+    res.json({ success: true, data: products.map(withAutoTaxonomy), meta: { total, page, limit } });
   } catch (err) {
     sendError(res, 500, err);
   }
@@ -282,7 +284,7 @@ exports.createProduct = async (req, res) => {
       );
     }
 
-    res.status(201).json({ success: true, data: p });
+    res.status(201).json({ success: true, data: withAutoTaxonomy(p) });
   } catch (err) {
     sendError(res, 400, err);
   }
@@ -350,7 +352,7 @@ exports.updateProduct = async (req, res) => {
       });
     }
 
-    res.json({ success: true, data: p });
+    res.json({ success: true, data: withAutoTaxonomy(p) });
   } catch (err) {
     sendError(res, 400, err);
   }
@@ -398,11 +400,21 @@ exports.toggleProductAvailability = async (req, res) => {
       }
     }
 
-    res.json({ success: true, data: p });
+    res.json({ success: true, data: withAutoTaxonomy(p) });
   } catch (err) {
     sendError(res, 400, err);
   }
 };
+
+// The shop-site values the catalogue would compute on its own, shown in the
+// product form as hints next to the override fields.
+function withAutoTaxonomy(product) {
+  const auto = autoCatalog(product);
+  return {
+    ...(typeof product.toJSON === 'function' ? product.toJSON() : product),
+    autoTaxonomy: { title: auto.title, titleUz: auto.titleUz, needs: auto.needs, kind: auto.kind },
+  };
+}
 
 /* The two fiscal codes, with the shape the tax office expects. Empty is a
    valid answer and means "fall back to the shop-wide default". */
@@ -441,6 +453,27 @@ function sanitizeProductBody(b = {}) {
   }
   if (Array.isArray(out.images)) {
     out.images = out.images.map((s) => String(s || '').trim()).filter(Boolean);
+  }
+
+  // Shop-site overrides. Empty means "use the computed value", so clearing a
+  // field hands it back to the catalogue rules.
+  for (const field of ['displayName', 'displayNameUz']) {
+    if (b[field] === undefined) continue;
+    const value = String(b[field] ?? '').trim().replace(/\s+/g, ' ');
+    if (value.length > 200) throw new Error('Название для сайта: не длиннее 200 символов');
+    out[field] = value;
+  }
+  if (b.needs !== undefined) {
+    const list = Array.isArray(b.needs) ? b.needs : String(b.needs ?? '').split(',');
+    const keys = list.map((k) => String(k || '').trim()).filter(Boolean);
+    const unknown = keys.filter((k) => !NEED_KEYS.includes(k));
+    if (unknown.length) throw new Error(`Цели здоровья: неизвестные значения ${unknown.join(', ')}`);
+    out.needs = NEED_KEYS.filter((k) => keys.includes(k));
+  }
+  if (b.kind !== undefined) {
+    const kind = String(b.kind ?? '').trim();
+    if (kind && !KIND_KEYS.includes(kind)) throw new Error(`Вид продукта: неизвестное значение ${kind}`);
+    out.kind = kind;
   }
   return out;
 }

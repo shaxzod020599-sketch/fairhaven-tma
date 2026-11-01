@@ -113,9 +113,9 @@ exports.status = async (req, res) => {
   }
 };
 
-/** GET /api/web/auth/me — requires webAuth middleware. */
+/** GET /api/web/auth/me — webAuthOptional; data is null for guests. */
 exports.me = async (req, res) => {
-  res.json({ success: true, data: publicUser(req.webUser) });
+  res.json({ success: true, data: req.webUser ? publicUser(req.webUser) : null });
 };
 
 /** POST /api/web/auth/logout */

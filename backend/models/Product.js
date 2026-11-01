@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { NEED_KEYS, KIND_KEYS } = require('../utils/catalog/taxonomy');
 
 /**
  * Per-channel selling configuration.
@@ -95,6 +96,17 @@ const productSchema = new mongoose.Schema({
   sku: { type: String, default: '' },
   barcode: { type: String, default: '' },
   tags: [{ type: String }],
+
+  // ── Shop display (fairhaven.uz) ───────────────────────────────────────────
+  // Empty means "computed from the name" (utils/catalog). `name` itself stays
+  // the Billz name, because integrations match products by it.
+  displayName: { type: String, trim: true, maxlength: 200, default: '' },
+  displayNameUz: { type: String, trim: true, maxlength: 200, default: '' },
+  needs: {
+    type: [{ type: String, enum: NEED_KEYS }],
+    default: [],
+  },
+  kind: { type: String, enum: ['', ...KIND_KEYS], default: '' },
 
   // ── Stock automation ──────────────────────────────────────────────────────
   // A new product stays hidden until an operator approves it. Absent on

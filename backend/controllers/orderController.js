@@ -2,10 +2,31 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const PromoCode = require('../models/PromoCode');
+const Setting = require('../models/Setting');
+const mongoose = require('mongoose');
 const { errorLabel, sendError } = require('../utils/http');
 
+// Fallback for the `free_delivery_threshold` Setting, which the site shows
+// to customers and the admin edits; pricing follows the same value.
 const FREE_DELIVERY_THRESHOLD = 500000;
 const DELIVERY_FEE = 25000;
+
+async function freeDeliveryThreshold() {
+  if (mongoose.connection.readyState !== 1) return FREE_DELIVERY_THRESHOLD;
+  try {
+    const row = await Setting.findOne({ key: 'free_delivery_threshold' }).lean();
+    const value = Number(row?.value);
+    return Number.isFinite(value) && value >= 0 ? value : FREE_DELIVERY_THRESHOLD;
+  } catch (err) {
+    console.warn('[order] free_delivery_threshold unreadable, using default:', errorLabel(err));
+    return FREE_DELIVERY_THRESHOLD;
+  }
+}
+
+async function deliveryFeeFor(subtotal) {
+  if (subtotal === 0) return 0;
+  return subtotal >= await freeDeliveryThreshold() ? 0 : DELIVERY_FEE;
+}
 const MAX_ORDER_ITEMS = 50;
 const MAX_ITEM_QUANTITY = 100;
 
@@ -106,7 +127,7 @@ exports.create = async (req, res) => {
     const discount = promoResult.discount;
     const appliedPromo = promoResult.promo;
 
-    const deliveryFee = subtotal === 0 || subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE;
+    const deliveryFee = await deliveryFeeFor(subtotal);
     const totalAmount = Math.max(0, subtotal - discount + deliveryFee);
 
     const order = await Order.create({
@@ -361,6 +382,7 @@ exports._internal = {
   normalizePhone,
   normalizeText,
   messageForError,
+  deliveryFeeFor,
   FREE_DELIVERY_THRESHOLD,
   DELIVERY_FEE,
 };

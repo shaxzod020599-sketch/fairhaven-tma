@@ -7,8 +7,7 @@ const {
   normalizeItems,
   normalizePhone,
   normalizeText,
-  FREE_DELIVERY_THRESHOLD,
-  DELIVERY_FEE,
+  deliveryFeeFor,
   messageForError,
 } = require('./orderController')._internal;
 
@@ -28,14 +27,22 @@ function normalizeWebLocation(location) {
   return { lat: hasCoords ? lat : 0, lng: hasCoords ? lng : 0, addressString };
 }
 
+/**
+ * Items priced from the database. Returns `{ error }` when the cart cannot be
+ * ordered: `invalid_items` for malformed or out-of-stock items, and
+ * `unavailable_product` (with the ids) for products withdrawn from the shop.
+ */
 async function loadTrustedItems(items) {
   const requested = normalizeItems(items);
-  if (!requested) return null;
+  if (!requested) return { error: 'invalid_items' };
   const productIds = [...new Set(requested.map((item) => item.productId))];
   const products = await Product.find({ _id: { $in: productIds }, isAvailable: true });
+  // Only an explicit false hides a product (utils/publicProduct.js LISTED).
+  const withdrawn = products.filter((p) => p.approved === false).map((p) => p._id.toString());
+  if (withdrawn.length) return { error: 'unavailable_product', productIds: withdrawn };
   const productMap = new Map(products.map((p) => [p._id.toString(), p]));
-  if (productMap.size !== productIds.length) return null;
-  return requested.map((item) => {
+  if (productMap.size !== productIds.length) return { error: 'invalid_items' };
+  const trusted = requested.map((item) => {
     const product = productMap.get(item.productId);
     return {
       productId: product._id,
@@ -44,6 +51,7 @@ async function loadTrustedItems(items) {
       quantity: item.quantity,
     };
   });
+  return { items: trusted };
 }
 
 async function forwardToChannel(req, order) {
@@ -61,10 +69,22 @@ async function forwardToChannel(req, order) {
   }
 }
 
+// Fields a customer may see about their own order. Everything else (operator
+// notes, status history with staff names, claim info, Billz sync state, the
+// access token) stays internal.
+const PUBLIC_ORDER_FIELDS = [
+  '_id', 'items', 'subtotal', 'deliveryFee', 'discount', 'promoCode',
+  'totalAmount', 'status', 'location', 'customerName', 'customerPhone',
+  'email', 'paymentMethod', 'notes', 'source', 'createdAt', 'updatedAt',
+];
+
 function publicOrder(order) {
   const obj = order.toObject ? order.toObject() : order;
-  delete obj.accessToken;
-  return obj;
+  const out = {};
+  for (const key of PUBLIC_ORDER_FIELDS) {
+    if (obj[key] !== undefined) out[key] = obj[key];
+  }
+  return out;
 }
 
 /**
@@ -86,10 +106,20 @@ exports.create = async (req, res) => {
       promoCode,
     } = req.body;
 
-    const trustedItems = await loadTrustedItems(items);
-    if (!trustedItems) {
-      return res.status(400).json({ success: false, error: 'invalid_items' });
+    const loaded = await loadTrustedItems(items);
+    if (loaded.error === 'unavailable_product') {
+      return res.status(400).json({
+        success: false,
+        error: 'unavailable_product',
+        message: 'Некоторых товаров из корзины больше нет в продаже. Удалите их и оформите заказ снова. ' +
+          'Savatdagi baʼzi mahsulotlar endi sotuvda yo‘q. Ularni olib tashlab, qayta buyurtma bering.',
+        productIds: loaded.productIds,
+      });
     }
+    if (loaded.error) {
+      return res.status(400).json({ success: false, error: loaded.error });
+    }
+    const trustedItems = loaded.items;
 
     const safeLocation = normalizeWebLocation(location);
     if (!safeLocation) {
@@ -132,8 +162,7 @@ exports.create = async (req, res) => {
     const discount = promoResult.discount;
     const appliedPromo = promoResult.promo;
 
-    const deliveryFee =
-      subtotal === 0 || subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE;
+    const deliveryFee = await deliveryFeeFor(subtotal);
     const totalAmount = Math.max(0, subtotal - discount + deliveryFee);
 
     const order = await Order.create({

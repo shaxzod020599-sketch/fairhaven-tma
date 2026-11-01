@@ -14,7 +14,8 @@ const { authLimiter, uploadLimiter } = require('../middleware/rateLimit');
 // user is switching to Telegram; the global /api limiter still covers it.
 router.post('/auth/start', authLimiter, webAuthCtrl.start);
 router.get('/auth/status', webAuthCtrl.status);
-router.get('/auth/me', webAuth, webAuthCtrl.me);
+// Guests get 200 with data: null, so every page load does not log a 401.
+router.get('/auth/me', webAuthOptional, webAuthCtrl.me);
 router.post('/auth/logout', webAuthCtrl.logout);
 
 // Site checkout + order lookup
