@@ -1,0 +1,75 @@
+/* Phone menu: full height from the right, the whole width on small phones, big type. */
+.ui-sheet.sh-mm { width: min(480px, 100vw); }
+@media (max-width: 480px) {
+  .ui-sheet.sh-mm { border-radius: 0; }
+}
+.sh-mm .ui-sheet-body { padding-top: 0; padding-bottom: calc(var(--s-8) + var(--safe-bottom)); }
+
+.sh-mm-list { margin: 0; padding: 0; list-style: none; }
+
+.sh-mm-acc { border-top: 0; }
+.sh-mm-acc .ui-acc-button {
+  min-height: 64px;
+  font-size: 26px;
+  font-weight: var(--w-h3);
+  letter-spacing: -0.02em;
+}
+.sh-mm-acc .ui-acc-panel { padding-bottom: var(--s-3); color: var(--fg); }
+
+.sh-mm-sublist { margin: 0; padding: 0; list-style: none; }
+.sh-mm-sublink {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-2);
+  border-radius: 12px;
+  color: var(--fg);
+  font-size: 16px;
+  text-decoration: none;
+}
+.sh-mm-icon { flex: none; color: var(--fg-2); }
+.sh-mm-sublabel { flex: 1; min-width: 0; }
+.sh-mm-count { flex: none; font-size: var(--t-micro); letter-spacing: 0; color: var(--fg-3); }
+
+.sh-mm-link {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 64px;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg);
+  font-size: 26px;
+  font-weight: var(--w-h3);
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+.sh-mm-link--small { font-size: 17px; font-weight: var(--w-strong); letter-spacing: 0; }
+
+@media (hover: hover) {
+  .sh-mm-sublink:hover { background: var(--bg-2); }
+  .sh-mm-link:hover { color: var(--fg-2); }
+}
+
+.sh-mm-contacts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  margin-top: var(--s-6);
+  padding: var(--s-4);
+  border-radius: var(--r-card);
+  background: var(--bg-2);
+}
+.sh-mm-contact {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: var(--tap);
+  margin: 0;
+  color: var(--fg);
+  font-size: 16px;
+  text-decoration: none;
+}
+.sh-mm-contact svg { flex: none; color: var(--fg-2); }
+.sh-mm-hours { color: var(--fg-2); font-size: var(--t-small); }
+.sh-mm-lang { align-self: flex-start; margin-top: var(--s-3); }

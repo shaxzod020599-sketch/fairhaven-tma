@@ -1,11 +1,14 @@
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
-/** Scroll to top on route change — standard SPA UX. */
+/**
+ * Jumps to the top on every new path, before paint, so the incoming page (and its view-transition
+ * snapshot) never shows the previous scroll position. Query-only changes (filters) keep the scroll.
+ */
 export default function ScrollToTop() {
   const { pathname } = useLocation();
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
   }, [pathname]);
   return null;
 }

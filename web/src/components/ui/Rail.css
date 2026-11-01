@@ -1,0 +1,53 @@
+/* Rail: a snapping horizontal row that bleeds to the screen edge on phones. */
+.ui-rail {
+  position: relative;
+  display: grid;
+  gap: var(--s-4);
+}
+.ui-rail-track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: var(--rail-item);
+  gap: var(--s-5);
+  margin: 0 calc(var(--gutter) * -1);
+  padding: var(--s-2) var(--gutter) var(--s-4);
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: var(--gutter);
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.ui-rail-track::-webkit-scrollbar { display: none; }
+.ui-rail-track:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  border-radius: var(--r-well);
+}
+.ui-rail-item {
+  min-width: 0;
+  scroll-snap-align: start;
+}
+/* While a mouse drags, snapping would fight the hand; it comes back on release. */
+.ui-rail-track.is-dragging {
+  scroll-snap-type: none;
+  cursor: grabbing;
+  user-select: none;
+}
+.ui-rail-track.is-dragging a { pointer-events: none; }
+
+.ui-rail-arrows {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  order: -1;
+}
+.ui-rail-arrows .ui-iconbtn:disabled { opacity: .35; cursor: default; }
+/* Touch screens swipe; arrows are for mouse users. */
+@media (hover: none) {
+  .ui-rail-arrows { display: none; }
+}
+@media (min-width: 1024px) {
+  .ui-rail-track { gap: var(--s-6); }
+}

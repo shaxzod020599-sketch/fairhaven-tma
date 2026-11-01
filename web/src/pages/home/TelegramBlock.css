@@ -1,0 +1,79 @@
+.hm-tg-card {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  align-items: end;
+  gap: var(--s-10);
+  padding: clamp(var(--s-8), 5vw, var(--s-16));
+  overflow: hidden;
+  border-radius: var(--r-sheet);
+  color: var(--stage-fg);
+}
+
+/* The hero's sun, set in the top-right corner, clear of the text and the sun-coloured button. */
+.hm-tg-sun {
+  position: absolute;
+  top: calc(-0.62 * clamp(320px, 38vw, 560px));
+  right: -6%;
+  z-index: -1;
+  width: clamp(320px, 38vw, 560px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, var(--sun) 0 58%, rgba(255, 201, 60, 0.28) 59%, transparent 70%);
+  box-shadow: 0 0 120px 40px var(--sun-glow);
+  opacity: 0.9;
+}
+
+.hm-tg-title {
+  max-width: 16ch;
+  margin: 0;
+  text-wrap: balance;
+}
+.hm-tg-text {
+  max-width: 52ch;
+  margin: var(--s-5) 0 0;
+  color: var(--stage-fg-2);
+  font-size: 17px;
+  line-height: var(--lh-body);
+}
+.hm-tg-text strong { color: var(--stage-fg); font-weight: var(--w-strong); }
+
+.hm-tg-facts {
+  display: grid;
+  gap: var(--s-3);
+  margin: var(--s-6) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--stage-fg-2);
+}
+.hm-tg-facts li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.hm-tg-facts svg { flex: none; color: var(--sun); }
+.hm-tg-phone {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  margin-block: calc((var(--tap) - 1.5em) / -2);
+  margin-left: 0.3em;
+  color: var(--stage-fg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.hm-tg-phone:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 6px; }
+
+.hm-tg-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--s-3);
+}
+
+@media (max-width: 899px) {
+  .hm-tg-card { grid-template-columns: minmax(0, 1fr); gap: var(--s-8); padding-top: 112px; }
+  .hm-tg-actions { align-items: stretch; }
+  .hm-tg-sun { top: -160px; right: -48px; width: 240px; }
+}

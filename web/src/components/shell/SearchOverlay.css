@@ -1,0 +1,275 @@
+/* Search overlay: a sheet from the top on wide screens, the whole screen on phones. */
+.sh-search-root {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sheet);
+}
+.sh-search-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(11, 12, 15, .5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.sh-search {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  max-height: min(86dvh, 820px);
+  padding-top: var(--safe-top);
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: 0 0 var(--r-sheet) var(--r-sheet);
+  box-shadow: var(--shadow-3);
+  outline: none;
+}
+
+.sh-search-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding-block: var(--s-5);
+  border-bottom: 1px solid var(--line);
+}
+.sh-search-field {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.sh-search-glass {
+  position: absolute;
+  left: var(--s-5);
+  color: var(--fg-3);
+  pointer-events: none;
+}
+.sh-search-input {
+  width: 100%;
+  height: 60px;
+  padding: 0 96px 0 56px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--bg-2);
+  color: var(--fg);
+  font: inherit;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  outline: none;
+  transition: border-color var(--d-hover) var(--ease-out), background-color var(--d-hover) var(--ease-out);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.sh-search-input::-webkit-search-cancel-button { display: none; }
+.sh-search-input::placeholder { color: var(--fg-3); }
+.sh-search-input:focus-visible {
+  border-color: var(--fg);
+  background: var(--bg);
+  box-shadow: var(--focus-ring);
+}
+.sh-search-clear {
+  position: absolute;
+  right: var(--s-2);
+  min-height: var(--tap);
+  padding: 0 var(--s-4);
+  border-radius: var(--r-pill);
+  color: var(--fg-2);
+  font-size: var(--t-small);
+}
+.sh-search-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0 var(--s-3);
+  border-radius: var(--r-pill);
+  color: var(--fg);
+}
+.sh-search-esc {
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: var(--t-micro);
+  color: var(--fg-3);
+}
+@media (hover: hover) {
+  .sh-search-clear:hover { color: var(--fg); background: var(--bg-3); }
+  .sh-search-close:hover { background: var(--bg-2); }
+}
+
+.sh-search-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-block: var(--s-6) var(--s-8);
+}
+
+/* Results: products on the left, brands and goals on the right. */
+.sh-search-results {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: var(--s-4) var(--s-10);
+}
+.sh-search-results.is-empty { display: none; }
+.sh-search-group--products { grid-row: span 2; }
+.sh-search-group--all { grid-column: 1 / -1; }
+.sh-search-side { display: flex; flex-direction: column; gap: var(--s-6); }
+.sh-search-group { min-width: 0; }
+.sh-search-gtitle {
+  margin: 0 0 var(--s-2);
+  padding-inline: var(--s-3);
+  font-size: var(--t-micro);
+  font-weight: var(--w-micro);
+  letter-spacing: var(--ls-micro);
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.sh-search-gcount { color: var(--fg-2); }
+.sh-search-rows,
+.sh-search-recent,
+.sh-search-chips { margin: 0; padding: 0; list-style: none; }
+
+.sh-search-option {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background-color var(--d-hover) var(--ease-out);
+}
+.sh-search-option.is-active { background: var(--bg-2); box-shadow: inset 0 0 0 1px var(--line); }
+.sh-search-option--product { min-height: 72px; }
+.sh-search-option--all {
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding-inline: var(--s-5);
+  font-weight: var(--w-strong);
+}
+.sh-search-thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: var(--bg-2);
+  overflow: hidden;
+}
+.sh-search-thumb img { width: 86%; height: 86%; object-fit: contain; mix-blend-mode: multiply; }
+.sh-search-ptext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sh-search-brand {
+  font-size: var(--t-micro);
+  letter-spacing: var(--ls-micro);
+  text-transform: uppercase;
+  color: var(--fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sh-search-ptitle {
+  font-size: var(--t-small);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sh-search-price { flex: none; text-align: right; }
+.sh-search-label { flex: 1; min-width: 0; font-size: var(--t-small); }
+.sh-search-icon { flex: none; color: var(--fg-2); }
+.sh-search-count { flex: none; font-size: var(--t-micro); letter-spacing: 0; color: var(--fg-3); }
+
+/* Idle state: recent searches, goal chips, all brands */
+.sh-search-idle { display: flex; flex-direction: column; gap: var(--s-6); }
+.sh-search-section { display: flex; flex-direction: column; }
+.sh-search-recent li { display: flex; align-items: center; }
+.sh-search-recent-q {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: var(--tap);
+  padding: 0 var(--s-3);
+  border-radius: 12px;
+  color: var(--fg);
+  text-align: left;
+  font-size: var(--t-small);
+}
+.sh-search-recent-q svg { flex: none; color: var(--fg-3); }
+.sh-search-recent-q span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sh-search-recent-x {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: var(--r-pill);
+  color: var(--fg-3);
+}
+.sh-search-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.sh-search-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  padding: 0 var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  color: var(--fg);
+  font-size: var(--t-small);
+  text-decoration: none;
+  transition: background-color var(--d-hover) var(--ease-out), border-color var(--d-hover) var(--ease-out);
+}
+.sh-search-chip svg { color: var(--fg-2); }
+.sh-search-more {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  padding: 0 var(--s-3);
+  border-radius: var(--r-pill);
+  color: var(--fg);
+  font-weight: var(--w-strong);
+  text-decoration: none;
+}
+@media (hover: hover) {
+  .sh-search-recent-q:hover,
+  .sh-search-more:hover { background: var(--bg-2); }
+  .sh-search-recent-x:hover { color: var(--fg); background: var(--bg-2); }
+  .sh-search-chip:hover { background: var(--bg-2); border-color: var(--fg-3); }
+}
+
+/* Nothing found */
+.sh-search-none { display: flex; flex-direction: column; gap: var(--s-3); max-width: 760px; }
+.sh-search-none-title { margin: 0; font-size: var(--t-h3); font-weight: var(--w-h3); line-height: var(--lh-h3); }
+.sh-search-none-text { margin: 0 0 var(--s-2); color: var(--fg-2); }
+.sh-search-none-links { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-2); }
+
+@media (max-width: 860px) {
+  .sh-search-results { grid-template-columns: minmax(0, 1fr); }
+  .sh-search-group--products { grid-row: auto; }
+}
+
+/* Phones: the whole screen, a calmer field. */
+@media (max-width: 720px) {
+  .sh-search {
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+  }
+  .sh-search-head { padding-block: var(--s-3); gap: var(--s-1); }
+  .sh-search-input { height: 52px; font-size: 17px; padding: 0 76px 0 48px; }
+  .sh-search-glass { left: var(--s-4); }
+  .sh-search-esc { display: none; }
+  .sh-search-body { padding-bottom: calc(var(--s-8) + var(--safe-bottom)); }
+  .sh-search-option--product { min-height: 64px; }
+  .sh-search-thumb { width: 48px; height: 48px; }
+}

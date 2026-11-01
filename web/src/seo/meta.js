@@ -47,14 +47,36 @@ function decode(value) {
   }
 }
 
-/** `{ kind: 'product' | 'post' | 'page', path, param }` for a URL path. */
+/** `{ kind: 'product' | 'post' | 'need' | 'brand' | 'page', path, param }` for a URL path. */
 export function matchRoute(pathname) {
   const path = normalizePath(pathname);
   const product = path.match(/^\/product\/([^/]+)$/);
   if (product) return { kind: 'product', path, param: decode(product[1]) };
   const post = path.match(/^\/learn\/([^/]+)$/);
   if (post) return { kind: 'post', path, param: decode(post[1]) };
+  const need = path.match(/^\/shop\/([^/]+)$/);
+  if (need) return { kind: 'need', path, param: decode(need[1]) };
+  const brand = path.match(/^\/brands\/([^/]+)$/);
+  if (brand) return { kind: 'brand', path, param: decode(brand[1]) };
   return { kind: 'page', path };
+}
+
+/**
+ * The need key a /shop/<slug> URL shows, or ''. Old life-stage slugs
+ * (`pregnant`, `fertility-women`…) map to a need; their URL is no longer
+ * canonical, so the server answers 301 and the app navigates with replace.
+ */
+export function needForSlug(cfg, slug) {
+  if (cfg.needs[slug]) return slug;
+  return cfg.legacyStages[slug] || '';
+}
+
+/** `/shop/<need>` when `pathname` is an old life-stage URL, else ''. */
+export function legacyRedirect(cfg, pathname) {
+  const route = matchRoute(pathname);
+  if (route.kind !== 'need' || cfg.needs[route.param]) return '';
+  const need = cfg.legacyStages[route.param];
+  return need ? `/shop/${need}` : '';
 }
 
 /** The noindex prefix a path falls under (`/order/123` → `/order`), if any. */
@@ -63,11 +85,60 @@ export function privatePrefix(cfg, pathname) {
   return Object.keys(cfg.noindex).find((prefix) => path === prefix || path.startsWith(`${prefix}/`)) || '';
 }
 
-/** "FertilAid for Women, Fairhaven Health" — the brand only when the name lacks it. */
-export function productLabel(product) {
-  const name = cleanText(product?.name);
-  const brand = cleanText(product?.brand);
-  return brand && !name.toLowerCase().includes(brand.toLowerCase()) ? `${name}, ${brand}` : name;
+/**
+ * Em and en dashes are not used in FairHaven copy. Product and post texts
+ * come from people, so titles and descriptions are cleaned of them: a range
+ * keeps a hyphen ("1–3" → "1-3"), any other dash becomes a comma.
+ */
+export function undash(value) {
+  return String(value ?? '')
+    .replace(/(\d)\s*[–—]\s*(?=\d)/g, '$1-')
+    .replace(/\s*[–—]+\s*/g, ', ')
+    .replace(/,\s*([,.:;!?])/g, '$1')
+    .replace(/^,\s*|,\s*$/g, '')
+    .trim();
+}
+
+/** Display title from the API (`title`), else the raw name. */
+export function productTitle(product) {
+  return cleanText(product?.title) || cleanText(product?.name);
+}
+
+/** Canonical brand from the API (`brandName`), else the raw field. */
+export function productBrand(product) {
+  return cleanText(product?.brandName) || cleanText(product?.brand);
+}
+
+/** "Магний глицинат · Natural Factors": the brand only when the title lacks it. */
+export function productLabel(product, separator = ' · ') {
+  const title = productTitle(product);
+  const brand = productBrand(product);
+  return brand && !title.toLowerCase().includes(brand.toLowerCase()) ? `${title}${separator}${brand}` : title;
+}
+
+/** "1 товар", "24 товара", "106 товаров". */
+export function itemCount(count) {
+  const n = Math.abs(Math.trunc(Number(count) || 0));
+  const tens = n % 100;
+  const ones = n % 10;
+  const word = tens >= 11 && tens <= 14 ? 'товаров'
+    : ones === 1 ? 'товар'
+    : ones >= 2 && ones <= 4 ? 'товара'
+    : 'товаров';
+  return `${n} ${word}`;
+}
+
+const hasCount = (count) => Number.isInteger(count) && count >= 0;
+
+/** Whole sentences, in order, while they fit a search snippet (~200 chars). */
+function sentences(parts, max = 200) {
+  let text = '';
+  for (const part of parts.filter(Boolean)) {
+    const next = text ? `${text} ${part}` : part;
+    if (text && next.length > max) break;
+    text = next;
+  }
+  return text;
 }
 
 export function productImages(cfg, product) {
@@ -82,12 +153,25 @@ export function postCopy(post) {
   return post?.ru || {};
 }
 
+const withSite = (cfg, text) => `${text} | ${cfg.siteName}`;
+
+/** Same `meta` with dash-free title and description. */
+function tidy(meta) {
+  return { ...meta, title: undash(meta.title), description: undash(meta.description) };
+}
+
 /**
  * Everything the head needs for `pathname`. `data` carries what the page
- * loaded: `{ product }`, `{ post }`, `{ empty: true }` for a life-stage page
- * without products, or `{ notFound: true }`.
+ * loaded: `{ product }`, `{ post }`, `{ need, count }` for /shop/<need>,
+ * `{ brand: { slug, name, count } }` for /brands/<slug>, or
+ * `{ notFound: true }`. `{ empty: true }` (or `count: 0`) keeps a goal page
+ * without products out of the index.
  */
 export function buildMeta(cfg, pathname, data = {}) {
+  return tidy(rawMeta(cfg, pathname, data || {}));
+}
+
+function rawMeta(cfg, pathname, data) {
   const route = matchRoute(pathname);
   const home = cfg.pages['/'];
   const base = {
@@ -116,14 +200,13 @@ export function buildMeta(cfg, pathname, data = {}) {
   if (route.kind === 'product') {
     const { product } = data;
     if (!product) return missing;
-    const label = productLabel(product);
-    const price = Number(product.price) > 0 ? ` — ${formatSum(product.price)}` : '';
+    const price = Number(product.price) > 0 ? `, ${formatSum(product.price)}` : '';
     return {
       ...base,
       type: 'product',
-      title: `${label} — ${cfg.product.titleTail}`,
-      h1: cleanText(product.name),
-      description: clip(`${label}${price}. ${cleanText(product.description)} ${cfg.product.descriptionTail}`),
+      title: withSite(cfg, productLabel(product)),
+      h1: productTitle(product),
+      description: clip(undash(`${productLabel(product, ', ')}${price}. ${cleanText(product.description)} ${cfg.product.descriptionTail}`)),
       image: productImages(cfg, product)[0] || base.image,
     };
   }
@@ -134,9 +217,43 @@ export function buildMeta(cfg, pathname, data = {}) {
     return {
       ...base,
       type: 'article',
-      title: `${cleanText(copy.title)} — ${cfg.post.titleTail}`,
+      title: withSite(cfg, cleanText(copy.title)),
       h1: cleanText(copy.title),
-      description: clip(copy.excerpt || copy.body?.[0]),
+      description: clip(undash(copy.excerpt || copy.body?.[0])),
+    };
+  }
+
+  if (route.kind === 'need') {
+    const need = needForSlug(cfg, route.param);
+    if (!need) return missing;
+    const copy = cfg.needs[need];
+    const count = hasCount(data.count) ? data.count : null;
+    return {
+      ...base,
+      canonical: `${cfg.origin}/shop/${need}`,
+      title: withSite(cfg, count ? `${copy.h1}: ${itemCount(count)}` : copy.h1),
+      h1: copy.h1,
+      description: sentences([copy.description, count ? `В подборке ${itemCount(count)}.` : '', cfg.listTail]),
+      robots: data.empty || count === 0 ? NOINDEX_FOLLOW : INDEX,
+    };
+  }
+
+  if (route.kind === 'brand') {
+    const brand = data.brand;
+    const name = cleanText(brand?.name);
+    const count = hasCount(brand?.count) ? brand.count : null;
+    // A brand without products on sale has no page.
+    if (!name || count === 0) return missing;
+    const slug = cleanText(brand.slug) || route.param;
+    const fill = (text) => text.replace(/\{name\}/g, name);
+    const lead = cfg.brand.overrides[slug]?.description || fill(cfg.brand.description);
+    const heading = fill(cfg.brand.heading);
+    return {
+      ...base,
+      canonical: `${cfg.origin}/brands/${encodeURIComponent(slug)}`,
+      title: withSite(cfg, count ? `${heading}: ${itemCount(count)}` : heading),
+      h1: name,
+      description: sentences([lead, count ? `В каталоге ${itemCount(count)}.` : '', cfg.listTail]),
     };
   }
 

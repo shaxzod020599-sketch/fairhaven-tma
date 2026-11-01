@@ -1,0 +1,61 @@
+/* Delivery card: free-delivery meter with the rising sun, then three short facts. */
+.pdp-dc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-5);
+  border-radius: var(--r-well);
+  background: var(--bg-2);
+}
+
+.pdp-dc-free { display: flex; flex-direction: column; gap: var(--s-3); }
+.pdp-dc-free-text { font-size: var(--t-small); font-weight: var(--w-strong); }
+
+/* The bar fills toward the threshold; the sun rides its tip and rises over the line when delivery is free. */
+.pdp-dc-meter {
+  position: relative;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--bg-3);
+  container-type: inline-size;
+}
+.pdp-dc-meter-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--sun);
+  transform: scaleX(var(--fill, 0));
+  transform-origin: left center;
+  transition: transform var(--d-reveal) var(--ease-out);
+}
+.pdp-dc-sun {
+  --size: 14px;
+  position: absolute;
+  top: calc(50% - var(--size) / 2);
+  left: calc(var(--size) / -2);
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, var(--sun), var(--sun-600));
+  box-shadow: 0 0 0 3px var(--bg-2), 0 0 14px var(--sun-glow);
+  /* cqw is the bar's width, so the sun sits exactly at the tip of the fill */
+  translate: calc(var(--fill, 0) * 100cqw) 0;
+  transition: translate var(--d-reveal) var(--ease-out), transform var(--d-reveal) var(--ease-out);
+}
+.pdp-dc-sun.is-up { transform: translateY(-6px) scale(1.15); }
+
+.pdp-dc-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  list-style: none;
+  font-size: var(--t-small);
+  color: var(--fg-2);
+}
+.pdp-dc-list li {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: var(--s-3);
+  align-items: start;
+}
+.pdp-dc-list svg { color: var(--fg); margin-top: 1px; }

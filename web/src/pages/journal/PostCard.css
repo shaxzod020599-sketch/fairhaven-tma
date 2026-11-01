@@ -1,0 +1,185 @@
+/* Journal cards and covers (.jr-). The title link is stretched over the card. */
+.jr-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  min-width: 0;
+}
+
+/* Cover: sun rising over a horizon, packshots on white plinths standing on the horizon line. */
+.jr-cover {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--r-card);
+  overflow: hidden;
+  isolation: isolate;
+  background: radial-gradient(120% 90% at 50% 70%, var(--bg) 0%, var(--bg-2) 60%);
+  --ground: var(--bg-2);
+  --horizon: var(--line);
+}
+.jr-cover--stage {
+  background: radial-gradient(110% 90% at 50% 72%, var(--stage-800) 0%, var(--stage-950) 70%);
+  --ground: var(--stage-950);
+  --horizon: rgba(245, 246, 248, .18);
+}
+.jr-cover-art {
+  position: absolute;
+  inset: 0;
+  transition: transform var(--d-reveal) var(--ease-out);
+}
+.jr-cover-sun {
+  position: absolute;
+  left: 50%;
+  bottom: 36%;
+  width: 44%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  transform: translate(-50%, 50%);
+  background: radial-gradient(circle at 50% 35%, var(--sun) 0%, var(--sun-600) 100%);
+  box-shadow: 0 0 80px 10px var(--sun-glow);
+}
+.jr-cover-ground {
+  position: absolute;
+  inset: 64% 0 0;
+  background: var(--ground);
+  border-top: 1px solid var(--horizon);
+}
+.jr-cover-shots {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  width: 70%;
+  height: 62%;
+  transform: translateX(-50%);
+}
+.jr-shot {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 34%;
+  aspect-ratio: 4 / 5;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-well);
+  background: #fff;
+  box-shadow: var(--shadow-2);
+  transform: translateX(-50%);
+  transition: transform var(--d-reveal) var(--ease-out);
+}
+.jr-shot img {
+  width: 84%;
+  height: 84%;
+  object-fit: contain;
+}
+/* Fan: the first shot stands in front, the others lean behind it. */
+.jr-cover-shots--2 .jr-shot:nth-child(1),
+.jr-cover-shots--3 .jr-shot:nth-child(1) { z-index: 2; }
+.jr-cover-shots--3 .jr-shot:nth-child(2),
+.jr-cover-shots--2 .jr-shot:nth-child(2) { transform: translateX(-112%) translateY(-6%) rotate(-7deg) scale(.86); }
+.jr-cover-shots--3 .jr-shot:nth-child(3) { transform: translateX(12%) translateY(-6%) rotate(7deg) scale(.86); }
+
+.jr-cover-video {
+  position: absolute;
+  top: var(--s-3);
+  left: var(--s-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--r-pill);
+  background: var(--fg);
+  color: var(--bg);
+  font-size: var(--t-micro);
+}
+
+@media (hover: hover) {
+  .jr-card:hover .jr-cover-art { transform: scale(1.04); }
+  .jr-card:hover .jr-cover-shots--3 .jr-shot:nth-child(2),
+  .jr-card:hover .jr-cover-shots--2 .jr-shot:nth-child(2) { transform: translateX(-124%) translateY(-8%) rotate(-10deg) scale(.86); }
+  .jr-card:hover .jr-cover-shots--3 .jr-shot:nth-child(3) { transform: translateX(24%) translateY(-8%) rotate(10deg) scale(.86); }
+  .jr-card:hover .jr-card-link { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+}
+
+.jr-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.jr-card-tag { color: var(--fg-2); }
+.jr-card-title {
+  font-size: var(--t-h3);
+  font-weight: var(--w-h3);
+  line-height: 1.22;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.jr-card-link { color: inherit; text-decoration: none; }
+.jr-card-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-card);
+}
+.jr-card-link:focus-visible { outline: none; }
+.jr-card-link:focus-visible::after {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+.jr-card-excerpt {
+  color: var(--fg-2);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.jr-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-4);
+  color: var(--fg-3);
+}
+.jr-card-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg);
+  font-weight: var(--w-strong);
+}
+
+/* Feature: the big story at the top of /learn. */
+.jr-card--feature .jr-cover { aspect-ratio: 4 / 3; }
+.jr-card--feature .jr-card-title {
+  font-size: var(--t-h2);
+  font-weight: var(--w-display);
+  letter-spacing: var(--ls-display);
+  line-height: 1.04;
+}
+.jr-card--feature .jr-card-excerpt { font-size: 17px; -webkit-line-clamp: 4; }
+@media (min-width: 1024px) {
+  .jr-card--feature {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    align-items: center;
+    gap: var(--s-12);
+  }
+  .jr-card--feature .jr-card-body { gap: var(--s-4); }
+}
+
+/* Row: small square cover beside the title. */
+.jr-card--row {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--s-4);
+}
+.jr-card--row .jr-cover {
+  flex: 0 0 auto;
+  width: clamp(96px, 26vw, 136px);
+  aspect-ratio: 1;
+  border-radius: var(--r-well);
+}
+.jr-card--row .jr-cover-shots { width: 92%; height: 70%; }
+.jr-card--row .jr-cover-video { display: none; }
+.jr-card--row .jr-card-title { font-size: 17px; line-height: 1.3; }

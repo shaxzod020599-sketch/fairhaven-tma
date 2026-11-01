@@ -1,0 +1,58 @@
+.bx-letters {
+  position: sticky;
+  top: var(--bx-top, var(--header-h));
+  z-index: calc(var(--z-header) - 1);
+  margin-inline: calc(-1 * var(--gutter));
+  padding: var(--s-2) var(--gutter);
+  background: rgba(255, 255, 255, .9);
+  -webkit-backdrop-filter: saturate(1.6) blur(14px);
+  backdrop-filter: saturate(1.6) blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+.bx-letters-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  margin: 0;
+  padding: 2px;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.bx-letters-row::-webkit-scrollbar { display: none; }
+.bx-letters-row li { flex: none; }
+
+.bx-letter {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: var(--tap);
+  height: var(--tap);
+  border-radius: var(--r-pill);
+  font-weight: var(--w-strong);
+  font-size: 15px;
+  color: var(--fg);
+  text-decoration: none;
+  isolation: isolate;
+}
+/* Inactive letters are not targets, so they can be narrower than 44 px. */
+.bx-letter.is-off {
+  min-width: 26px;
+  color: var(--fg-3);
+  opacity: .45;
+  font-weight: var(--w-body);
+}
+.bx-letter-text { position: relative; z-index: 1; }
+.bx-letter-mark {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--sun);
+}
+.bx-letter.is-active { color: var(--on-sun); }
+.bx-letter:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media (hover: hover) {
+  .bx-letter:not(.is-off):not(.is-active):hover { background: var(--bg-3); }
+}

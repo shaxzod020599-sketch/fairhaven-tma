@@ -1,0 +1,152 @@
+.bx-tile {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: var(--s-6);
+  min-height: 236px;
+  height: 100%;
+  padding: var(--s-6);
+  border-radius: var(--r-card);
+  background: var(--bg-2);
+  color: var(--fg);
+  text-decoration: none;
+  overflow: hidden;
+  isolation: isolate;
+  transition: background-color var(--d-hover) var(--ease-out), transform var(--d-ui) var(--ease-out);
+}
+/* The sun rises behind the packshots on hover: the one accent, as a light. */
+.bx-tile::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  right: -12%;
+  bottom: -46%;
+  width: 72%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--sun) 0%, var(--sun-glow) 42%, transparent 70%);
+  opacity: 0;
+  transform: translateY(18%) scale(.9);
+  transition: opacity var(--d-reveal) var(--ease-out), transform var(--d-reveal) var(--ease-out);
+}
+.bx-tile:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.bx-tile:focus-visible::before { opacity: .55; transform: none; }
+@media (hover: hover) {
+  .bx-tile:hover { background: var(--bg-3); }
+  .bx-tile:hover::before { opacity: .55; transform: none; }
+  .bx-tile:hover .bx-tile-arrow { transform: translate(3px, -3px); color: var(--fg); }
+}
+.bx-tile:active { transform: scale(.99); }
+
+.bx-tile-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-3);
+  min-width: 0;
+  padding-right: var(--s-8);
+}
+.bx-tile-name {
+  margin: 0;
+  font-size: clamp(26px, 2.4vw, 36px);
+  font-weight: var(--w-display);
+  line-height: 1;
+  letter-spacing: var(--ls-display);
+  overflow-wrap: anywhere;
+}
+.bx-tile-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--fg-3);
+}
+.bx-tile-badge {
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: var(--sun);
+  color: var(--on-sun);
+}
+.bx-tile-fan { justify-self: end; }
+.bx-tile-arrow {
+  position: absolute;
+  top: var(--s-6);
+  right: var(--s-6);
+  color: var(--fg-3);
+  transition: transform var(--d-hover) var(--ease-out), color var(--d-hover) var(--ease-out);
+}
+
+/* Rails: narrower, the fan sits beside the meta. */
+.bx-tile--compact {
+  min-height: 188px;
+  padding: var(--s-5);
+  background: var(--bg);
+}
+.bx-tile--compact .bx-tile-name { font-size: 24px; }
+@media (hover: hover) {
+  .bx-tile--compact:hover { background: var(--bg); box-shadow: var(--shadow-2); }
+}
+
+/* Index (/brands): a dense card, big name over a row of packshots at full size, no white plinths.
+   Phones: one light row per brand, name on the left and the shots on the right. */
+.bx-tile--index {
+  --shot: 80px;
+  grid-template-rows: auto auto;
+  align-content: space-between;
+  gap: var(--s-5);
+  min-height: 0;
+  padding: var(--s-5);
+}
+.bx-tile--index .bx-tile-name { font-size: clamp(24px, 2vw, 30px); }
+.bx-tile--index .bx-tile-arrow { top: var(--s-5); right: var(--s-5); }
+
+.bx-strip {
+  display: flex;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.bx-shot {
+  flex: none;
+  width: var(--shot);
+  aspect-ratio: 1;
+  /* Many shop photos sit on a cream mat with a thin frame; the zoom below pushes it out of this clip. */
+  overflow: hidden;
+  border-radius: 10px;
+}
+.bx-shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* The white ground left inside the mat melts into the tile colour. The moving part is the image itself:
+     a transform on the clip would isolate it and stop the blend. */
+  mix-blend-mode: multiply;
+  transform: scale(1.14);
+  transition: transform var(--d-ui) var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 45ms);
+}
+@media (hover: hover) {
+  .bx-tile--index:hover .bx-shot img { transform: scale(1.24); }
+}
+.bx-tile--index:focus-visible .bx-shot img { transform: scale(1.24); }
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .bx-tile--index { --shot: 76px; }
+}
+@media (max-width: 767px) {
+  .bx-tile--index {
+    --shot: 64px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: none;
+    align-items: center;
+    gap: var(--s-3);
+    padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4);
+    border-radius: var(--r-well);
+  }
+  .bx-tile--index .bx-tile-text { gap: var(--s-1); padding-right: 0; }
+  .bx-tile--index .bx-tile-name { font-size: 22px; }
+  .bx-tile--index .bx-tile-arrow { display: none; }
+  .bx-tile--index .bx-strip { gap: var(--s-1); }
+}
+@media (max-width: 459px) {
+  .bx-tile--index .bx-shot:nth-child(3) { display: none; }
+}

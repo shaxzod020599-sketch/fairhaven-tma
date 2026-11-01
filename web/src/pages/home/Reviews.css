@@ -1,0 +1,25 @@
+.hm-rv-quote {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--s-6);
+  height: 100%;
+  margin: 0;
+  padding: var(--s-8);
+  border-radius: var(--r-card);
+  background: var(--bg);
+}
+.hm-rv-text {
+  margin: 0;
+  font-size: 18px;
+  line-height: var(--lh-body);
+}
+.hm-rv-text::before { content: '«'; }
+.hm-rv-text::after { content: '»'; }
+.hm-rv-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hm-rv-name { font-weight: var(--w-strong); }
+.hm-rv-city { color: var(--fg-3); }

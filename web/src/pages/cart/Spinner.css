@@ -1,0 +1,16 @@
+.crt-spinner {
+  display: inline-block;
+  flex: none;
+  width: var(--spin-size, 18px);
+  height: var(--spin-size, 18px);
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: crt-spin .8s linear infinite;
+}
+@keyframes crt-spin { to { transform: rotate(360deg); } }
+/* Reduced motion: a slow pulse instead of a spin, so "busy" is still visible. */
+@media (prefers-reduced-motion: reduce) {
+  .crt-spinner { animation: crt-spin-calm 1.6s ease-in-out infinite alternate; border-right-color: currentColor; }
+  @keyframes crt-spin-calm { from { opacity: 1; } to { opacity: .35; } }
+}

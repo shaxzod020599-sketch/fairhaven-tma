@@ -1,0 +1,119 @@
+/* /contact (.ct-): title, channel cards beside the Telegram form, useful links. */
+.ct-page { padding-bottom: var(--section); }
+.ct-head { display: grid; gap: var(--s-4); padding-block: var(--s-6) var(--s-10); }
+.ct-title {
+  font-size: var(--t-hero);
+  font-weight: var(--w-display);
+  letter-spacing: var(--ls-display);
+  line-height: .98;
+}
+.ct-lead { max-width: 52ch; font-size: 17px; }
+
+.ct-layout { display: grid; gap: var(--s-8); align-items: start; }
+@media (min-width: 1024px) {
+  .ct-layout { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: var(--s-12); }
+}
+
+.ct-channels { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-3); }
+.ct-channel {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-height: 88px;
+  padding: var(--s-5) var(--s-6);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  color: var(--fg);
+  text-decoration: none;
+  transition: background-color var(--d-hover) var(--ease-out), border-color var(--d-hover) var(--ease-out);
+}
+.ct-channel-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--sun-100);
+}
+.ct-channel--tg .ct-channel-icon { background: var(--sun); color: var(--on-sun); }
+.ct-channel-body { display: grid; gap: var(--s-1); min-width: 0; flex: 1; }
+.ct-channel-label { color: var(--fg-3); font-size: var(--t-micro); }
+.ct-channel-value { font-size: clamp(18px, 1.8vw, 22px); font-weight: var(--w-strong); overflow-wrap: anywhere; }
+.ct-channel-arrow { flex: none; color: var(--fg-3); transition: transform var(--d-hover) var(--ease-out); }
+@media (hover: hover) {
+  a.ct-channel:hover { background: var(--bg-2); border-color: var(--fg-3); }
+  a.ct-channel:hover .ct-channel-arrow { transform: translateX(3px); color: var(--fg); }
+}
+a.ct-channel:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ct-channel--hours { background: var(--bg-2); border-color: transparent; }
+
+.ct-form {
+  display: grid;
+  gap: var(--s-4);
+  padding: var(--s-6);
+  border-radius: var(--r-card);
+  background: var(--bg-2);
+}
+@media (min-width: 768px) {
+  .ct-form { padding: var(--s-10); }
+}
+.ct-form-title { font-size: var(--t-h2); font-weight: var(--w-display); letter-spacing: var(--ls-display); line-height: 1.05; }
+.ct-form-note { margin-top: calc(-1 * var(--s-2)); }
+.ct-field { display: grid; gap: var(--s-2); }
+.ct-field-label { font-size: var(--t-small); font-weight: var(--w-strong); }
+.ct-field input,
+.ct-field textarea {
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 0 var(--s-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  font-size: 16px;
+  transition: border-color var(--d-hover) var(--ease-out), box-shadow var(--d-hover) var(--ease-out);
+}
+.ct-field textarea {
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--r-well);
+  resize: vertical;
+  min-height: 132px;
+  line-height: 1.5;
+}
+.ct-field input:hover,
+.ct-field textarea:hover { border-color: var(--fg-3); }
+.ct-field input:focus-visible,
+.ct-field textarea:focus-visible { outline: none; border-color: var(--fg); box-shadow: 0 0 0 3px var(--sun-100), 0 0 0 1px var(--fg); }
+.ct-form-status:empty { display: none; }
+.ct-form-status { padding: var(--s-3) var(--s-4); border-radius: var(--r-well); background: var(--sun-100); font-size: var(--t-small); }
+
+.ct-useful { margin-top: var(--s-16); }
+.ct-useful-title { color: var(--fg-3); font-size: var(--t-micro); }
+.ct-useful ul {
+  list-style: none;
+  margin: var(--s-4) 0 0;
+  padding: 0;
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+.ct-useful li { border-bottom: 1px solid var(--line); }
+.ct-useful-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  min-height: 72px;
+  color: var(--fg);
+  font-size: clamp(20px, 2.4vw, 32px);
+  font-weight: var(--w-strong);
+  letter-spacing: -.01em;
+  text-decoration: none;
+}
+.ct-useful-link svg { flex: none; transition: transform var(--d-hover) var(--ease-out); }
+@media (hover: hover) {
+  .ct-useful-link:hover svg { transform: translateX(6px); }
+}
+.ct-useful-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (min-width: 768px) {
+  .ct-useful ul { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 var(--s-6); }
+}

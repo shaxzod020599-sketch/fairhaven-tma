@@ -1,0 +1,102 @@
+.hm-bw {
+  position: relative;
+  overflow: clip;
+}
+
+.hm-bw-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-6);
+}
+.hm-bw-title {
+  margin: 0;
+  color: var(--stage-fg);
+}
+.hm-bw-stat { white-space: nowrap; }
+.hm-bw-num { color: var(--sun); }
+.hm-bw-sep {
+  margin-inline: 0.35em;
+  color: var(--stage-fg-2);
+}
+
+.hm-bw-rows {
+  display: grid;
+  gap: var(--s-2);
+  margin-top: clamp(var(--s-8), 5vw, var(--s-12));
+}
+.hm-bw-rows.is-pointing { cursor: pointer; }
+
+.hm-bw-name {
+  display: block;
+  padding: 0.04em 0.08em;
+  border-radius: var(--r-well);
+  color: var(--stage-fg);
+  font-size: clamp(44px, 8vw, 132px);
+  font-weight: var(--w-display);
+  line-height: 1.04;
+  letter-spacing: var(--ls-display);
+  white-space: nowrap;
+  text-decoration: none;
+  transition: color var(--d-hover) var(--ease-out), -webkit-text-stroke-color var(--d-hover) var(--ease-out);
+}
+/* Every other name is drawn as an outline, so the wall reads as rhythm rather than a list. */
+.hm-bw-name--line {
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--stage-fg-2);
+}
+.hm-bw-name.is-on {
+  color: var(--sun);
+  -webkit-text-stroke-color: var(--sun);
+}
+.hm-bw-name:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  color: var(--sun);
+  -webkit-text-stroke-color: var(--sun);
+}
+@media (hover: hover) {
+  .hm-bw-name:hover {
+    color: var(--sun);
+    -webkit-text-stroke-color: var(--sun);
+  }
+}
+
+/* Packshots that trail the cursor; never catch the pointer themselves. */
+.hm-bw-follow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.hm-bw-trio {
+  position: absolute;
+  top: -60px;
+  left: 88px;
+  width: 96px;
+}
+.hm-bw-shot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 96px;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+.hm-bw-shot:nth-child(2) { z-index: 1; }
+.hm-bw-shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 10%;
+  object-fit: contain;
+}
+
+@media (max-width: 599px) {
+  .hm-bw-name--line { -webkit-text-stroke-width: 1px; }
+}

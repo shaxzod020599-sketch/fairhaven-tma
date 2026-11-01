@@ -1,0 +1,214 @@
+/* Fairhaven Health keeps its own palette in this one sheet: the plum and rose of its original site. */
+.hm-ps-sheet {
+  --fh-plum: #973961;
+  --fh-plum-deep: #6e2547;
+  --fh-plum-night: #3f1428;
+  --fh-rose: #e9c5d4;
+  --fh-rose-text: #f6dfe8; /* small text on plum stays above 4.5:1 */
+  --focus: #fff;
+  --focus-ring: 0 0 0 2px var(--fh-plum-night), 0 0 0 4px #fff;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  align-items: center;
+  gap: var(--s-10) var(--s-12);
+  padding: clamp(32px, 4.4vw, 64px);
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: var(--r-sheet);
+  color: #fff;
+  background:
+    radial-gradient(70% 90% at 100% 0%, rgba(233, 197, 212, 0.16), transparent 60%),
+    linear-gradient(140deg, var(--fh-plum) 0%, var(--fh-plum-deep) 52%, var(--fh-plum-night) 100%);
+}
+
+.hm-ps-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 520px;
+}
+.hm-ps-logo {
+  display: block;
+  width: auto;
+  height: 26px;
+  margin: 0 0 var(--s-5);
+  filter: brightness(0) invert(1); /* the wordmark file is dark ink */
+}
+.hm-ps-title {
+  margin: 0;
+  color: #fff;
+  text-wrap: balance;
+}
+.hm-ps-facts {
+  display: grid;
+  gap: var(--s-2);
+  margin: var(--s-6) 0 var(--s-8);
+  padding: 0;
+  list-style: none;
+}
+.hm-ps-facts li {
+  position: relative;
+  padding-left: var(--s-5);
+  color: rgba(255, 255, 255, 0.84);
+  font-size: var(--t-small);
+  line-height: var(--lh-small);
+}
+.hm-ps-facts li::before {
+  content: '';
+  position: absolute;
+  top: 0.5em;
+  left: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fh-rose);
+}
+.hm-ps-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--control-h);
+  padding: 0 var(--s-6);
+  border-radius: var(--r-pill);
+  background: #fff;
+  color: var(--fh-plum);
+  font-weight: var(--w-strong);
+  text-decoration: none;
+  transition: background-color var(--d-hover) var(--ease-out), transform var(--d-hover) var(--ease-out);
+}
+.hm-ps-cta svg { transition: transform var(--d-ui) var(--ease-out); }
+.hm-ps-cta:hover { background: var(--fh-rose-text); }
+.hm-ps-cta:hover svg { transform: translateX(4px); }
+.hm-ps-cta:active { transform: scale(0.98); }
+.hm-ps-cta:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* The bottles stand on a lit floor. Captions hang below each bottle, inside the row's bottom padding, so the
+   floor line sits exactly at the bottles' base. */
+.hm-ps-stage {
+  position: relative;
+  align-self: end;
+}
+.hm-ps-stage::before {
+  content: '';
+  position: absolute;
+  inset: -12% 8% 18%;
+  background: radial-gradient(closest-side, rgba(246, 223, 232, 0.16), transparent);
+  pointer-events: none;
+}
+.hm-ps-floor {
+  position: absolute;
+  right: 2%;
+  bottom: 44px;
+  left: 2%;
+  height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(246, 223, 232, 0.5), rgba(233, 197, 212, 0.16) 62%, transparent);
+  filter: blur(6px);
+  pointer-events: none;
+}
+.hm-ps-line {
+  --hm-ps-h: clamp(190px, 17vw, 250px);
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(10px, 1.6vw, 24px);
+  margin: 0;
+  padding: 0 0 72px;
+  list-style: none;
+}
+.hm-ps-bottle {
+  position: relative;
+  flex: 0 0 auto;
+}
+.hm-ps-bottle-link {
+  position: relative;
+  display: block;
+  border-radius: var(--r-well);
+  color: inherit;
+  text-decoration: none;
+}
+.hm-ps-bottle-link:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* No glare on a cut-out bottle, so nothing to clip; the lift uses `translate` to stay clear of the tilt. */
+.hm-ps-bottle .hm-ps-bottle-tilt {
+  overflow: visible;
+  transition: translate var(--d-ui) var(--ease-out);
+}
+.hm-ps-bottle-link:hover .hm-ps-bottle-tilt,
+.hm-ps-bottle-link:focus-visible .hm-ps-bottle-tilt { translate: 0 -10px; }
+.hm-ps-bottle-img {
+  display: block;
+  width: auto;
+  height: var(--hm-ps-h);
+  filter: drop-shadow(0 16px 18px rgba(40, 6, 22, 0.45));
+}
+.hm-ps-bottle-stage,
+.hm-ps-bottle-name {
+  position: absolute;
+  right: 0;
+  left: 0;
+  text-align: center;
+}
+.hm-ps-bottle-stage {
+  top: calc(100% + 14px);
+  color: var(--fh-rose-text);
+  font-size: var(--t-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.hm-ps-bottle-name {
+  top: calc(100% + 34px);
+  display: -webkit-box;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+@media (max-width: 1023px) {
+  .hm-ps-sheet {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-8);
+  }
+  .hm-ps-copy { max-width: 640px; }
+  .hm-ps-line { --hm-ps-h: clamp(150px, 26vw, 210px); }
+}
+
+/* Phones: the row scrolls sideways and runs to the sheet's edges. */
+@media (max-width: 639px) {
+  .hm-ps-sheet {
+    padding: var(--s-8) var(--s-5) var(--s-6);
+    border-radius: var(--r-card);
+  }
+  .hm-ps-copy { align-items: stretch; }
+  .hm-ps-logo { align-self: flex-start; }
+  .hm-ps-cta {
+    justify-content: center;
+    padding: 0 var(--s-5);
+    white-space: nowrap;
+  }
+  .hm-ps-stage { margin-inline: calc(-1 * var(--s-5)); }
+  .hm-ps-line {
+    --hm-ps-h: 168px;
+    justify-content: flex-start;
+    padding-inline: var(--s-5);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: var(--s-5);
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .hm-ps-line::-webkit-scrollbar { display: none; }
+  .hm-ps-bottle { scroll-snap-align: start; }
+  .hm-ps-bottle-link { margin-top: var(--s-3); } /* room for the focus ring inside the scroller */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hm-ps-bottle .hm-ps-bottle-tilt,
+  .hm-ps-cta,
+  .hm-ps-cta svg { transition: none; }
+}

@@ -1,0 +1,312 @@
+/* Admin panel (/admin). Everything AdminPanel.jsx needs, scoped under .ap-page so the shop's own
+   .btn and .page-title styles never depend on it. */
+.ap-page { padding-block: var(--s-8) 72px; }
+
+.ap-page .page-title {
+  font-size: var(--t-h2);
+  font-weight: var(--w-display);
+  line-height: var(--lh-display);
+  letter-spacing: var(--ls-display);
+}
+
+.ap-page .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: var(--control-h-sm);
+  padding: 0 var(--s-6);
+  border-radius: var(--r-pill);
+  border: 1px solid transparent;
+  font-weight: var(--w-strong);
+  font-size: var(--t-small);
+  white-space: nowrap;
+  transition: background-color var(--d-hover) var(--ease-out), border-color var(--d-hover) var(--ease-out),
+    transform var(--d-hover) var(--ease-out);
+}
+.ap-page .btn:active:not(:disabled) { transform: scale(.98); }
+.ap-page .btn:disabled { opacity: .45; }
+.ap-page .btn-primary { background: var(--fg); color: var(--bg); }
+.ap-page .btn-primary:hover:not(:disabled) { background: var(--fg-2); }
+.ap-page .btn-outline { background: var(--bg); border-color: var(--line); color: var(--fg); }
+.ap-page .btn-outline:hover:not(:disabled) { border-color: var(--fg); }
+
+.ap-topbar-actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.ap-state { font-size: 13px; color: var(--fg-3); }
+.ap-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+  margin: var(--s-2) 0 22px;
+}
+.ap-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 26px;
+  align-items: start;
+}
+.ap-nav {
+  position: sticky;
+  top: calc(var(--header-h) + 20px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-well);
+  padding: 10px;
+}
+.ap-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: var(--tap);
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: var(--t-small);
+  color: var(--fg);
+  text-align: left;
+  transition: background-color var(--d-hover) var(--ease-out);
+}
+.ap-nav-item:hover { background: var(--bg-2); }
+.ap-nav-item.active { background: var(--sun-100); font-weight: var(--w-strong); }
+.ap-nav-icon { flex: none; color: var(--fg-2); }
+.ap-nav-chev { margin-left: auto; color: var(--fg-3); }
+.ap-nav-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--fg-3);
+  border-top: 1px dashed var(--line);
+  line-height: var(--lh-small);
+}
+
+.ap-editor {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: 22px;
+  min-height: 400px;
+}
+.ap-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.ap-field span { font-size: 13px; color: var(--fg-3); }
+.ap-field input,
+.ap-field textarea {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 11px 12px;
+  font-size: 15px;
+  background: var(--bg);
+}
+.ap-field input { min-height: var(--tap); }
+.ap-field textarea { resize: vertical; line-height: 1.55; }
+.ap-field input:focus-visible,
+.ap-field textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.ap-field input::placeholder,
+.ap-field textarea::placeholder { color: var(--fg-3); }
+.ap-field .ap-field-hint { font-size: 13px; color: var(--fg-3); line-height: var(--lh-small); }
+.ap-row2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--s-3); }
+.ap-row3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--s-3); }
+.ap-subhead { margin: 22px 0 10px; font-size: 17px; font-weight: var(--w-h3); letter-spacing: -0.01em; line-height: 1.3; }
+
+.ap-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-well);
+  padding: var(--s-4);
+  margin-bottom: var(--s-4);
+  background: var(--bg-2);
+}
+.ap-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: var(--s-3);
+}
+.ap-card-tools { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+.ap-mini,
+.ap-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--tap);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  border-radius: var(--r-pill);
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: var(--w-strong);
+  transition: border-color var(--d-hover) var(--ease-out), color var(--d-hover) var(--ease-out);
+}
+.ap-icon { width: var(--tap); padding: 0; }
+.ap-mini:hover:not(:disabled),
+.ap-icon:hover:not(:disabled) { border-color: var(--fg); }
+.ap-mini:disabled,
+.ap-icon:disabled { opacity: .35; }
+.ap-danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+.ap-card-num { font-size: var(--t-small); }
+.ap-list,
+.ap-trust { list-style: none; margin: 0; padding: 0; }
+.ap-trust .ap-card-num { display: block; margin-bottom: var(--s-3); }
+
+.ap-langtabs { display: flex; gap: var(--s-2); margin-bottom: 18px; }
+.ap-langtabs button {
+  min-height: var(--tap);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  border-radius: var(--r-pill);
+  padding: 0 22px;
+  font-weight: var(--w-strong);
+}
+.ap-langtabs button.active { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+
+.ap-hint { color: var(--fg-3); font-size: var(--t-small); margin: 0 0 var(--s-4); line-height: 1.55; }
+.ap-hint code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--bg-2);
+  color: var(--fg);
+}
+.ap-hint-inline { margin: 0; }
+.ap-note {
+  margin: 0 0 var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-well);
+  background: var(--sun-100);
+  font-size: var(--t-small);
+  font-weight: var(--w-strong);
+}
+
+.ap-editor-title { margin: 0 0 var(--s-4); font-size: var(--t-h3); font-weight: var(--w-h3); line-height: 1.2; }
+.ap-editor > .btn { margin-top: var(--s-2); }
+.ap-editor .ap-list + .btn,
+.ap-editor .ap-trust + .btn { margin-top: 0; }
+
+/* Hero preview: a small slice of the dark stage, so the owner sees the headline the way the page sets it. */
+.ap-preview {
+  margin: var(--s-2) 0 var(--s-4);
+  padding: var(--s-5);
+  border-radius: var(--r-well);
+  background: var(--stage-950);
+  color: var(--stage-fg);
+}
+.ap-preview-label {
+  display: block;
+  margin-bottom: var(--s-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--stage-fg-2);
+}
+.ap-preview-title {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 36px);
+  font-weight: var(--w-display);
+  line-height: var(--lh-display);
+  letter-spacing: var(--ls-display);
+  overflow-wrap: anywhere;
+}
+.ap-preview-sub { margin: var(--s-3) 0 0; color: var(--stage-fg-2); font-size: var(--t-small); }
+
+/* Showcase: chosen products in order, then catalogue search results, then the automatic pick. */
+.ap-sc-status {
+  margin-bottom: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-well);
+  background: var(--bg-2);
+  font-size: var(--t-small);
+}
+.ap-sc-status.is-manual { background: var(--sun-100); font-weight: var(--w-strong); }
+.ap-sc-list,
+.ap-sc-results { list-style: none; margin: 0 0 var(--s-4); padding: 0; display: grid; gap: var(--s-2); }
+.ap-sc-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-well);
+  background: var(--bg);
+}
+.ap-sc-row.has-problem { border-color: var(--danger); }
+.ap-sc-row > .ap-card-tools,
+.ap-sc-add { margin-left: auto; }
+.ap-sc-pos {
+  flex: none;
+  width: 24px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-3);
+}
+.ap-sc-thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: var(--bg-2);
+  font-size: 11px;
+  color: var(--fg-3);
+  text-align: center;
+  overflow: hidden;
+}
+.ap-sc-thumb img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
+.ap-sc-meta { display: flex; flex-direction: column; gap: 2px; flex: 1 1 200px; min-width: 0; }
+.ap-sc-title { font-size: 15px; font-weight: var(--w-strong); line-height: 1.3; overflow-wrap: anywhere; }
+.ap-sc-sub { font-size: 13px; color: var(--fg-3); }
+.ap-sc-problem { font-size: 13px; color: var(--danger); }
+.ap-sc-input { position: relative; display: flex; align-items: center; }
+.ap-sc-input svg { position: absolute; left: 14px; color: var(--fg-3); pointer-events: none; }
+.ap-sc-input input { flex: 1; padding-left: 42px; border-radius: var(--r-pill); }
+.ap-sc-auto {
+  list-style: none;
+  margin: 0 0 var(--s-4);
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: var(--s-3);
+}
+.ap-sc-auto li { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-3); text-align: center; }
+.ap-sc-auto .ap-sc-thumb { width: 72px; height: 72px; }
+
+.ap-video-row { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3); }
+.ap-video-preview {
+  width: 120px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--stage-950);
+}
+.ap-progress {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--bg-3);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.ap-progress span { display: block; height: 100%; background: var(--sun-600); }
+
+.ap-gate { text-align: center; padding-top: 40px; }
+.ap-gate p { color: var(--fg-2); margin: var(--s-3) 0 22px; }
+
+@media (max-width: 900px) {
+  .ap-layout { grid-template-columns: 1fr; }
+  .ap-nav { position: static; flex-direction: row; overflow-x: auto; }
+  .ap-nav-item { white-space: nowrap; }
+  .ap-nav-chev, .ap-nav-note { display: none; }
+}
+@media (max-width: 599px) {
+  .ap-editor { padding: var(--s-4); }
+  .ap-sc-row > .ap-card-tools,
+  .ap-sc-add { margin-left: 0; }
+}

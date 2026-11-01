@@ -1,0 +1,117 @@
+/* Product gallery: one lit well, thumbnails under it. Sticky beside the buy box from 1024px. */
+.pdp-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .pdp-gallery {
+    position: sticky;
+    top: calc(var(--header-h) + var(--s-6));
+  }
+}
+
+.pdp-well {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--r-card);
+  background: var(--bg-2);
+}
+/* Soft light from above, as if the packshot stood on a lit shelf. */
+.pdp-well::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 55% at 50% 38%, rgba(255, 255, 255, .95), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(40% 18% at 50% 88%, rgba(15, 17, 21, .07), rgba(15, 17, 21, 0) 80%);
+}
+.pdp-well--empty {
+  display: grid;
+  place-items: center;
+}
+.pdp-noimage { position: relative; color: var(--fg-3); }
+
+.pdp-well-btn {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  cursor: zoom-in;
+  touch-action: pan-y;
+}
+.pdp-well-btn:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--focus);
+}
+.pdp-well-img {
+  width: 78%;
+  height: 78%;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+  user-select: none;
+  animation: pdp-photo-in var(--d-ui) var(--ease-out);
+}
+@keyframes pdp-photo-in {
+  from { opacity: .35; transform: scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+.pdp-well-zoom {
+  position: absolute;
+  right: var(--s-4);
+  bottom: var(--s-4);
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  color: var(--fg);
+  box-shadow: var(--shadow-1);
+  transition: transform var(--d-hover) var(--ease-out);
+}
+@media (hover: hover) {
+  .pdp-well-btn:hover .pdp-well-zoom { transform: scale(1.08); }
+}
+
+.pdp-thumbs {
+  display: flex;
+  gap: var(--s-2);
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 3px;
+  margin: -3px;
+}
+.pdp-thumbs::-webkit-scrollbar { display: none; }
+.pdp-thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--r-well);
+  background: var(--bg-2);
+  border: 1px solid transparent;
+  transition: border-color var(--d-hover) var(--ease-out), transform var(--d-hover) var(--ease-out);
+}
+.pdp-thumb img {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+.pdp-thumb[aria-current='true'] { border-color: var(--fg); }
+.pdp-thumb:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media (hover: hover) {
+  .pdp-thumb:hover { transform: translateY(-2px); }
+}
+@media (min-width: 1024px) {
+  .pdp-thumb { width: 84px; height: 84px; }
+}

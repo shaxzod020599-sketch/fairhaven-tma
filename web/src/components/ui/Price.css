@@ -1,0 +1,29 @@
+/* Price */
+.ui-price {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-1) var(--s-2);
+}
+.ui-price-now { font-size: 16px; }
+.ui-price-old {
+  color: var(--fg-3);
+  font-size: 13px;
+  white-space: nowrap;
+  text-decoration-thickness: 1px;
+}
+.ui-price-off {
+  align-self: center;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: var(--sun);
+  color: var(--on-sun);
+  font-size: 12px;
+  font-weight: var(--w-price);
+  line-height: 1.2;
+}
+.ui-price--sm .ui-price-now { font-size: 15px; }
+.ui-price--lg .ui-price-now { font-size: clamp(24px, 2.4vw, 32px); letter-spacing: -0.02em; }
+.ui-price--lg .ui-price-old { font-size: 16px; }
+.ui-price--lg .ui-price-off { font-size: 14px; padding: 4px 10px; }
+.stage .ui-price-old { color: var(--stage-fg-2); }

@@ -1,0 +1,82 @@
+/* Catalogue page frame: head, goal rail, sidebar + results, empty state, filter sheet footer. */
+.shop { padding-bottom: var(--s-16); }
+.shop-head { padding-top: var(--s-6); }
+
+.shop-intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2) var(--s-4);
+  margin-bottom: var(--s-6);
+}
+.shop-intro-title { margin: 0; }
+.shop-intro-count { margin: 0; color: var(--fg-3); }
+
+.shop-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-8);
+  padding-top: var(--s-6);
+}
+@media (min-width: 1024px) {
+  .shop-body { grid-template-columns: 264px minmax(0, 1fr); }
+}
+
+.shop-side {
+  position: sticky;
+  top: calc(var(--header-h) + 76px);
+  align-self: start;
+  max-height: calc(100dvh - var(--header-h) - 96px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px var(--s-3) var(--s-6) 2px;
+  scrollbar-width: thin;
+}
+.shop-side-title {
+  margin: 0 0 var(--s-4);
+  font-size: var(--t-h3);
+  font-weight: var(--w-strong);
+}
+
+.shop-results { min-width: 0; }
+/* Search and toolbar share a row when both fit, otherwise each takes a full row; active filters always below. */
+.shop-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-6);
+}
+.shop-controls > .shop-search { flex: 1 1 300px; width: auto; min-width: 0; }
+.shop-controls > .shop-toolbar { flex: 1 1 480px; }
+.shop-controls > :not(.shop-search):not(.shop-toolbar) { flex-basis: 100%; }
+
+.shop-empty-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-6);
+}
+.shop-empty-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-3);
+}
+.shop-empty-goals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-2);
+  max-width: 720px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.shop-empty-goals .ui-chip { text-decoration: none; }
+
+.shop-sheet-foot {
+  display: flex;
+  gap: var(--s-3);
+}
+.shop-sheet-foot > :last-child { flex: 1; }

@@ -1,0 +1,53 @@
+/* Search inside the catalogue: a pill field on the grey well. */
+.shop-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.shop-search-icon {
+  position: absolute;
+  left: var(--s-4);
+  color: var(--fg-3);
+  pointer-events: none;
+}
+.shop-search-input {
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 0 calc(var(--tap) + var(--s-2)) 0 calc(var(--s-4) + 20px + var(--s-3));
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  background: var(--bg-2);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--t-body);
+  transition: border-color var(--d-hover) var(--ease-out), background-color var(--d-hover) var(--ease-out);
+}
+.shop-search-input::placeholder { color: var(--fg-3); }
+.shop-search-input::-webkit-search-cancel-button { display: none; }
+@media (hover: hover) {
+  .shop-search-input:hover { background: var(--bg-3); }
+}
+.shop-search-input:focus-visible {
+  outline: none;
+  border-color: var(--fg);
+  background: var(--bg);
+  box-shadow: var(--focus-ring);
+}
+.shop-search-clear {
+  position: absolute;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-2);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .shop-search-clear:hover { background: var(--bg-3); color: var(--fg); }
+}
+.shop-search-clear:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }

@@ -1,0 +1,141 @@
+/* /brands/:slug: the brand name huge on the stage with its packshots over a rising sun, then its products. */
+
+.bd-hero {
+  position: relative;
+  overflow: hidden;
+  padding-top: calc(var(--header-overlap) + var(--s-8));
+  padding-bottom: clamp(40px, 6vw, 88px);
+}
+.bd-hero .breadcrumbs ol,
+.bd-hero .breadcrumbs a { color: var(--stage-fg-2); }
+
+.bd-hero-grid {
+  display: grid;
+  gap: var(--s-8);
+  align-items: end;
+}
+@media (min-width: 1024px) {
+  .bd-hero-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, .75fr); gap: var(--s-12); }
+}
+.bd-hero-copy {
+  display: grid;
+  justify-items: start;
+  gap: var(--s-5);
+  min-width: 0;
+}
+
+.bd-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 6px 14px 6px 10px;
+  border-radius: var(--r-pill);
+  background: var(--sun);
+  color: var(--on-sun);
+  font-size: var(--t-small);
+  font-weight: var(--w-strong);
+  transform-origin: 0 50%;
+}
+
+.bd-title {
+  margin: 0;
+  max-width: 100%;
+  font-size: clamp(52px, 9vw, 148px);
+  font-weight: var(--w-display);
+  line-height: .92;
+  letter-spacing: -0.045em;
+  color: var(--stage-fg);
+}
+.bx-kinetic-word { display: inline-block; white-space: nowrap; }
+.bx-kinetic-char { display: inline-block; transform-origin: 0 100%; }
+
+.bd-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-5);
+  min-height: 20px;
+  margin: 0;
+  color: var(--stage-fg-2);
+}
+.bd-lead {
+  margin: 0;
+  max-width: 40ch;
+  font-size: clamp(17px, 1.5vw, 20px);
+  line-height: 1.5;
+  color: var(--stage-fg-2);
+}
+.bd-hero-cta { margin-top: var(--s-2); }
+
+/* The art: packshots stand on the horizon while the sun rises behind them. */
+.bd-art {
+  position: relative;
+  display: grid;
+  place-items: end center;
+  min-height: clamp(240px, 30vw, 400px);
+  overflow: hidden;
+  isolation: isolate;
+}
+.bd-sun {
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  bottom: -32%;
+  width: min(86%, 400px);
+  aspect-ratio: 1;
+  margin-left: calc(min(86%, 400px) / -2);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, var(--sun) 0%, var(--sun-600) 60%, rgba(245, 180, 0, 0) 72%);
+  box-shadow: 0 0 120px 24px var(--sun-glow);
+}
+.bd-horizon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 201, 60, .7), transparent);
+}
+.bd-fan { margin-bottom: var(--s-8); }
+
+/* ---------- Fairhaven Health facts ---------- */
+.bd-facts {
+  padding-block: var(--section);
+  border-top: 1px solid var(--stage-800);
+}
+.bd-facts-grid {
+  display: grid;
+  gap: var(--s-8);
+}
+@media (min-width: 1024px) {
+  .bd-facts-grid { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: var(--s-16); }
+}
+.bd-facts-head h2 { margin: 0 0 var(--s-4); }
+.bd-facts-lead { margin: 0; max-width: 32ch; color: var(--stage-fg-2); font-size: clamp(17px, 1.5vw, 20px); }
+.bd-facts-list { margin: 0; padding: 0; list-style: none; }
+.bd-fact {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: var(--s-4);
+  align-items: baseline;
+  padding-block: var(--s-5);
+  border-bottom: 1px solid var(--stage-800);
+}
+.bd-fact:first-child { border-top: 1px solid var(--stage-800); }
+.bd-fact-num { color: var(--sun); }
+.bd-fact-text {
+  font-size: clamp(18px, 1.7vw, 22px);
+  line-height: 1.4;
+  font-weight: var(--w-h3);
+  color: var(--stage-fg);
+}
+
+/* ---------- products ---------- */
+.bd-products { scroll-margin-top: var(--header-h); }
+.bd-chips {
+  display: grid;
+  gap: var(--s-3);
+  margin-bottom: var(--s-8);
+  min-width: 0;
+}

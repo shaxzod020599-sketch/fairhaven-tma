@@ -1,182 +1,125 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AnimatePresence, m } from 'motion/react';
+import { AnimatePresence, m, useReducedMotion } from 'motion/react';
 import { useI18n } from '../i18n/index.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { fetchMyOrders } from '../api.js';
-import { formatPrice } from '../helpers.js';
+import { formatSum } from '../catalog/index.js';
+import { EASE_OUT } from '../motion/index.js';
+import { Button, EmptyState, Skeleton } from '../components/ui/index.js';
 import Breadcrumbs from '../components/Breadcrumbs.jsx';
-import { User as UserIcon } from '../components/Icons.jsx';
+import { ChevronDown, ChevronRight, Package, Phone, Shield, User } from '../components/Icons.jsx';
 import { useSeo } from '../seo/useSeo.js';
+import TelegramLogin from './account/TelegramLogin.jsx';
+import OrderDetails from './cart/OrderDetails.jsx';
+import './account/Account.css';
 
-const STATUS_KEYS = {
-  pending: 'statusPending',
-  confirmed: 'statusConfirmed',
-  preparing: 'statusConfirmed',
-  delivering: 'statusConfirmed',
-  delivered: 'statusDelivered',
-  cancelled: 'statusCancelled',
-};
+const STATUSES = ['pending', 'confirmed', 'preparing', 'delivering', 'delivered', 'cancelled', 'returned'];
 
-function PlaneArt({ waiting }) {
+function OrderCard({ order }) {
+  const { t, tf, lang } = useI18n();
+  const reduce = useReducedMotion();
+  const [open, setOpen] = useState(false);
+  const status = STATUSES.includes(order.status) ? order.status : 'pending';
+  const panelId = `acc-order-${order._id}`;
+  const date = order.createdAt
+    ? new Date(order.createdAt).toLocaleDateString(lang === 'uz' ? 'uz-Latn-UZ' : 'ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
+
   return (
-    <m.div
-      className="tg-login-art"
-      aria-hidden="true"
-      animate={waiting ? { scale: [1, 1.04, 1] } : { scale: 1 }}
-      transition={waiting ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : {}}
-    >
-      <svg viewBox="0 0 240 240" width="96" height="96">
-        <circle cx="120" cy="120" r="120" fill="#973961" opacity="0.08" />
-        <m.circle
-          cx="120" cy="120" r="88" fill="#973961" opacity="0.12"
-          animate={waiting ? { opacity: [0.12, 0.22, 0.12] } : { opacity: 0.12 }}
-          transition={waiting ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : {}}
-        />
-        <m.path
-          d="M53 117l124-48c6-2 11 1 9 10l-21 99c-2 7-6 9-12 6l-32-24-16 15c-2 2-3 3-6 3l2-33 61-55c3-2-1-4-4-2l-76 48-33-10c-7-2-7-7 4-9z"
-          fill="#973961"
-          animate={waiting ? { x: [0, 5, 0], y: [0, -4, 0] } : { x: 0, y: 0 }}
-          transition={waiting ? { duration: 2.4, repeat: Infinity, ease: 'easeInOut' } : {}}
-        />
-      </svg>
-    </m.div>
+    <article className={`acc-order${open ? ' is-open' : ''}`}>
+      <header className="acc-order-head">
+        <div className="acc-order-id">
+          <h3 className="acc-order-no">{tf('account.orderNo', { n: String(order._id).slice(-6).toUpperCase() })}</h3>
+          {date && <span className="acc-order-date">{tf('account.placedOn', { date })}</span>}
+        </div>
+        <span className={`acc-status acc-status--${status}`}>{t(`account.status.${status}`)}</span>
+        <span className="acc-order-total t-price">{formatSum(order.totalAmount, lang)}</span>
+        <button
+          type="button"
+          className="acc-order-toggle"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span>{open ? t('account.hide') : t('account.details')}</span>
+          <ChevronDown size={18} />
+        </button>
+      </header>
+      <AnimatePresence initial={false}>
+        {open && (
+          <m.div
+            key="details"
+            id={panelId}
+            className="acc-order-body"
+            initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, transition: { duration: 0.12 } }}
+            transition={{ duration: 0.28, ease: EASE_OUT }}
+          >
+            <OrderDetails order={order} />
+          </m.div>
+        )}
+      </AnimatePresence>
+    </article>
   );
 }
 
-const stageFade = {
-  initial: { opacity: 0, y: 14, scale: 0.99 },
-  animate: { opacity: 1, y: 0, scale: 1 },
-  exit: { opacity: 0, y: -10, transition: { duration: 0.16, ease: 'easeIn' } },
-  transition: { type: 'spring', stiffness: 300, damping: 26 },
-};
-
-function LoginPanel() {
-  const { t } = useI18n();
-  const { loginState, beginLogin, cancelLogin } = useAuth();
-  const [botUrl, setBotUrl] = useState('');
-
-  const start = async () => {
-    const url = await beginLogin();
-    if (url) {
-      setBotUrl(url);
-      window.open(url, '_blank', 'noopener');
-    }
-  };
-
-  const waiting = loginState === 'waiting';
-
-  return (
-    <m.section
-      className="tg-login-panel"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 220, damping: 26 }}
-    >
-      <PlaneArt waiting={waiting} />
-      <h2 className="tg-login-title">{t('tgLoginTitle')}</h2>
-      <p className="tg-login-desc">{t('tgLoginDesc')}</p>
-
-      <div className="tg-login-stage">
-        <AnimatePresence mode="wait" initial={false}>
-          {!waiting ? (
-            <m.div key="cta" {...stageFade}>
-              <m.button
-                type="button"
-                className="btn btn-primary btn-lg tg-login-btn"
-                onClick={start}
-                whileHover={{ y: -2, scale: 1.015 }}
-                whileTap={{ scale: 0.965 }}
-                transition={{ type: 'spring', stiffness: 420, damping: 22 }}
-              >
-                <svg width="19" height="19" viewBox="0 0 240 240" fill="none" aria-hidden="true">
-                  <path d="M53 117l124-48c6-2 11 1 9 10l-21 99c-2 7-6 9-12 6l-32-24-16 15c-2 2-3 3-6 3l2-33 61-55c3-2-1-4-4-2l-76 48-33-10c-7-2-7-7 4-9z" fill="currentColor" />
-                </svg>
-                {t('tgLoginCta')}
-              </m.button>
-              {loginState === 'error' && (
-                <m.div
-                  className="promo-msg error"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  role="alert"
-                >
-                  {t('tgLoginExpired')}
-                </m.div>
-              )}
-            </m.div>
-          ) : (
-            <m.div key="waiting" className="tg-login-waiting" {...stageFade}>
-              <span className="tg-login-spinner" aria-hidden="true" />
-              <p aria-live="polite">{t('tgLoginWaiting')}</p>
-              {botUrl && (
-                <a href={botUrl} target="_blank" rel="noopener noreferrer" className="tg-login-relink">
-                  {t('tgLoginReopen')}
-                </a>
-              )}
-              <button type="button" className="btn btn-outline btn-sm" onClick={cancelLogin}>
-                {t('cancel')}
-              </button>
-            </m.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <ol className="tg-login-steps">
-        <li>{t('tgLoginStep1')}</li>
-        <li>{t('tgLoginStep2')}</li>
-        <li>{t('tgLoginStep3')}</li>
-      </ol>
-    </m.section>
-  );
-}
-
-function OrdersList() {
-  const { t } = useI18n();
+function Orders() {
+  const { t, tf, plural } = useI18n();
   const [orders, setOrders] = useState(null);
+  const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let mounted = true;
+    setFailed(false);
+    setOrders(null);
     fetchMyOrders()
       .then((res) => { if (mounted) setOrders(res?.data || []); })
-      .catch(() => { if (mounted) setOrders([]); });
+      .catch(() => { if (mounted) { setOrders([]); setFailed(true); } });
     return () => { mounted = false; };
   }, []);
 
-  if (orders === null) return <p>{t('loading')}</p>;
-  if (orders.length === 0) {
-    return (
-      <div className="account-empty">
-        <p>{t('noOrdersYet')}</p>
-        <Link to="/shop" className="btn btn-primary">{t('goToShop')}</Link>
-      </div>
-    );
-  }
+  useEffect(() => load(), [load]);
 
   return (
-    <div className="account-orders">
-      {orders.map((o) => (
-        <article className="account-order-card" key={o._id}>
-          <header className="account-order-head">
-            <strong>#{String(o._id).slice(-6).toUpperCase()}</strong>
-            <span className={`order-status order-status-${o.status}`}>
-              {t(STATUS_KEYS[o.status] || 'statusPending')}
-            </span>
-          </header>
-          <ul className="account-order-items">
-            {o.items.map((it, i) => (
-              <li key={i}>
-                {it.name} × {it.quantity}
-              </li>
-            ))}
-          </ul>
-          <footer className="account-order-foot">
-            <span>{new Date(o.createdAt).toLocaleDateString('ru-RU')}</span>
-            <strong>{formatPrice(o.totalAmount)}</strong>
-          </footer>
-        </article>
-      ))}
-    </div>
+    <section className="acc-orders" aria-labelledby="acc-orders-h">
+      <div className="acc-orders-head">
+        <h2 id="acc-orders-h" className="t-h3">{t('account.orders')}</h2>
+        {orders?.length > 0 && (
+          <span className="acc-orders-count t-num">
+            {tf('account.ordersCount', { n: orders.length, unit: plural(orders.length, t('account.ordersUnit')) })}
+          </span>
+        )}
+      </div>
+
+      {orders === null && (
+        <div className="acc-orders-list" aria-busy="true">
+          <Skeleton h={88} r={20} />
+          <Skeleton h={88} r={20} />
+        </div>
+      )}
+      {failed && (
+        <div className="acc-orders-error" role="alert">
+          <p>{t('account.ordersError')}</p>
+          <Button variant="secondary" size="sm" onClick={load}>{t('retry')}</Button>
+        </div>
+      )}
+      {orders && !failed && orders.length === 0 && (
+        <EmptyState
+          as="h3"
+          icon={<Package size={40} />}
+          title={t('account.noOrders')}
+          text={t('account.noOrdersText')}
+          action={<Button to="/shop">{t('goToShop')}</Button>}
+        />
+      )}
+      {orders?.length > 0 && (
+        <div className="acc-orders-list">
+          {orders.map((o) => <OrderCard key={o._id} order={o} />)}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -184,53 +127,60 @@ export default function Account() {
   useSeo();
   const { t } = useI18n();
   const { user, isLoading, logout } = useAuth();
+  const reduce = useReducedMotion();
+  const name = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username : '';
 
   return (
-    <div className="account-page">
+    <div className="acc-page">
       <div className="container container-narrow">
-        <Breadcrumbs trail={[{ label: t('goHome'), to: '/' }, { label: t('account') }]} />
-        <h1 className="page-title">{t('account')}</h1>
+        <Breadcrumbs trail={[{ label: t('home'), to: '/' }, { label: t('account.title') }]} />
+        <h1 className="t-h1 acc-title">{t('account.title')}</h1>
 
-        {isLoading && <p>{t('loading')}</p>}
+        {isLoading && (
+          <div className="acc-loading" aria-busy="true">
+            <span className="sr-only">{t('loading')}</span>
+            <Skeleton h={112} r={20} />
+            <Skeleton h={88} r={20} />
+          </div>
+        )}
 
-        {!isLoading && !user && <LoginPanel />}
+        {!isLoading && !user && <TelegramLogin variant="full" />}
 
         {!isLoading && user && (
           <m.div
-            initial={{ opacity: 0, y: 18 }}
+            className="acc-signed"
+            initial={reduce ? false : { opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ type: 'spring', stiffness: 240, damping: 26 }}
+            transition={{ duration: 0.5, ease: EASE_OUT }}
           >
-            <section className="account-profile">
-              <div className="account-avatar" aria-hidden="true">
-                {user.photoUrl
-                  ? <img src={user.photoUrl} alt="" width="56" height="56" />
-                  : <UserIcon width={28} height={28} />}
+            <section className="acc-profile" aria-label={t('account.signedIn')}>
+              <span className="acc-avatar">
+                {user.photoUrl ? <img src={user.photoUrl} alt="" width="64" height="64" /> : <User size={28} />}
+              </span>
+              <div className="acc-identity">
+                <span className="acc-signed-label">{t('account.signedIn')}</span>
+                <strong className="acc-name">{name}</strong>
+                {user.phone && (
+                  <span className="acc-phone t-num"><Phone size={16} />{user.phone}</span>
+                )}
               </div>
-              <div className="account-identity">
-                <strong>{[user.firstName, user.lastName].filter(Boolean).join(' ') || user.username}</strong>
-                {user.phone && <span>{user.phone}</span>}
-              </div>
-              <button type="button" className="btn btn-outline btn-sm" onClick={logout}>
-                {t('logout')}
-              </button>
+              <Button variant="secondary" size="sm" onClick={logout} className="acc-logout">
+                {t('account.logout')}
+              </Button>
             </section>
 
             {user.role === 'admin' && (
-              <Link to="/admin" className="account-admin-row">
-                <span className="account-admin-ic" aria-hidden="true">🛠</span>
-                <span className="account-admin-txt">
-                  <strong>Админ-панель</strong>
-                  <span>Тексты, отзывы, 3D товары, блог</span>
+              <Link to="/admin" className="acc-admin">
+                <span className="acc-admin-icon" aria-hidden="true"><Shield size={20} /></span>
+                <span className="acc-admin-text">
+                  <strong>{t('account.admin')}</strong>
+                  <span>{t('account.adminText')}</span>
                 </span>
-                <span aria-hidden="true">›</span>
+                <ChevronRight size={20} />
               </Link>
             )}
 
-            <section className="account-history">
-              <h2 className="summary-title">{t('myOrders')}</h2>
-              <OrdersList />
-            </section>
+            <Orders />
           </m.div>
         )}
       </div>

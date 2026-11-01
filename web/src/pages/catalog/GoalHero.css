@@ -1,0 +1,109 @@
+/* Goal landing band on the floor: text left, rising sun with a packshot fan right. */
+.shop-goal {
+  position: relative;
+  display: grid;
+  gap: var(--s-8);
+  padding: clamp(24px, 4vw, 48px);
+  border-radius: var(--r-card);
+  background: var(--bg-2);
+  overflow: hidden;
+  isolation: isolate;
+}
+@media (min-width: 900px) {
+  .shop-goal { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: center; }
+}
+.shop-goal-text { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.shop-goal-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: var(--s-5);
+  border-radius: var(--r-pill);
+  background: var(--sun);
+  color: var(--on-sun);
+}
+.shop-goal-title {
+  margin: 0;
+  max-width: 14ch;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+.shop-goal-count { margin: var(--s-3) 0 0; color: var(--fg-2); }
+.shop-goal-desc {
+  margin: var(--s-4) 0 0;
+  max-width: 46ch;
+  color: var(--fg-2);
+  font-size: var(--t-body);
+}
+.shop-goal-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-6);
+}
+.shop-goal-brands { margin-top: var(--s-5); }
+.shop-goal-brands .shop-goal-chips { margin-top: var(--s-2); }
+.shop-goal-label { margin: 0; color: var(--fg-3); }
+
+/* The visual: a sun rising behind a horizon, three white plinths fanned in front of it. */
+.shop-goal-visual {
+  position: relative;
+  height: clamp(200px, 26vw, 320px);
+  min-width: 0;
+}
+.shop-goal-sun {
+  position: absolute;
+  left: 50%;
+  bottom: 22%;
+  width: min(68%, 260px);
+  aspect-ratio: 1;
+  margin-left: calc(min(68%, 260px) / -2);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, var(--sun) 0%, var(--sun-600) 100%);
+  box-shadow: 0 0 80px 10px var(--sun-glow);
+  animation: shop-sun-rise var(--d-hero) var(--ease-out) both;
+}
+.shop-goal-horizon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 22%;
+  height: 1px;
+  background: var(--fg);
+  opacity: .14;
+}
+@keyframes shop-sun-rise {
+  from { transform: translateY(36%) scale(.92); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.shop-goal-fan {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: end center;
+  padding-bottom: 6%;
+}
+.shop-goal-shot {
+  grid-area: 1 / 1;
+  display: grid;
+  place-items: center;
+  width: clamp(104px, 12vw, 152px);
+  aspect-ratio: 4 / 5;
+  padding: var(--s-3);
+  border-radius: var(--r-card);
+  background: var(--bg);
+  box-shadow: var(--shadow-2);
+}
+.shop-goal-shot--1 { z-index: 1; width: clamp(120px, 14vw, 176px); }
+.shop-goal-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+@media (max-width: 639.98px) {
+  .shop-goal { gap: var(--s-6); }
+  .shop-goal-visual { order: -1; height: 180px; margin: calc(-1 * var(--s-2)) 0 0; }
+  .shop-goal-shot { width: 96px; }
+  .shop-goal-shot--1 { width: 112px; }
+}

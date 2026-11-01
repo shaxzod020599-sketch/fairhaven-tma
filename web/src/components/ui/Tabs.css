@@ -1,0 +1,46 @@
+/* Tabs */
+.ui-tabs {
+  display: flex;
+  gap: var(--s-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--line);
+}
+.ui-tabs::-webkit-scrollbar { display: none; }
+.ui-tab {
+  position: relative;
+  flex: none;
+  min-height: var(--control-h);
+  padding: 0 var(--s-4);
+  border: 0;
+  border-radius: var(--r-pill) var(--r-pill) 0 0;
+  background: none;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 15px;
+  font-weight: var(--w-strong);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--d-hover) var(--ease-out);
+}
+.ui-tab.is-on { color: var(--fg); }
+@media (hover: hover) {
+  .ui-tab:hover { color: var(--fg); }
+}
+.ui-tab:focus-visible { outline-offset: -2px; }
+/* Line under the active tab (ink on the floor, sun on the stage); it slides to the next tab (layoutId). */
+.ui-tab-line {
+  position: absolute;
+  left: var(--s-4);
+  right: var(--s-4);
+  bottom: -1px;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: var(--fg);
+}
+.ui-tabpanel { padding-top: var(--s-6); }
+.ui-tabpanel:focus-visible { outline-offset: 4px; }
+.stage .ui-tabs { border-color: var(--stage-800); }
+.stage .ui-tab { color: var(--stage-fg-2); }
+.stage .ui-tab.is-on { color: var(--stage-fg); }
+.stage .ui-tab-line { background: var(--sun); }

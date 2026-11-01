@@ -1,0 +1,25 @@
+/* Product page frame: crumbs, gallery and buy box side by side from 1024px, details and related below. */
+.pdp-page { padding-bottom: var(--s-16); }
+.pdp-crumbs { padding-block: var(--s-5) var(--s-4); }
+.pdp-crumbs-skeleton { padding-block: var(--s-6) var(--s-5); }
+
+.pdp-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-8);
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .pdp-layout {
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+    gap: clamp(40px, 5vw, 88px);
+  }
+}
+@media (min-width: 1280px) {
+  .pdp-layout { grid-template-columns: minmax(0, 1.15fr) minmax(380px, 1fr); }
+}
+
+.pdp-below { padding-top: var(--section); }
+
+.pdp-skeleton-well { display: block; aspect-ratio: 1; }
+.pdp-skeleton-lines { display: flex; flex-direction: column; gap: var(--s-4); }

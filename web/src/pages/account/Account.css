@@ -1,0 +1,164 @@
+/* /account: Telegram sign-in, or the profile and order history. */
+.acc-page { padding-bottom: var(--s-16); }
+.acc-title { margin: var(--s-4) 0 var(--s-8); }
+.acc-loading,
+.acc-signed { display: grid; gap: var(--s-6); }
+
+.acc-profile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-4) var(--s-5);
+  padding: var(--s-6);
+  border-radius: var(--r-card);
+  background: var(--bg-2);
+}
+.acc-avatar {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--sun);
+  color: var(--on-sun);
+  overflow: hidden;
+  box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--line);
+}
+.acc-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.acc-identity { display: grid; gap: 2px; min-width: 0; }
+.acc-signed-label { font-size: var(--t-micro); color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; }
+.acc-name { font-size: var(--t-h3); line-height: 1.25; overflow-wrap: anywhere; }
+.acc-phone { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--fg-2); font-size: var(--t-small); }
+
+.acc-admin {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-height: 72px;
+  padding: var(--s-3) var(--s-5) var(--s-3) var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  color: var(--fg);
+  text-decoration: none;
+  transition: border-color var(--d-hover) var(--ease-out), background-color var(--d-hover) var(--ease-out);
+}
+.acc-admin-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--fg);
+  color: var(--bg);
+}
+.acc-admin-text { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.acc-admin-text span { font-size: var(--t-small); color: var(--fg-2); }
+.acc-admin > svg { color: var(--fg-3); transition: transform var(--d-hover) var(--ease-out); }
+.acc-admin:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media (hover: hover) {
+  .acc-admin:hover { border-color: var(--fg); background: var(--bg-2); }
+  .acc-admin:hover > svg { transform: translateX(3px); }
+}
+
+.acc-orders { display: grid; gap: var(--s-5); margin-top: var(--s-4); }
+.acc-orders-head { display: flex; align-items: baseline; gap: var(--s-3); }
+.acc-orders-head h2 { margin: 0; }
+.acc-orders-count { color: var(--fg-3); font-size: var(--t-small); }
+.acc-orders-list { display: grid; gap: var(--s-3); }
+.acc-orders-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-5);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-well);
+}
+.acc-orders-error p { margin: 0; color: var(--danger); font-weight: var(--w-strong); }
+
+.acc-order {
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--bg);
+  transition: border-color var(--d-hover) var(--ease-out);
+}
+.acc-order.is-open { border-color: var(--fg-3); }
+.acc-order-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--s-3) var(--s-5);
+  padding: var(--s-4) var(--s-4) var(--s-4) var(--s-6);
+}
+.acc-order-id { display: grid; gap: 2px; min-width: 0; }
+.acc-order-no { margin: 0; font-size: var(--t-body); font-weight: var(--w-strong); }
+.acc-order-date { font-size: var(--t-small); color: var(--fg-3); }
+.acc-order-total { white-space: nowrap; }
+.acc-order-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: var(--tap);
+  padding: 0 var(--s-3);
+  border-radius: var(--r-pill);
+  color: var(--fg-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-strong);
+  transition: background-color var(--d-hover) var(--ease-out), color var(--d-hover) var(--ease-out);
+}
+.acc-order-toggle svg { transition: transform var(--d-ui) var(--ease-out); }
+.acc-order.is-open .acc-order-toggle svg { transform: rotate(180deg); }
+.acc-order-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media (hover: hover) {
+  .acc-order-toggle:hover { background: var(--bg-2); color: var(--fg); }
+}
+.acc-order-body { padding: 0 var(--s-6) var(--s-6); }
+
+/* Status chips: tone follows the stage; text always says the status. */
+.acc-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-pill);
+  background: var(--bg-2);
+  color: var(--fg);
+  font-size: var(--t-small);
+  font-weight: var(--w-strong);
+  white-space: nowrap;
+}
+.acc-status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fg-3);
+}
+.acc-status--confirmed,
+.acc-status--preparing,
+.acc-status--delivering { background: var(--sun-100); }
+.acc-status--confirmed::before,
+.acc-status--preparing::before,
+.acc-status--delivering::before { background: var(--sun-600); }
+.acc-status--delivered::before { background: var(--ok); }
+.acc-status--cancelled,
+.acc-status--returned { color: var(--fg-2); }
+.acc-status--cancelled::before,
+.acc-status--returned::before { background: var(--danger); }
+
+@media (max-width: 640px) {
+  .acc-title { margin-bottom: var(--s-6); }
+  .acc-profile { grid-template-columns: auto minmax(0, 1fr); padding: var(--s-5); }
+  .acc-logout { grid-column: 1 / -1; justify-self: start; }
+  .acc-order-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: var(--s-4) var(--s-3) var(--s-3) var(--s-5);
+  }
+  .acc-status { grid-row: 1; grid-column: 2; }
+  .acc-order-total { grid-column: 1; }
+  .acc-order-toggle { grid-column: 2; justify-self: end; }
+  .acc-order-body { padding: 0 var(--s-5) var(--s-5); }
+}

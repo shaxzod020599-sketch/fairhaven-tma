@@ -1,0 +1,26 @@
+/* Related products: a card rail for the goal, then a two-column list of compact rows for the brand. */
+.pdp-rail,
+.pdp-more-brand {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+  min-width: 0;
+}
+.pdp-more-brand { border-top: 1px solid var(--line); }
+
+.pdp-brand-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  list-style: none;
+}
+.pdp-brand-list > li {
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .pdp-brand-list { grid-template-columns: 1fr 1fr; column-gap: var(--s-10); }
+}
+@media (min-width: 1280px) {
+  .pdp-brand-list { grid-template-columns: repeat(3, 1fr); }
+}

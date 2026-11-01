@@ -1,0 +1,70 @@
+/* Chip, ChipGroup */
+.ui-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+/* One line that scrolls sideways (sticky filter bars, phones); the bleed lets chips scroll under the gutter. */
+.ui-chips--scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  margin-inline: calc(-1 * var(--gutter));
+  padding: 2px var(--gutter);
+  scroll-padding-inline: var(--gutter);
+}
+.ui-chips--scroll::-webkit-scrollbar { display: none; }
+
+.ui-chip {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-height: var(--tap);
+  padding: 0 var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: var(--t-small);
+  font-weight: var(--w-micro);
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color var(--d-hover) var(--ease-out), color var(--d-ui) var(--ease-out),
+    background-color var(--d-hover) var(--ease-out), transform var(--d-hover) var(--ease-out);
+}
+.ui-chip-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.ui-chip-label svg { width: 18px; height: 18px; flex: none; }
+.ui-chip-count { color: var(--fg-3); transition: color var(--d-ui) var(--ease-out); }
+
+/* Selected: ink fill. In a single-choice group the fill is a sliding layer (.ui-chip-fill). */
+.ui-chip.is-on { border-color: var(--fg); color: var(--bg); }
+.ui-chip.is-on .ui-chip-count { color: var(--stage-fg-2); }
+.ui-chip.is-on:not(:has(.ui-chip-fill)) { background: var(--fg); }
+.ui-chip-fill {
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--fg);
+}
+
+@media (hover: hover) {
+  .ui-chip:hover:not(:disabled):not(.is-on) { border-color: var(--fg-3); }
+}
+.ui-chip:active:not(:disabled) { transform: scale(.97); }
+.ui-chip:disabled { opacity: .4; cursor: default; }
+
+.stage .ui-chip { border-color: var(--stage-800); background: transparent; color: var(--stage-fg); }
+.stage .ui-chip-count { color: var(--stage-fg-2); }
+.stage .ui-chip.is-on { border-color: var(--sun); color: var(--on-sun); }
+.stage .ui-chip.is-on .ui-chip-count { color: var(--on-sun); }
+.stage .ui-chip.is-on:not(:has(.ui-chip-fill)),
+.stage .ui-chip-fill { background: var(--sun); }

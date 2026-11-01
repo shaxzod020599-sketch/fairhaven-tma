@@ -1,0 +1,200 @@
+/* Hero orbit: sun, horizon and plinth cards in one CSS 3D scene. The loop in Orbit.jsx writes each card's
+   translate3d and --shade; everything else here is static. */
+.hm-orbit {
+  --orbit-card: clamp(96px, 8.6vw, 128px);
+  --sun-d: clamp(180px, 19vw, 288px);
+  --horizon: 47%;
+  position: relative;
+  height: clamp(420px, 39vw, 572px);
+  perspective: 1300px;
+  perspective-origin: 50% var(--horizon);
+}
+.hm-orbit--compact {
+  --orbit-card: 76px;
+  --sun-d: 148px;
+  --horizon: 46%;
+  height: 292px;
+  perspective: 900px;
+}
+
+.hm-orbit-scene {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+/* Far behind every card, so the glow never washes over the packshots. */
+.hm-orbit-glow {
+  position: absolute;
+  left: 50%;
+  top: var(--horizon);
+  width: calc(var(--sun-d) * 2.8);
+  aspect-ratio: 1;
+  margin: calc(var(--sun-d) * -1.4) 0 0 calc(var(--sun-d) * -1.4);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--sun-glow), rgba(255, 201, 60, 0) 72%);
+  transform: translateZ(-460px) scale(1.36);
+  opacity: .5;
+  pointer-events: none;
+  animation: hm-orbit-breathe 7s var(--ease-in-out) infinite alternate;
+}
+.hm-orbit.is-still .hm-orbit-glow { animation-play-state: paused; }
+@keyframes hm-orbit-breathe {
+  to { opacity: .8; }
+}
+
+/* Everything above the horizon; the sun rises out of its lower edge and sets back into it. */
+.hm-orbit-sky {
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--horizon);
+  overflow: hidden;
+  pointer-events: none;
+}
+.hm-orbit-set {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--sun-d) / -2);
+  width: var(--sun-d);
+  aspect-ratio: 1;
+  margin-left: calc(var(--sun-d) / -2);
+}
+.hm-orbit-sun {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 30%, var(--sun) 0 34%, var(--sun-600) 100%);
+  box-shadow: 0 0 64px 6px var(--sun-glow);
+}
+
+.hm-orbit-horizon {
+  position: absolute;
+  left: 2%;
+  right: 2%;
+  top: var(--horizon);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--stage-800) 18%, rgba(255, 201, 60, .7) 50%, var(--stage-800) 82%, transparent);
+  pointer-events: none;
+}
+/* The sun's light on the water below the line. */
+.hm-orbit-horizon::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 1px;
+  width: calc(var(--sun-d) * 1.1);
+  height: calc(var(--sun-d) * .5);
+  margin-left: calc(var(--sun-d) * -.55);
+  background: radial-gradient(ellipse 50% 100% at 50% 0, rgba(255, 201, 60, .22), rgba(255, 201, 60, 0));
+}
+
+.hm-orbit-ring {
+  position: absolute;
+  left: 50%;
+  top: var(--horizon);
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transform-style: preserve-3d;
+}
+.hm-orbit-item {
+  position: absolute;
+  left: calc(var(--orbit-card) / -2);
+  top: calc(var(--orbit-card) * -.62);
+  width: var(--orbit-card);
+  will-change: transform;
+}
+
+.hm-orbit-card {
+  position: relative;
+  display: block;
+  border-radius: var(--r-well);
+  color: var(--stage-fg);
+  text-decoration: none;
+  transition: transform var(--d-ui) var(--ease-out);
+  animation: hm-orbit-in var(--d-hero) var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 50ms + 200ms);
+}
+/* Cards land one by one as the sun comes up (also when the catalogue arrives after the first paint). */
+@keyframes hm-orbit-in {
+  from { opacity: 0; transform: translateY(18px) scale(.86); }
+}
+.hm-orbit-plinth {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border-radius: var(--r-well);
+  background: var(--bg);
+  box-shadow: 0 26px 40px -22px rgba(0, 0, 0, .75);
+  transition: box-shadow var(--d-ui) var(--ease-out);
+}
+.hm-orbit-plinth img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 10%;
+  object-fit: contain;
+}
+/* Depth: back cards dim towards the night. */
+.hm-orbit-plinth::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--stage-950);
+  opacity: var(--shade, 0);
+  pointer-events: none;
+}
+
+.hm-orbit-meta {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + var(--s-2));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, -4px);
+  transition: opacity var(--d-ui) var(--ease-out), transform var(--d-ui) var(--ease-out);
+  pointer-events: none;
+}
+.hm-orbit-brand { color: var(--stage-fg-2); }
+.hm-orbit-price { font-size: var(--t-small); }
+
+.hm-orbit-card:focus-visible { outline: none; }
+.hm-orbit-card:focus-visible .hm-orbit-plinth { box-shadow: var(--focus-ring); }
+.hm-orbit-card:focus-visible .hm-orbit-meta {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+@media (hover: hover) {
+  .hm-orbit-card:hover { transform: translateY(-10px) scale(1.06); }
+  .hm-orbit-card:hover .hm-orbit-meta {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.hm-orbit-toggle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 1px solid var(--stage-800);
+  border-radius: var(--r-pill);
+  background: rgba(11, 12, 15, .6);
+  color: var(--stage-fg-2);
+  cursor: pointer;
+  transition: color var(--d-hover) var(--ease-out), border-color var(--d-hover) var(--ease-out);
+}
+.hm-orbit-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media (hover: hover) {
+  .hm-orbit-toggle:hover { color: var(--stage-fg); border-color: var(--stage-fg-2); }
+}

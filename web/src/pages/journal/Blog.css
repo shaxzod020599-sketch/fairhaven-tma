@@ -1,0 +1,40 @@
+/* /learn (.jr-): title row, rubric chips, the featured story, then a two-column grid. */
+.jr-page { padding-bottom: var(--section); }
+
+.jr-head {
+  display: grid;
+  gap: var(--s-4);
+  padding-block: var(--s-6) var(--s-8);
+}
+.jr-head-title { font-size: var(--t-hero); }
+.jr-head-side { display: grid; gap: var(--s-3); max-width: 46ch; }
+.jr-head-lead { font-size: 17px; }
+.jr-head-count { color: var(--fg-3); }
+@media (min-width: 1024px) {
+  .jr-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: var(--s-12);
+    padding-block: var(--s-8) var(--s-10);
+  }
+}
+
+.jr-tags { margin-bottom: var(--s-10); }
+
+.jr-featured {
+  padding-bottom: var(--s-12);
+  margin-bottom: var(--s-12);
+  border-bottom: 1px solid var(--line);
+}
+
+.jr-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-12) var(--s-8);
+}
+.jr-grid > li { min-width: 0; }
+@media (min-width: 768px) {
+  .jr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

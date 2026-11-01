@@ -1,0 +1,58 @@
+/* Results toolbar: filters button (under 1024 px), count, sort. */
+.shop-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.shop-toolbar-count {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.shop-toolbar-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  padding: 0 var(--s-4);
+  border: 1px solid var(--fg);
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--t-small);
+  font-weight: var(--w-strong);
+  cursor: pointer;
+  transition: background-color var(--d-hover) var(--ease-out), transform var(--d-hover) var(--ease-out);
+}
+@media (hover: hover) {
+  .shop-toolbar-filters:hover { background: var(--bg-2); }
+}
+.shop-toolbar-filters:active { transform: scale(.98); }
+.shop-toolbar-filters:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.shop-toolbar-badge {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--sun);
+  color: var(--on-sun);
+  font-size: 12px;
+  font-weight: var(--w-strong);
+}
+.shop-toolbar-sort select { max-width: 100%; }
+.shop-toolbar-sort select:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+@media (min-width: 1024px) {
+  .shop-toolbar-filters { display: none; }
+}
+/* Phones: count on its own line above the two controls. */
+@media (max-width: 639.98px) {
+  .shop-toolbar { flex-wrap: wrap; }
+  .shop-toolbar-count { order: -1; flex-basis: 100%; }
+  .shop-toolbar-sort { flex: 1; min-width: 0; justify-content: flex-end; }
+  .shop-toolbar-sort .ui-select-box { min-width: 0; max-width: 100%; }
+}

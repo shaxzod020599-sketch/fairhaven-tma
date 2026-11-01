@@ -1,0 +1,180 @@
+/* Home hero on the stage: headline, search and goals on the left, the orbit on the right.
+   Phones and small tablets: headline, then the orbit, then the rest. */
+.hm-hero {
+  position: relative;
+  overflow-x: clip;
+  padding: calc(var(--header-overlap) + var(--s-10)) 0 var(--s-8);
+  color: var(--stage-fg);
+}
+
+.hm-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-rows: 1fr auto auto 1fr;
+  grid-template-areas:
+    '. orbit'
+    'title orbit'
+    'body orbit'
+    '. orbit';
+  column-gap: var(--s-8);
+}
+
+.hm-hero-title {
+  grid-area: title;
+  margin: 0;
+  /* Sized so each of the two lines stays on one row beside the orbit at desktop widths. */
+  font-size: clamp(36px, 4.1vw, 60px);
+  font-weight: var(--w-display);
+  line-height: 1.02;
+  letter-spacing: var(--ls-display);
+}
+.hm-hero-line {
+  display: block;
+  text-wrap: balance;
+}
+.hm-hero-num { color: var(--sun); }
+
+.hm-hero-orbit {
+  grid-area: orbit;
+  align-self: center;
+  min-width: 0;
+}
+
+.hm-hero-body { grid-area: body; }
+
+.hm-hero-sub {
+  max-width: 42ch;
+  margin: var(--s-5) 0 0;
+  color: var(--stage-fg-2);
+  font-size: clamp(16px, 1.25vw, 18px);
+  line-height: var(--lh-body);
+}
+
+/* Looks like a field, opens the search overlay. */
+.hm-search {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  max-width: 580px;
+  min-height: 64px;
+  margin-top: var(--s-8);
+  padding: 0 var(--s-2) 0 var(--s-5);
+  border: 1px solid var(--stage-800);
+  border-radius: var(--r-pill);
+  background: var(--stage-900);
+  color: var(--stage-fg-2);
+  font: inherit;
+  font-size: 17px;
+  text-align: left;
+  cursor: text;
+  transition: border-color var(--d-hover) var(--ease-out), background-color var(--d-hover) var(--ease-out);
+}
+.hm-search:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hm-search-icon { flex: none; }
+.hm-search-text {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 1.5em;
+  overflow: hidden;
+}
+.hm-search-line {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.hm-search-kbd {
+  display: none;
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--stage-800);
+  border-radius: 6px;
+  color: var(--stage-fg-2);
+}
+.hm-search-go {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--sun);
+  color: var(--on-sun);
+  transition: transform var(--d-ui) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .hm-search-kbd { display: inline-block; }
+}
+@media (hover: hover) {
+  .hm-search:hover { border-color: var(--stage-fg-2); background: var(--stage-800); }
+  .hm-search:hover .hm-search-go { transform: translateX(3px); }
+}
+
+.hm-goals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: var(--s-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.hm-goal {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  padding: 0 var(--s-4);
+  border: 1px solid var(--stage-800);
+  border-radius: var(--r-pill);
+  color: var(--stage-fg);
+  font-size: var(--t-small);
+  white-space: nowrap;
+  text-decoration: none;
+  transition: border-color var(--d-hover) var(--ease-out), background-color var(--d-hover) var(--ease-out);
+}
+.hm-goal svg { color: var(--sun); }
+.hm-goal-count { color: var(--stage-fg-2); }
+.hm-goal:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media (hover: hover) {
+  .hm-goal:hover { border-color: var(--stage-fg-2); background: var(--stage-900); }
+}
+
+.hm-hero-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-top: var(--s-8);
+}
+
+@media (max-width: 899px) {
+  .hm-hero { padding-top: calc(var(--header-overlap) + var(--s-8)); }
+  .hm-hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: 'title' 'orbit' 'body';
+  }
+  .hm-hero-orbit { margin-top: var(--s-6); }
+  .hm-hero-sub { margin-top: var(--s-6); }
+}
+
+@media (max-width: 599px) {
+  .hm-search { min-height: 56px; margin-top: var(--s-6); font-size: 16px; }
+  .hm-search-go { width: 40px; height: 40px; }
+  /* One line that scrolls sideways; the bleed lets chips run under the gutter. */
+  .hm-goals {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    margin-inline: calc(-1 * var(--gutter));
+    padding: 2px var(--gutter);
+  }
+  .hm-goals::-webkit-scrollbar { display: none; }
+  .hm-goals > li { flex: none; }
+  .hm-hero-ctas { margin-top: var(--s-6); }
+  .hm-hero-ctas > * { flex: 1 1 auto; }
+}

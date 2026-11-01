@@ -1,0 +1,112 @@
+/* ProductCard. The title link is stretched over the whole card; the add button sits above it. */
+.ui-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.ui-card-well {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: var(--r-well);
+  background: var(--bg-2);
+  overflow: hidden;
+}
+/* Packshots on white backgrounds melt into the grey well. */
+.ui-card-well img {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+  transition: transform var(--d-reveal) var(--ease-out), opacity var(--d-ui) var(--ease-out);
+}
+.ui-card-noimage { color: var(--fg-3); }
+.ui-card.is-out .ui-card-well img { opacity: .5; }
+
+.ui-card-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ui-card-brand { color: var(--fg-2); }
+.ui-card-title {
+  font-size: 15px;
+  font-weight: var(--w-strong);
+  line-height: 1.32;
+  letter-spacing: -0.005em;
+  text-wrap: pretty;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.ui-card-link { color: inherit; text-decoration: none; }
+.ui-card-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-card);
+}
+.ui-card-link:focus-visible { outline: none; }
+.ui-card-link:focus-visible::after {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+.ui-card-spec { color: var(--fg-3); }
+.ui-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-top: auto;
+  padding-top: var(--s-2);
+}
+.ui-card-out { color: var(--fg-3); font-size: var(--t-small); }
+
+/* Quick add: outlined at rest, the sun sweeps in on hover. */
+.ui-card .ui-card-add {
+  position: relative;
+  z-index: 1;
+  --btn-sweep: var(--sun);
+  --btn-fg-hover: var(--on-sun);
+}
+@media (hover: hover) {
+  .ui-card:hover .ui-card-well img { transform: scale(1.045); }
+  .ui-card:hover .ui-card-add { --btn-border: var(--fg); }
+}
+/* Two columns on phones: the price takes its line and the button the full width under it. */
+@media (max-width: 639.98px) {
+  .ui-card--default .ui-card-add,
+  .ui-card--stage .ui-card-add { flex: 1 1 100%; }
+  .ui-card--default .ui-card-title { font-size: 14px; }
+}
+
+/* Compact: one row */
+.ui-card--compact {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--s-4);
+}
+.ui-card--compact .ui-card-well { width: 88px; flex: none; border-radius: 12px; }
+.ui-card--compact .ui-card-title { -webkit-line-clamp: 2; font-size: 14px; }
+.ui-card--compact .ui-card-foot { padding-top: 0; }
+
+/* Stage: a raised dark card with a white plinth for the packshot. */
+.ui-card--stage {
+  padding: var(--s-3) var(--s-3) var(--s-4);
+  border-radius: var(--r-card);
+  background: var(--stage-900);
+  color: var(--stage-fg);
+}
+.ui-card--stage .ui-card-well { background: var(--bg); }
+.ui-card--stage .ui-card-body { padding-inline: var(--s-1); }
+.ui-card--stage .ui-card-brand,
+.ui-card--stage .ui-card-spec,
+.ui-card--stage .ui-card-out { color: var(--stage-fg-2); }
+.ui-card--stage .ui-price-old { color: var(--stage-fg-2); }

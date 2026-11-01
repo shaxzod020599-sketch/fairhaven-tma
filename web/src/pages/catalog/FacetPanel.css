@@ -1,0 +1,180 @@
+/* Filter facets: groups of check rows with live counts. */
+.shop-facets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+}
+.shop-facet {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.shop-facet + .shop-facet {
+  padding-top: var(--s-6);
+  border-top: 1px solid var(--line);
+}
+.shop-facet-title {
+  padding: 0;
+  margin-bottom: var(--s-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-strong);
+  color: var(--fg);
+}
+.shop-facet-list {
+  display: flex;
+  flex-direction: column;
+}
+.shop-facet-none { padding: var(--s-2) 0; }
+
+/* One row: a native input under a drawn box, label, count. The whole row is the 44 px target. */
+.shop-check {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: var(--tap);
+  padding: 0 var(--s-2);
+  margin: 0 calc(-1 * var(--s-2));
+  border-radius: var(--r-well);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--d-hover) var(--ease-out);
+}
+@media (hover: hover) {
+  .shop-check:hover:not(.is-off) { background: var(--bg-2); }
+}
+.shop-check.is-off { cursor: default; color: var(--fg-3); }
+.shop-check.is-off .shop-check-box,
+.shop-check.is-off .shop-check-dot,
+.shop-check.is-off .shop-check-switch { opacity: .45; }
+.shop-check-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.shop-check-label {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--t-small);
+  line-height: 1.35;
+}
+.shop-check-count { color: var(--fg-3); }
+.shop-nowrap { white-space: nowrap; }
+
+.shop-check-box,
+.shop-check-dot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--fg-3);
+  border-radius: 6px;
+  color: var(--bg);
+  transition: background-color var(--d-hover) var(--ease-out), border-color var(--d-hover) var(--ease-out);
+}
+.shop-check-box svg {
+  transform: scale(.4);
+  opacity: 0;
+  transition: transform var(--d-ui) var(--ease-out), opacity var(--d-hover) var(--ease-out);
+}
+.shop-check-input:checked ~ .shop-check-box { background: var(--fg); border-color: var(--fg); }
+.shop-check-input:checked ~ .shop-check-box svg { transform: scale(1); opacity: 1; }
+
+.shop-check-dot { border-radius: var(--r-pill); }
+.shop-check-dot::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-pill);
+  background: var(--fg);
+  transform: scale(0);
+  transition: transform var(--d-ui) var(--ease-out);
+}
+.shop-check-input:checked ~ .shop-check-dot { border-color: var(--fg); }
+.shop-check-input:checked ~ .shop-check-dot::after { transform: scale(1); }
+
+/* Stock and sale read as switches: on means the list narrows. */
+.shop-check--switch .shop-check-label { order: -1; }
+.shop-check--switch .shop-check-count { order: -1; }
+.shop-check-switch {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 24px;
+  border-radius: var(--r-pill);
+  background: var(--bg-3);
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition: background-color var(--d-ui) var(--ease-out);
+}
+.shop-check-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  box-shadow: var(--shadow-1);
+  transition: transform var(--d-ui) var(--ease-out);
+}
+.shop-check-input:checked ~ .shop-check-switch { background: var(--fg); box-shadow: none; }
+.shop-check-input:checked ~ .shop-check-switch::after { transform: translateX(16px); background: var(--sun); }
+
+.shop-check-input:focus-visible ~ .shop-check-box,
+.shop-check-input:focus-visible ~ .shop-check-dot,
+.shop-check-input:focus-visible ~ .shop-check-switch { box-shadow: var(--focus-ring); }
+
+/* Brand finder inside the brand list. */
+.shop-facet-find {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--s-2);
+}
+.shop-facet-find-icon {
+  position: absolute;
+  left: var(--s-3);
+  color: var(--fg-3);
+  pointer-events: none;
+}
+.shop-facet-find-input {
+  width: 100%;
+  min-height: var(--control-h-sm);
+  padding: 0 var(--s-4) 0 calc(var(--s-3) + 18px + var(--s-2));
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--t-small);
+}
+.shop-facet-find-input::-webkit-search-cancel-button { display: none; }
+.shop-facet-find-input:focus-visible { outline: none; border-color: var(--fg); box-shadow: var(--focus-ring); }
+
+.shop-facet-more {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--t-small);
+  font-weight: var(--w-strong);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--line);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .shop-facet-more:hover { text-decoration-color: currentColor; }
+}
+.shop-facet-more:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }

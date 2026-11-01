@@ -1,0 +1,84 @@
+/* Toasts: bottom centre on phones, bottom right on wide screens; ink surface with a sun dot.
+   --toast-lift raises them above a bar or drawer footer at the bottom (StickyBar, CartDrawer). */
+.ui-toasts {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--s-4) + var(--safe-bottom) + var(--toast-lift, 0px));
+  z-index: var(--z-toast);
+  display: flex;
+  justify-content: center;
+  padding-inline: var(--s-3);
+  pointer-events: none;
+}
+.ui-toasts-list {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s-2);
+  width: min(100%, 420px);
+}
+@media (min-width: 768px) {
+  .ui-toasts { justify-content: flex-end; padding-inline: var(--gutter); bottom: calc(var(--s-6) + var(--toast-lift, 0px)); }
+}
+.ui-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 56px;
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4);
+  border-radius: var(--r-well);
+  background: var(--stage-900);
+  color: var(--stage-fg);
+  box-shadow: var(--shadow-3);
+  pointer-events: auto;
+  --focus: var(--sun);
+}
+.ui-toast-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sun);
+  box-shadow: 0 0 0 4px rgba(255, 201, 60, .18);
+}
+.ui-toast-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--t-small);
+  font-weight: var(--w-micro);
+  line-height: 1.35;
+}
+.ui-toast-action {
+  flex: none;
+  min-height: var(--tap);
+  padding: 0 var(--s-4);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--sun);
+  color: var(--on-sun);
+  font: inherit;
+  font-size: var(--t-small);
+  font-weight: var(--w-strong);
+  cursor: pointer;
+  transition: background-color var(--d-hover) var(--ease-out), transform var(--d-hover) var(--ease-out);
+}
+@media (hover: hover) {
+  .ui-toast-action:hover { background: var(--sun-600); }
+}
+.ui-toast-action:active { transform: scale(.97); }
+.ui-toast-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--stage-fg-2);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .ui-toast-close:hover { color: var(--stage-fg); background: var(--stage-800); }
+}

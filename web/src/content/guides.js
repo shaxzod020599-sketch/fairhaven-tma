@@ -7,6 +7,7 @@ export const GUIDES = [
   {
     slug: "fertility-guide",
     read: 7,
+    topic: "fertility",
     ru: {
       tag: "Фертильность",
       title: "Как подготовиться к зачатию: гайд по фертильности",
@@ -35,10 +36,11 @@ export const GUIDES = [
   {
     slug: "prenatal-vitamins",
     read: 5,
+    topic: "pregnancy",
     ru: {
       tag: "Беременность",
       title: "Какие витамины нужны при беременности",
-      excerpt: "Фолиевая кислота, железо, DHA — что действительно важно в каждом триместре.",
+      excerpt: "Фолиевая кислота, железо, DHA: что действительно важно в каждом триместре.",
       body: [
         "Во время беременности потребность в нутриентах возрастает. Однако это не значит «есть за двоих» — важнее качество и сбалансированность.",
         "Фолиевая кислота остаётся приоритетом в первом триместре. Железо необходимо для профилактики анемии — его дефицит часто встречается во второй половине беременности.",
@@ -50,7 +52,7 @@ export const GUIDES = [
     uz: {
       tag: "Homiladorlik",
       title: "Homiladorlikda qaysi vitaminlar kerak",
-      excerpt: "Folat kislota, temir, DHA — har trimestrda nima muhim.",
+      excerpt: "Folat kislota, temir, DHA: har trimestrda nima muhim.",
       body: [
         "Homiladorlik davrida ozuqaviy moddalarga bo'lgan ehtiyoj ortadi. Biroq bu 'ikki kishi uchun eyish' degani emas — sifat va muvozanat muhimroq.",
         "Folat kislota birinchi trimestrda ustuvor bo'lib qoladi. Temir kamqonlikning oldini olish uchun zarur — uning yetishmasligi homiladorlikning ikkinchi yarmida tez uchraydi.",
@@ -63,6 +65,7 @@ export const GUIDES = [
   {
     slug: "lactation-support",
     read: 6,
+    topic: "pregnancy",
     ru: {
       tag: "Лактация",
       title: "5 способов увеличить лактацию",
@@ -93,6 +96,7 @@ export const GUIDES = [
   {
     slug: "mens-fertility",
     read: 6,
+    topic: "men",
     ru: {
       tag: "Фертильность",
       title: "Мужская фертильность: на что обратить внимание",

@@ -1,308 +1,33 @@
-import React, {
-  Suspense,
-  lazy,
-  useState,
-  useEffect,
-  useRef,
-} from 'react';
-import { Link } from 'react-router-dom';
-import { m } from 'motion/react';
-import { useI18n } from '../i18n/index.jsx';
-import { useSiteContent } from '../context/SiteContentContext.jsx';
-import TestimonialCascade from '../components/home/TestimonialCascade.jsx';
-import { scrollBus, resetScrollBus } from '../components/home/scrollBus.js';
+import React from 'react';
 import { useSeo } from '../seo/useSeo.js';
+import { useHeaderTone } from '../components/shell/HeaderTone.jsx';
+import Hero from './home/Hero.jsx';
+import GoalNavigator from './home/GoalNavigator.jsx';
+import SavingsShelf from './home/SavingsShelf.jsx';
+import BrandWall from './home/BrandWall.jsx';
+import KindTiles from './home/KindTiles.jsx';
+import PartnerStory from './home/PartnerStory.jsx';
+import Journal from './home/Journal.jsx';
+import TelegramBlock from './home/TelegramBlock.jsx';
+import Reviews from './home/Reviews.jsx';
+import { useHomeFacts } from './home/useHomeFacts.js';
 
-// The Three.js scene is split out of the main chunk; only capable desktops load it.
-const Scene3D = lazy(() => import('../components/home/Scene3D.jsx'));
-
-const clamp01 = (v) => Math.min(1, Math.max(0, v));
-
-/* Hero entrance — one orchestrated stagger (35ms/child, spring rise). */
-const heroStagger = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.07, delayChildren: 0.08 } },
-};
-const heroRise = {
-  hidden: { opacity: 0, y: 26 },
-  show: {
-    opacity: 1,
-    y: 0,
-    transition: { type: 'spring', stiffness: 190, damping: 26, mass: 0.9 },
-  },
-};
-
-/** Desktop + fine pointer + WebGL + motion allowed → full 3D journey. */
-function useFullExperience() {
-  const [mode, setMode] = useState(null); // null = deciding (SSR-safe default)
-  useEffect(() => {
-    const decide = () => {
-      const wide = window.matchMedia('(min-width: 1024px) and (pointer: fine)').matches;
-      const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      let webgl = false;
-      try {
-        const c = document.createElement('canvas');
-        webgl = Boolean(window.WebGLRenderingContext &&
-          (c.getContext('webgl') || c.getContext('experimental-webgl')));
-      } catch { webgl = false; }
-      setMode(wide && webgl && !calm ? 'full' : 'simple');
-    };
-    decide();
-    const mq = window.matchMedia('(min-width: 1024px)');
-    mq.addEventListener?.('change', decide);
-    return () => mq.removeEventListener?.('change', decide);
-  }, []);
-  return mode;
-}
-
-/**
- * Continuous eased journey driver (full mode only). The bus carries a
- * glide-smoothed 0→1 progress; the 3D camera adds its own damping on top,
- * so even harsh wheel jumps travel as one fluid descent.
- */
-function useJourneyDriver(rootRef, enabled) {
-  useEffect(() => {
-    if (!enabled) return undefined;
-    const root = rootRef.current;
-    if (!root) return undefined;
-
-    let raf = 0;
-    let running = true;
-    let last = performance.now();
-    let journey = 0;
-    let hero = 0;
-
-    // Where along the journey each testimonial step sits centered — the 3D
-    // gallery aligns every product with its own quote from these.
-    const measureSteps = () => {
-      const vh = window.innerHeight;
-      const rootRect = root.getBoundingClientRect();
-      const rootTop = rootRect.top + window.scrollY;
-      const total = rootRect.height - vh;
-      if (total <= 0) return;
-      scrollBus.stepCenters = Array.from(
-        root.querySelectorAll('.cascade-step')
-      ).map((step) => {
-        const r = step.getBoundingClientRect();
-        const absTop = r.top + window.scrollY;
-        return clamp01((absTop + r.height / 2 - vh / 2 - rootTop) / total);
-      });
-    };
-    measureSteps();
-    window.addEventListener('resize', measureSteps);
-
-    const frame = (now) => {
-      if (!running) return;
-      raf = requestAnimationFrame(frame);
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      const k = 1 - Math.exp(-dt * 4.5);
-
-      const rect = root.getBoundingClientRect();
-      const vh = window.innerHeight;
-      const total = rect.height - vh;
-      const journeyTarget = total > 0 ? clamp01(-rect.top / total) : 0;
-      const heroTarget = clamp01(-rect.top / vh);
-
-      journey += (journeyTarget - journey) * k;
-      hero += (heroTarget - hero) * k;
-
-      scrollBus.journey = journey;
-      scrollBus.hero = hero;
-      root.style.setProperty('--journey', journey.toFixed(4));
-      root.style.setProperty('--hero-p', hero.toFixed(4));
-    };
-
-    raf = requestAnimationFrame(frame);
-    const onVisibility = () => { last = performance.now(); };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      running = false;
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', measureSteps);
-      document.removeEventListener('visibilitychange', onVisibility);
-      resetScrollBus();
-    };
-  }, [rootRef, enabled]);
-}
-
-/**
- * Homepage — «Голоса доверия»: an editorial 3D descent.
- * Act I  hero statement · Act II  testimonial cascade · Act III  finale CTA.
- * No catalogue sections here by design — every service lives in the header.
- */
+/** fairhaven.uz home: the stage hero with the orbit, then the floor and stage sections in turn. */
 export default function Home() {
   useSeo();
-  const { t, lang } = useI18n();
-  const content = useSiteContent();
-  const heroCopy = content.hero[lang] || content.hero.ru;
-  const mode = useFullExperience();
-  const rootRef = useRef(null);
-  const [canvasActive, setCanvasActive] = useState(true);
-
-  useJourneyDriver(rootRef, mode === 'full');
-
-  // Pause the fixed canvas when the journey is out of view (footer etc.).
-  useEffect(() => {
-    if (mode !== 'full') return undefined;
-    const root = rootRef.current;
-    if (!root) return undefined;
-    const io = new IntersectionObserver(
-      ([entry]) => setCanvasActive(entry.isIntersecting),
-      { threshold: 0 }
-    );
-    io.observe(root);
-    return () => io.disconnect();
-  }, [mode]);
-
-  const simple = mode !== 'full';
-
+  useHeaderTone('stage');
+  const { home } = useHomeFacts();
   return (
-    <div className={`scrolly-root ${simple ? 'scrolly-simple' : 'scrolly-full'}`} ref={rootRef}>
-      {mode === 'full' && (
-        <Suspense fallback={null}>
-          <Scene3D active={canvasActive} products={content.products3d} />
-        </Suspense>
-      )}
-
-      {/* Atmosphere wash behind everything (CSS-only, both modes) */}
-      <div className="scrolly-atmosphere" aria-hidden="true" />
-
-      {/* ── Act I · Hero — original fairhavenhealth.com composition ────── */}
-      <section className="hero-section journey-hero" aria-labelledby="home-hero-title">
-        <div className="container hero-inner">
-          <m.div
-            className="hero-copy hero-lux"
-            variants={heroStagger}
-            initial="hidden"
-            animate="show"
-          >
-            <m.div className="hero-lux-eyebrow" variants={heroRise}>
-              <span className="hero-lux-dot" aria-hidden="true" />
-              {t('announce2')}
-            </m.div>
-            <m.h1 className="hero-title" id="home-hero-title" variants={heroRise}>
-              {heroCopy.titlePre}{' '}
-              <span className="hero-swash-wrap">
-                <em>{heroCopy.titleEm}</em>
-                <svg
-                  className="hero-swash"
-                  viewBox="0 0 220 14"
-                  preserveAspectRatio="none"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M3 10.5C60 3.5 150 2.5 217 7.5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="4.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </span>{' '}
-              {heroCopy.titlePost}
-            </m.h1>
-            <m.p className="hero-desc" variants={heroRise}>{heroCopy.desc}</m.p>
-            <m.div className="hero-cta-row" variants={heroRise}>
-              <Link to="/shop" className="btn btn-primary btn-lg">
-                {heroCopy.cta || t('heroCta')} <span aria-hidden="true">→</span>
-              </Link>
-              <button
-                type="button"
-                className="hero-ghost-link"
-                onClick={() => {
-                  document.querySelector('.journey-cascade-head')
-                    ?.scrollIntoView({ behavior: 'smooth' });
-                }}
-              >
-                {t('journeyVoicesTitle')} ↓
-              </button>
-            </m.div>
-            <m.div className="hero-stats hero-stats-lux" variants={heroRise}>
-              {content.hero.stats.map((st, i) => (
-                <div className="hero-stat" key={i}>
-                  <strong>{st.value}</strong>
-                  <span>{lang === 'uz' ? st.uz : st.ru}</span>
-                </div>
-              ))}
-            </m.div>
-            <m.div className="hero-trust-chips" variants={heroRise} aria-label={t('trustTitle')}>
-              {content.hero.chips.map((chip, i) => (
-                <span key={i}>{chip}</span>
-              ))}
-            </m.div>
-          </m.div>
-          <div className="hero-visual" aria-hidden="true">
-            <div className="hero-glow" />
-            {simple && (
-              <div className="hero-product-static">
-                <img
-                  src="/assets/fh-pro-women.avif"
-                  alt=""
-                  width="1600"
-                  height="1600"
-                  loading="eager"
-                  fetchpriority="high"
-                  decoding="async"
-                />
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="journey-scroll-hint" aria-hidden="true">
-          <span className="journey-scroll-hint-label">{t('journeyScrollHint')}</span>
-          <span className="journey-scroll-hint-line" />
-        </div>
-        <div className="hero-side-note" aria-hidden="true">EST. 2003 · SEATTLE, USA</div>
-      </section>
-
-      {/* ── Act II · Voices of trust ──────────────────────────────────── */}
-      <div className="journey-cascade-head">
-        <div className="container">
-          <h2 className="journey-cascade-title">{t('journeyVoicesTitle')}</h2>
-          <p className="journey-cascade-sub">{t('journeyVoicesSub')}</p>
-        </div>
-      </div>
-      <TestimonialCascade simple={simple} />
-
-      {/* ── Act III · Finale ──────────────────────────────────────────── */}
-      <section className="journey-finale">
-        <div className="container journey-finale-inner">
-          <div className="journey-stats" role="list">
-            <div className="journey-stat" role="listitem">
-              <strong>2003</strong>
-              <span>{t('journeyStatFounded')}</span>
-            </div>
-            <div className="journey-stat" role="listitem">
-              <strong>22+</strong>
-              <span>{t('heroStat1Label')}</span>
-            </div>
-            <div className="journey-stat" role="listitem">
-              <strong>100%</strong>
-              <span>{t('heroStat2Label')}</span>
-            </div>
-          </div>
-          <h2 className="journey-finale-title">{t('journeyFinaleTitle')}</h2>
-          <p className="journey-finale-sub">{t('journeyFinaleSub')}</p>
-          <div className="journey-cta-row">
-            <Link to="/shop" className="btn btn-primary btn-lg">
-              {t('heroCta')} <span aria-hidden="true">→</span>
-            </Link>
-            <Link to="/about" className="btn btn-outline btn-lg">
-              {t('navDifference')}
-            </Link>
-          </div>
-          <p className="journey-press" aria-label={t('trustTitle')}>
-            <span>cGMP</span>
-            <span aria-hidden="true">·</span>
-            <span>Made in USA</span>
-            <span aria-hidden="true">·</span>
-            <span>Non-GMO</span>
-            <span aria-hidden="true">·</span>
-            <span>Mom’s Choice Awards®</span>
-          </p>
-        </div>
-      </section>
-    </div>
+    <>
+      <Hero />
+      <GoalNavigator />
+      <SavingsShelf />
+      <BrandWall />
+      <KindTiles />
+      <PartnerStory />
+      <Journal />
+      <TelegramBlock />
+      <Reviews items={home.reviews} />
+    </>
   );
 }

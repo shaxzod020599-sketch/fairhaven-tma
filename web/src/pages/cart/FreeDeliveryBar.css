@@ -1,0 +1,62 @@
+/* Free-delivery progress (cart summary, checkout summary). */
+/* The rider layer spans the full track and slides right; clipping keeps it from widening the page. */
+.crt-free {
+  padding: var(--s-4);
+  overflow: clip;
+  border-radius: var(--r-well);
+  background: var(--bg-2);
+  transition: background-color var(--d-reveal) var(--ease-out);
+}
+.crt-free-text {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-4);
+  font-size: var(--t-small);
+  line-height: var(--lh-small);
+  font-weight: var(--w-strong);
+}
+.crt-free-text svg { flex: none; margin-top: 1px; color: var(--fg-2); }
+.crt-free-text strong { white-space: nowrap; }
+.crt-free-track {
+  position: relative;
+  height: 6px;
+  margin-inline: 11px;
+  border-radius: var(--r-pill);
+  background: var(--bg-3);
+}
+.crt-free-bar {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--fg);
+  transform-origin: left center;
+  transition: background-color var(--d-reveal) var(--ease-out);
+}
+/* Full-width layer moved by translateX(share): its left edge carries the sun along the track. */
+.crt-free-rider {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.crt-free-sun {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--bg-2);
+  color: var(--fg);
+  transition: background-color var(--d-reveal) var(--ease-out);
+}
+.crt-free.is-reached { background: var(--sun-100); }
+.crt-free.is-reached .crt-free-bar { background: var(--sun-600); }
+.crt-free.is-reached .crt-free-sun {
+  background: var(--sun-100);
+  filter: drop-shadow(0 0 8px var(--sun-glow));
+}
+.crt-free.is-reached .crt-free-text svg { color: var(--fg); }

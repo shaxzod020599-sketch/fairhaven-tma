@@ -1,0 +1,13 @@
+/* Sticky goal rail: glass strip under the header that follows it up when it hides. */
+.shop-rail {
+  position: sticky;
+  top: var(--header-h);
+  z-index: calc(var(--z-header) - 1);
+  padding: var(--s-2) 0;
+  background: rgba(255, 255, 255, .9);
+  -webkit-backdrop-filter: saturate(1.6) blur(16px);
+  backdrop-filter: saturate(1.6) blur(16px);
+  border-bottom: 1px solid var(--line);
+  transition: transform var(--d-ui) var(--ease-out);
+}
+.shop-rail.is-raised { transform: translateY(calc(-1 * var(--header-h))); }

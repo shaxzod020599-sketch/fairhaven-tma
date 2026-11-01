@@ -1,8 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { ru } from './ru.js';
-import { uz } from './uz.js';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
+import { DICTS, interpolate, pluralForm } from './dicts.js';
 
-const DICTS = { ru, uz };
 const STORAGE_KEY = 'fh-web-lang';
 
 const I18nContext = createContext(null);
@@ -10,7 +8,8 @@ const I18nContext = createContext(null);
 export function I18nProvider({ children }) {
   const [lang, setLang] = useState(() => {
     if (typeof window === 'undefined') return 'ru';
-    return localStorage.getItem(STORAGE_KEY) || 'ru';
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved === 'uz' ? 'uz' : 'ru';
   });
 
   useEffect(() => {
@@ -20,6 +19,7 @@ export function I18nProvider({ children }) {
     document.documentElement.lang = lang;
   }, [lang]);
 
+  // Flat lookup with a Russian fallback, so a key missing in Uzbek never shows as a raw key.
   const t = useCallback(
     (key) => {
       const dict = DICTS[lang] || DICTS.ru;
@@ -28,11 +28,15 @@ export function I18nProvider({ children }) {
     [lang]
   );
 
+  const tf = useCallback((key, vars) => interpolate(t(key), vars), [t]);
+
+  const plural = useCallback((n, forms) => pluralForm(lang, n, forms), [lang]);
+
   const toggle = useCallback(() => {
     setLang((prev) => (prev === 'ru' ? 'uz' : 'ru'));
   }, []);
 
-  const value = { lang, setLang, toggle, t };
+  const value = useMemo(() => ({ lang, setLang, toggle, t, tf, plural }), [lang, toggle, t, tf, plural]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 

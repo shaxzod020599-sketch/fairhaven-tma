@@ -1,0 +1,41 @@
+/* Skeleton: the sheen is a translated layer (transform only); reduced motion leaves the plain block. */
+.ui-skeleton {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--bg-2);
+}
+.ui-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .7), transparent);
+  transform: translateX(-100%);
+  animation: ui-sheen 1.4s var(--ease-in-out) infinite;
+}
+@keyframes ui-sheen {
+  to { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-skeleton::after { display: none; }
+}
+.stage .ui-skeleton { background: var(--stage-900); }
+.stage .ui-skeleton::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .06), transparent); }
+
+.ui-skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.ui-skeleton-card .ui-skeleton-well {
+  aspect-ratio: 1;
+  border-radius: var(--r-well);
+}
+.ui-skeleton-lines { display: grid; gap: var(--s-2); }
+.ui-skeleton-card--compact {
+  flex-direction: row;
+  align-items: center;
+}
+.ui-skeleton-card--compact .ui-skeleton-well { width: 88px; flex: none; }
+.ui-skeleton-card--compact .ui-skeleton-lines { flex: 1; }

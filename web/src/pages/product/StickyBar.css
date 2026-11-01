@@ -1,0 +1,56 @@
+/* Phone buy bar: glass strip at the bottom, packshot, title and price on the left, the button on the right. */
+.pdp-bar {
+  --pdp-bar-h: 72px;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-header);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-height: calc(var(--pdp-bar-h) + var(--safe-bottom));
+  padding: var(--s-3) var(--gutter) calc(var(--s-3) + var(--safe-bottom));
+  background: rgba(255, 255, 255, .92);
+  -webkit-backdrop-filter: saturate(1.6) blur(16px);
+  backdrop-filter: saturate(1.6) blur(16px);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -12px 30px -18px rgba(15, 17, 21, .25);
+  transform: translateY(110%);
+}
+.pdp-bar-info {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.pdp-bar-img {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--bg-2);
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+.pdp-bar-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pdp-bar-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--fg-2);
+}
+.pdp-bar .ui-price-old { display: none; }
+.pdp-bar-add { flex: none; }
+
+@media (min-width: 1024px) {
+  .pdp-bar { display: none; }
+}
+
+/* While the bar shows, toasts rise above it and the page end stays reachable. */
+@media (max-width: 1023px) {
+  html[data-pdp-bar] { --toast-lift: 68px; }
+  html[data-pdp-bar] body { padding-bottom: calc(72px + var(--safe-bottom)); }
+}

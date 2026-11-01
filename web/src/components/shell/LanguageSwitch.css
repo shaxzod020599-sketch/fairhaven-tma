@@ -1,0 +1,46 @@
+/* RU / UZ pill. Colours follow the surface: ink fill on the floor, sun fill on the stage. */
+.sh-lang {
+  --lang-fill: var(--fg);
+  --lang-on: var(--bg);
+  --lang-edge: var(--line);
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  border: 1px solid var(--lang-edge);
+  border-radius: var(--r-pill);
+}
+.stage .sh-lang,
+.sh-lang.is-light {
+  --lang-fill: var(--sun);
+  --lang-on: var(--on-sun);
+  --lang-edge: rgba(245, 246, 248, .22);
+}
+.sh-lang-btn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  height: var(--tap);
+  padding: 0 var(--s-2);
+  border-radius: var(--r-pill);
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  font-weight: var(--w-micro);
+  letter-spacing: var(--ls-micro);
+  color: inherit;
+  opacity: .72;
+  transition: opacity var(--d-hover) var(--ease-out), color var(--d-ui) var(--ease-out);
+}
+.sh-lang-btn.is-on { opacity: 1; color: var(--lang-on); }
+.sh-lang-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--lang-fill);
+}
+.sh-lang-label { position: relative; }
+@media (hover: hover) {
+  .sh-lang-btn:not(.is-on):hover { opacity: 1; }
+}
+/* Large: phone menu, wider targets. */
+.sh-lang--lg .sh-lang-btn { min-width: 56px; }

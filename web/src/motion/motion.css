@@ -1,0 +1,90 @@
+/* Shared classes of the motion primitives (web/src/motion). Transform and opacity only. */
+
+/* Magnetic: an inline wrapper, so it never changes the layout of what it holds. */
+.fx-magnetic { display: inline-flex; }
+
+/* Tilt: clips the moving highlight to the wrapped shape (radius comes from the caller's class). */
+.fx-tilt {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.fx-tilt-glare {
+  position: absolute;
+  inset: -50%;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 40%);
+  mix-blend-mode: soft-light;
+  opacity: 0;
+}
+
+/* Marquee */
+.fx-marquee {
+  --marquee-gap: var(--s-8);
+  overflow: hidden;
+  max-width: 100%;
+}
+.fx-marquee-track {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+}
+.fx-marquee-copy {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--marquee-gap);
+  /* Trailing gap inside the copy, so copy width is exactly one loop. */
+  padding-inline-end: var(--marquee-gap);
+}
+/* Repeats are for the eye only: the pointer passes through them even where `inert` is unsupported
+   (a host such as the home brand wall maps the point back to the first copy). */
+.fx-marquee-copy[aria-hidden='true'] { pointer-events: none; }
+.fx-marquee--still {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.fx-marquee--still::-webkit-scrollbar { display: none; }
+.fx-marquee--still .fx-marquee-copy { width: max-content; }
+
+/* FlyToCart: copies fly in a fixed layer above the page and never take clicks. */
+.fx-fly-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-fly);
+  pointer-events: none;
+  overflow: hidden;
+}
+.fx-fly {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  padding: 10%;
+  border-radius: var(--r-well);
+  background: var(--bg-2);
+  box-shadow: var(--shadow-2);
+  will-change: transform, opacity;
+}
+.fx-fly img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+
+/* RouteProgress: a 3 px sun bar under the safe area, growing from the left. */
+.fx-progress {
+  position: fixed;
+  top: var(--safe-top);
+  left: 0;
+  right: 0;
+  z-index: var(--z-progress);
+  height: 3px;
+  background: var(--sun);
+  box-shadow: 0 0 10px var(--sun-glow);
+  transform-origin: 0 50%;
+  pointer-events: none;
+}
+
+/* Counter: digits keep their width while rolling. */
+.fx-counter { font-variant-numeric: tabular-nums; }

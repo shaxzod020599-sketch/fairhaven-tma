@@ -1,0 +1,166 @@
+.hm-gn-title { margin: 0 0 var(--s-10); }
+
+.hm-gn-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--s-10);
+  align-items: start;
+}
+
+.hm-gn-index {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px var(--s-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 1100px) {
+  .hm-gn-index { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.hm-gn-row {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-height: 68px;
+  padding: 0 var(--s-5) 0 var(--s-3);
+  border-radius: var(--r-well);
+  color: var(--fg);
+  text-decoration: none;
+}
+.hm-gn-row-fill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--bg-2);
+}
+.hm-gn-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hm-gn-label {
+  font-size: clamp(17px, 1.45vw, 21px);
+  font-weight: var(--w-h3);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.hm-gn-count {
+  margin-left: auto;
+  color: var(--fg-3);
+}
+
+.hm-gn-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: 50%;
+  background: var(--bg-2);
+  color: var(--fg);
+  transition: background-color var(--d-ui) var(--ease-out), color var(--d-ui) var(--ease-out);
+}
+.hm-gn-row.is-active .hm-gn-icon {
+  background: var(--sun);
+  color: var(--on-sun);
+}
+
+.hm-gn-preview {
+  position: sticky;
+  top: calc(var(--header-h) + var(--s-6));
+  display: flex;
+  flex-direction: column;
+  min-height: 440px;
+  padding: var(--s-8);
+  overflow: hidden;
+  border-radius: var(--r-sheet);
+  background: var(--bg-2);
+}
+.hm-gn-fan {
+  position: relative;
+  height: 250px;
+  margin-bottom: var(--s-6);
+}
+.hm-gn-fan-set {
+  position: absolute;
+  inset: 0;
+}
+.hm-gn-shot {
+  position: absolute;
+  left: 50%;
+  top: 4%;
+  width: 30%;
+  margin-left: -15%;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border-radius: var(--r-well);
+  background: var(--bg);
+  box-shadow: var(--shadow-2);
+}
+.hm-gn-shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 10%;
+  object-fit: contain;
+}
+.hm-gn-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-3);
+  margin-top: auto;
+}
+.hm-gn-name,
+.hm-gn-desc { margin: 0; }
+.hm-gn-desc { max-width: 40ch; margin-bottom: var(--s-3); }
+
+/* Phones: one card per goal in a rail. */
+.hm-gn-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--s-4);
+  border-radius: var(--r-card);
+  background: var(--bg-2);
+  color: var(--fg);
+  text-decoration: none;
+}
+.hm-gn-card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hm-gn-card-shots {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  height: 148px;
+  padding-top: var(--s-2);
+}
+.hm-gn-card-shot {
+  width: 36%;
+  aspect-ratio: 4 / 5;
+  margin-inline: -4%;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: var(--shadow-2);
+}
+.hm-gn-card-shot:nth-child(1) { transform: rotate(-7deg) translateY(6px); }
+.hm-gn-card-shot:nth-child(2) { position: relative; z-index: 1; }
+.hm-gn-card-shot:nth-child(3) { transform: rotate(7deg) translateY(6px); }
+.hm-gn-card-shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 10%;
+  object-fit: contain;
+}
+.hm-gn-card-text {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-top: var(--s-4);
+}
+.hm-gn-card-label {
+  font-weight: var(--w-strong);
+  line-height: 1.25;
+}

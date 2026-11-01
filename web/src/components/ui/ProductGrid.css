@@ -1,0 +1,10 @@
+/* ProductGrid (columns come from .grid-products in base.css) */
+.ui-grid { position: relative; } /* popLayout places leaving cards against this box */
+.ui-grid-item { min-width: 0; }
+.ui-grid-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+  margin-top: clamp(32px, 4vw, 56px);
+}

@@ -1,0 +1,41 @@
+/* Lines of a placed order. */
+.crt-od { display: grid; gap: var(--s-5); }
+.crt-od-lines { margin: 0; padding: 0; list-style: none; display: grid; }
+.crt-od-line {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding-block: var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+.crt-od-line:first-child { padding-top: 0; }
+.crt-od-thumb {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  background: var(--bg-2);
+  color: var(--fg-3);
+  overflow: hidden;
+}
+.crt-od-thumb img { width: 100%; height: 100%; object-fit: contain; padding: 6px; mix-blend-mode: multiply; }
+.crt-od-body { display: grid; gap: 2px; min-width: 0; }
+.crt-od-brand { font-size: var(--t-micro); color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; }
+.crt-od-title {
+  font-size: var(--t-small);
+  font-weight: var(--w-strong);
+  line-height: 1.35;
+  color: var(--fg);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+/* The link is the tap target: at least var(--tap) tall. */
+a.crt-od-title { display: flex; align-items: center; min-height: var(--tap); }
+a.crt-od-title:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
+@media (hover: hover) {
+  a.crt-od-title:hover { text-decoration: underline; text-underline-offset: 3px; }
+}
+.crt-od-meta { font-size: var(--t-small); color: var(--fg-3); }
+.crt-od-sum { font-size: var(--t-small); white-space: nowrap; }

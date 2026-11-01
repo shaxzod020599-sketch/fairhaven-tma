@@ -1,0 +1,43 @@
+/* Checkout text field: pill input, well-radius textarea, hint or error below. */
+.crt-field { display: grid; gap: var(--s-2); min-width: 0; }
+.crt-field-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-strong);
+}
+.crt-field-optional { font-weight: 400; color: var(--fg-3); }
+.crt-field-control {
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 0 var(--s-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 16px; /* no zoom on iOS */
+  transition: border-color var(--d-hover) var(--ease-out), box-shadow var(--d-hover) var(--ease-out);
+}
+.crt-field-control--area {
+  min-height: 104px;
+  padding: var(--s-3) var(--s-5);
+  border-radius: var(--r-well);
+  line-height: 1.5;
+  resize: vertical;
+}
+.crt-field-control::placeholder { color: var(--fg-3); }
+.crt-field-control:focus { outline: none; border-color: var(--fg); box-shadow: 0 0 0 3px var(--bg-3); }
+.crt-field-control:focus-visible { box-shadow: var(--focus-ring); }
+@media (hover: hover) {
+  .crt-field-control:hover:not(:focus) { border-color: var(--fg-3); }
+}
+.crt-field.is-error .crt-field-control { border-color: var(--danger); }
+.crt-field-note {
+  margin: 0;
+  padding-inline: var(--s-5);
+  font-size: var(--t-small);
+  line-height: var(--lh-small);
+  color: var(--fg-3);
+}
+.crt-field-error { color: var(--danger); }

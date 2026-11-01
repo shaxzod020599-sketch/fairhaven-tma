@@ -1,0 +1,88 @@
+/* 404 (.nf-): the sun sets behind the horizon, then search and goal links. */
+.nf-page { padding-block: var(--s-12) var(--section); }
+.nf-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.nf-sun {
+  width: clamp(200px, 30vw, 320px);
+  height: auto;
+  overflow: visible;
+}
+.nf-stop-a { stop-color: var(--sun); }
+.nf-stop-b { stop-color: var(--sun-600); }
+.nf-sun-glow { fill: var(--sun-glow); opacity: .6; }
+.nf-sun-line {
+  fill: none;
+  stroke: var(--fg);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.nf-sun-line--2 { opacity: .45; }
+.nf-sun-line--3 { opacity: .2; }
+/* Starts a little above its resting place and sinks half under the horizon. */
+.nf-sun-body {
+  transform-box: view-box;
+  animation: nf-set var(--d-hero) var(--ease-out) 150ms both;
+}
+@keyframes nf-set {
+  from { transform: translateY(-34px); }
+  to { transform: translateY(0); }
+}
+
+.nf-code { margin-top: var(--s-6); color: var(--fg-3); }
+.nf-title {
+  margin-top: var(--s-3);
+  font-size: var(--t-h1);
+  font-weight: var(--w-display);
+  letter-spacing: var(--ls-display);
+  line-height: 1;
+  text-wrap: balance;
+}
+.nf-text { max-width: 44ch; margin-top: var(--s-4); font-size: 17px; }
+.nf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-3);
+  margin-top: var(--s-8);
+}
+
+.nf-goals {
+  width: 100%;
+  max-width: 920px;
+  margin-top: var(--s-16);
+  padding-top: var(--s-8);
+  border-top: 1px solid var(--line);
+}
+.nf-goals-title { color: var(--fg-3); font-size: var(--t-micro); font-weight: var(--w-micro); }
+.nf-goals ul {
+  list-style: none;
+  margin: var(--s-5) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-2);
+}
+.nf-goal {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  padding-inline: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  color: var(--fg);
+  font-size: 15px;
+  text-decoration: none;
+  transition: background-color var(--d-hover) var(--ease-out), border-color var(--d-hover) var(--ease-out), transform var(--d-hover) var(--ease-out);
+}
+.nf-goal-count { color: var(--fg-3); }
+@media (hover: hover) {
+  .nf-goal:hover { background: var(--sun-100); border-color: var(--sun); transform: translateY(-2px); }
+}
+.nf-goal:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

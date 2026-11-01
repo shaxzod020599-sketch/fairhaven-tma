@@ -1,0 +1,60 @@
+/* /order/:id: the sun rises over the thank-you, then the order and what happens next. */
+.ok-page { padding: var(--s-8) 0 var(--s-16); }
+.ok-hero { display: grid; justify-items: center; gap: var(--s-4); text-align: center; }
+.ok-title { max-width: 18ch; margin: var(--s-2) 0 0; text-wrap: balance; }
+.ok-lead { margin: 0; max-width: 46ch; color: var(--fg-2); font-size: var(--t-body); line-height: 1.55; }
+
+.ok-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  align-items: start;
+  gap: var(--s-6);
+  max-width: 1080px;
+  margin: var(--s-12) auto 0;
+}
+.ok-card,
+.ok-next {
+  display: grid;
+  gap: var(--s-5);
+  padding: var(--s-6);
+  border-radius: var(--r-card);
+}
+.ok-card { border: 1px solid var(--line); background: var(--bg); }
+.ok-next { background: var(--bg-2); }
+.ok-card-title { margin: 0; }
+.ok-skeleton { display: grid; gap: var(--s-3); }
+
+.ok-facts { margin: 0; display: grid; gap: var(--s-3); padding-top: var(--s-5); border-top: 1px solid var(--line); }
+.ok-facts div { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--s-4); font-size: var(--t-small); }
+.ok-facts dt { color: var(--fg-3); }
+.ok-facts dd { margin: 0; font-weight: var(--w-strong); overflow-wrap: anywhere; }
+
+.ok-hidden { display: grid; justify-items: start; gap: var(--s-4); }
+.ok-hidden p { margin: 0; color: var(--fg-2); line-height: 1.55; }
+
+.ok-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--s-4); }
+.ok-steps li { display: flex; align-items: flex-start; gap: var(--s-3); line-height: 1.5; }
+.ok-step-n {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--sun);
+  color: var(--on-sun);
+  font-size: var(--t-small);
+  font-weight: var(--w-strong);
+}
+.ok-hours { color: var(--fg-2); }
+.ok-actions { display: grid; gap: var(--s-3); }
+
+@media (max-width: 900px) {
+  .ok-layout { grid-template-columns: minmax(0, 1fr); margin-top: var(--s-8); }
+}
+@media (max-width: 560px) {
+  .ok-page { padding-top: var(--s-6); }
+  .ok-card,
+  .ok-next { padding: var(--s-5); }
+  .ok-facts div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}

@@ -1,0 +1,57 @@
+/* Filters in use: removable ink-outline chips and a text reset. */
+.shop-active-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.shop-active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  max-width: 100%;
+  padding: 0 var(--s-3) 0 var(--s-4);
+  border: 1px solid var(--fg);
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--t-small);
+  font-weight: var(--w-micro);
+  cursor: pointer;
+  transition: background-color var(--d-hover) var(--ease-out), transform var(--d-hover) var(--ease-out);
+}
+.shop-active-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shop-active-chip svg { flex: none; color: var(--fg-2); }
+@media (hover: hover) {
+  .shop-active-chip:hover { background: var(--bg-2); }
+}
+.shop-active-chip:active { transform: scale(.97); }
+.shop-active-chip:focus-visible,
+.shop-active-clear:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.shop-active-clear {
+  min-height: var(--tap);
+  padding: 0 var(--s-3);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--t-small);
+  font-weight: var(--w-strong);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--line);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .shop-active-clear:hover { text-decoration-color: currentColor; }
+}

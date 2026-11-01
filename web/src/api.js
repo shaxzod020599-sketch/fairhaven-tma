@@ -44,6 +44,16 @@ export function fetchProductById(id) {
   return request(`/products/${id}`);
 }
 
+// The whole catalogue (~100 products) in one request; the catalog store caches it.
+export function fetchAllProducts() {
+  return request('/products?limit=500');
+}
+
+// Goal / kind / brand counts. Older APIs lack the endpoint; the catalog store then counts locally.
+export function fetchTaxonomy() {
+  return request('/products/taxonomy', { allowError: true });
+}
+
 export function fetchCategories() {
   return request('/products/categories');
 }

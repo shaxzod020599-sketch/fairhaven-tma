@@ -1,0 +1,125 @@
+/* Button, IconButton. Controls are full pill; hover effects only where a real hover exists. */
+.ui-btn {
+  --btn-bg: var(--fg);
+  --btn-fg: var(--bg);
+  --btn-sweep: var(--sun);
+  --btn-fg-hover: var(--on-sun);
+  --btn-border: transparent;
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-h);
+  padding: 0 var(--s-6);
+  border: 1px solid var(--btn-border);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-size: 15px;
+  font-weight: var(--w-strong);
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--d-hover) var(--ease-out), color var(--d-ui) var(--ease-out),
+    border-color var(--d-ui) var(--ease-out), opacity var(--d-ui) var(--ease-out);
+}
+/* The sweep: a layer under the label that grows from the left edge. */
+.ui-btn::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  background: var(--btn-sweep);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform var(--d-ui) var(--ease-out);
+}
+.ui-btn-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.ui-btn-label svg { width: 20px; height: 20px; flex: none; }
+
+@media (hover: hover) {
+  .ui-btn:hover:not(:disabled):not([aria-disabled='true']) { color: var(--btn-fg-hover); }
+  .ui-btn:hover:not(:disabled):not([aria-disabled='true'])::before { transform: scaleX(1); }
+}
+.ui-btn:active:not(:disabled) { transform: scale(.98); }
+.ui-btn:disabled,
+.ui-btn[aria-disabled='true'] { opacity: .45; cursor: default; }
+
+.ui-btn--sm { min-height: var(--control-h-sm); padding: 0 var(--s-5); font-size: 14px; }
+.ui-btn--lg { min-height: 56px; padding: 0 var(--s-8); font-size: 16px; }
+.ui-btn--block { display: flex; width: 100%; }
+.ui-btn-magnet--block { display: flex; width: 100%; }
+
+.ui-btn--secondary {
+  --btn-bg: var(--bg);
+  --btn-fg: var(--fg);
+  --btn-sweep: var(--bg-3);
+  --btn-fg-hover: var(--fg);
+  --btn-border: var(--line);
+}
+.ui-btn--ghost {
+  --btn-bg: transparent;
+  --btn-fg: var(--fg);
+  --btn-sweep: var(--bg-2);
+  --btn-fg-hover: var(--fg);
+}
+/* On a dark section the primary button turns sun with a white sweep; 'stage' forces that look anywhere. */
+.ui-btn--stage,
+.stage .ui-btn--primary {
+  --btn-bg: var(--sun);
+  --btn-fg: var(--on-sun);
+  --btn-sweep: var(--stage-fg);
+  --btn-fg-hover: var(--on-sun);
+}
+.stage .ui-btn--secondary {
+  --btn-bg: transparent;
+  --btn-fg: var(--stage-fg);
+  --btn-sweep: var(--stage-800);
+  --btn-fg-hover: var(--stage-fg);
+  --btn-border: var(--stage-800);
+}
+.stage .ui-btn--ghost {
+  --btn-fg: var(--stage-fg);
+  --btn-sweep: var(--stage-900);
+  --btn-fg-hover: var(--stage-fg);
+}
+
+/* IconButton */
+.ui-iconbtn {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--d-hover) var(--ease-out), border-color var(--d-hover) var(--ease-out),
+    transform var(--d-hover) var(--ease-out), opacity var(--d-ui) var(--ease-out);
+}
+.ui-iconbtn svg { width: 22px; height: 22px; }
+.ui-iconbtn--lg { width: 52px; height: 52px; }
+.ui-iconbtn--outline { border-color: var(--line); background: var(--bg); }
+.ui-iconbtn--solid { background: var(--fg); color: var(--bg); }
+@media (hover: hover) {
+  .ui-iconbtn--plain:hover:not(:disabled) { background: var(--bg-2); }
+  .ui-iconbtn--outline:hover:not(:disabled) { border-color: var(--fg-3); }
+  .ui-iconbtn--solid:hover:not(:disabled) { background: var(--fg-2); }
+  .stage .ui-iconbtn--plain:hover:not(:disabled) { background: var(--stage-800); }
+}
+.ui-iconbtn:active:not(:disabled) { transform: scale(.94); }
+.ui-iconbtn:disabled { opacity: .35; cursor: default; }
+.stage .ui-iconbtn--outline { border-color: var(--stage-800); background: transparent; }
+.stage .ui-iconbtn--solid { background: var(--stage-fg); color: var(--stage-950); }

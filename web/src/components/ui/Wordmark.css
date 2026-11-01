@@ -1,0 +1,46 @@
+/* SunMark, Wordmark */
+.ui-sun { flex: none; overflow: visible; }
+.ui-sun-disc { fill: var(--sun); }
+.ui-sun-glow {
+  fill: var(--sun-glow);
+  opacity: 0;
+  transition: opacity var(--d-ui) var(--ease-out);
+}
+.ui-sun-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.ui-sun-line--short { opacity: .55; }
+.ui-sun-line--shorter { opacity: .3; }
+
+/* The disc and glow start below the horizon (clipped away) and rise once. */
+.ui-sun--rise .ui-sun-disc,
+.ui-sun--rise .ui-sun-glow {
+  transform-box: view-box;
+  animation: ui-sun-rise var(--d-hero) var(--ease-out) 120ms both;
+}
+@keyframes ui-sun-rise {
+  from { transform: translateY(11px); }
+  to { transform: none; }
+}
+@media (hover: hover) {
+  .has-sun:hover .ui-sun-glow { opacity: 1; }
+}
+.has-sun:focus-visible .ui-sun-glow { opacity: 1; }
+
+.ui-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  color: inherit;
+  text-decoration: none;
+}
+.ui-wordmark-text {
+  font-size: calc(var(--wordmark, 28px) * .8);
+  font-weight: var(--w-display);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}

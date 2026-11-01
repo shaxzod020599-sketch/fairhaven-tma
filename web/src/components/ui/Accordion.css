@@ -1,0 +1,41 @@
+/* Accordion */
+.ui-accordion { border-top: 1px solid var(--line); }
+.ui-acc-item { border-bottom: 1px solid var(--line); }
+.ui-acc-heading { font: inherit; letter-spacing: normal; }
+.ui-acc-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  width: 100%;
+  min-height: 60px;
+  padding: var(--s-3) 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 17px;
+  font-weight: var(--w-strong);
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+.ui-acc-chevron {
+  flex: none;
+  color: var(--fg-2);
+  transition: transform var(--d-ui) var(--ease-out);
+}
+.ui-acc-item.is-open .ui-acc-chevron { transform: rotate(180deg); }
+@media (hover: hover) {
+  .ui-acc-button:hover .ui-acc-chevron { color: var(--fg); }
+}
+.ui-acc-panel {
+  padding-bottom: var(--s-5);
+  color: var(--fg-2);
+  line-height: var(--lh-body);
+  max-width: 72ch;
+}
+.stage .ui-accordion,
+.stage .ui-acc-item { border-color: var(--stage-800); }
+.stage .ui-acc-panel,
+.stage .ui-acc-chevron { color: var(--stage-fg-2); }

@@ -1,0 +1,27 @@
+/* SectionHeader */
+.ui-sechead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-4) var(--s-8);
+  margin-bottom: clamp(24px, 3.5vw, 48px);
+}
+.ui-sechead-text { display: grid; gap: var(--s-3); max-width: 760px; }
+.ui-sechead-eyebrow { color: var(--fg-2); }
+.stage .ui-sechead-eyebrow { color: var(--stage-fg-2); }
+.ui-sechead-desc { font-size: 17px; line-height: 1.5; max-width: 60ch; }
+.ui-sechead-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  color: inherit;
+  font-weight: var(--w-strong);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ui-sechead-link svg { transition: transform var(--d-ui) var(--ease-out); }
+@media (hover: hover) {
+  .ui-sechead-link:hover svg { transform: translateX(4px); }
+}

@@ -1,0 +1,101 @@
+/* Delivery address picker over the checkout: a sheet on phones, a centred dialog from tablet up. */
+.ymp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sheet);
+  display: grid;
+  place-items: center;
+  padding: var(--s-6);
+  background: rgb(14 17 22 / .48);
+}
+.ymp {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(760px, 100%);
+  height: min(680px, calc(100dvh - 48px));
+  border-radius: var(--r-sheet);
+  background: var(--bg);
+  box-shadow: 0 24px 64px rgb(14 17 22 / .24);
+  overflow: hidden;
+}
+.ymp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: var(--s-4) var(--s-4) var(--s-4) var(--s-6);
+}
+.ymp-title { margin: 0; font-size: var(--t-h3); font-weight: var(--w-strong); line-height: 1.25; }
+.ymp-canvas { position: relative; background: var(--bg-2); }
+.ymp-map { position: absolute; inset: 0; }
+/* The pin's tip marks the map centre: lift it by its own height. */
+.ymp-pin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 44px;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  z-index: 1;
+}
+.ymp-pin path { fill: var(--fg); }
+.ymp-pin circle { fill: var(--sun); }
+.ymp-pin svg { position: relative; z-index: 1; filter: drop-shadow(0 4px 6px rgb(14 17 22 / .3)); }
+.ymp-pin-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 12px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgb(14 17 22 / .3);
+  transform: translateX(-50%);
+}
+.ymp-state {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: var(--s-6);
+  background: var(--bg-2);
+  color: var(--fg-2);
+  text-align: center;
+}
+.ymp-state--failed { font-weight: var(--w-strong); }
+.ymp-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-4) var(--s-4) var(--s-4) var(--s-6);
+  border-top: 1px solid var(--line);
+}
+.ymp-address {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin: 0;
+  font-size: var(--t-small);
+  line-height: var(--lh-small);
+  font-weight: var(--w-strong);
+}
+.ymp-address svg { flex: none; color: var(--fg-2); }
+.ymp-address span { overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  .ymp-overlay { place-items: end stretch; padding: 0; }
+  .ymp {
+    width: 100%;
+    height: calc(100dvh - 32px);
+    border-radius: var(--r-sheet) var(--r-sheet) 0 0;
+  }
+  .ymp-head { padding-left: var(--s-5); }
+  .ymp-foot {
+    flex-direction: column;
+    align-items: stretch;
+    padding: var(--s-4) var(--s-5) calc(var(--s-4) + env(safe-area-inset-bottom));
+  }
+}
