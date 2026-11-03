@@ -33,6 +33,54 @@ async function yandexRow() {
 }
 afterEach(() => vi.unstubAllGlobals());
 
+it('shows old price under the channel price for Yandex and Uzum only', async () => {
+  stubRequests();
+  render(<ProductsPage />);
+  const yandex = await yandexRow();
+  const uzum = screen.getByRole('checkbox', { name: /на Uzum Tezkor$/ }).closest('.fh-channel-row');
+  const medicalka = screen.getByRole('checkbox', { name: /на Medicalka$/ }).closest('.fh-channel-row');
+  expect(within(yandex).getByRole('spinbutton', { name: /Цена до скидки/ })).toBeDisabled();
+  expect(within(uzum).getByRole('spinbutton', { name: /Цена до скидки/ })).toBeEnabled();
+  expect(within(medicalka).queryByRole('spinbutton', { name: /Цена до скидки/ })).not.toBeInTheDocument();
+});
+
+it('saves an edited old price in the Yandex PATCH', async () => {
+  const row = { ...product, channels: { ...product.channels, yandex: { enabled: true, price: 73000, oldPrice: 0, forceStatus: 'auto', minStock: 0 } } };
+  const fetch = stubRequests((patch) => respond({ ...row, channels: { ...row.channels, yandex: { ...row.channels.yandex, ...patch } } }), row);
+  const user = userEvent.setup();
+  render(<ProductsPage />);
+  const controls = within(await yandexRow());
+  await user.clear(controls.getByRole('spinbutton', { name: /Цена до скидки/ }));
+  await user.type(controls.getByRole('spinbutton', { name: /Цена до скидки/ }), '90000');
+  await user.click(controls.getByRole('button', { name: 'Сохранить' }));
+  expect(controls.queryByRole('button', { name: 'Сохранить' })).not.toBeInTheDocument();
+  const writes = fetch.mock.calls.filter(([, options]) => options.method === 'PATCH');
+  expect(writes).toHaveLength(1);
+  expect(writes[0][0]).toBe('/api/admin/channels/products/p1/yandex');
+  expect(JSON.parse(writes[0][1].body)).toEqual({ enabled: true, price: 73000, oldPrice: 90000, forceStatus: 'auto', minStock: 0 });
+});
+
+it('shows the inherited shop old price when the channel old price is zero', async () => {
+  stubRequests(undefined, { ...product, oldPrice: 90000, channels: { ...product.channels,
+    yandex: { enabled: true, price: 73000, oldPrice: 0, forceStatus: 'auto', minStock: 0 } } });
+  render(<ProductsPage />);
+  const controls = within(await yandexRow());
+  expect(controls.getByText('пусто — возьмём старую цену сайта: 90 000 сум')).toBeInTheDocument();
+});
+
+it.each([
+  { oldPrice: 0, shop: 60000 },
+  { oldPrice: 73000, shop: 90000 },
+  { oldPrice: 60000, shop: 90000 },
+])('warns when the effective old price is not above the channel price: %j', async ({ oldPrice, shop }) => {
+  stubRequests(undefined, { ...product, oldPrice: shop, channels: { ...product.channels,
+    yandex: { enabled: true, price: 73000, oldPrice, forceStatus: 'auto', minStock: 0 } } });
+  render(<ProductsPage />);
+  const controls = within(await yandexRow());
+  expect(controls.getByText('Скидка не покажется: цена до скидки должна быть выше цены')).toBeInTheDocument();
+  expect(controls.queryByText(/пусто — возьмём старую цену сайта/)).not.toBeInTheDocument();
+});
+
 it('new drafts start Yandex disabled with independent settings and empty fiscal codes', () => {
   const draft = emptyProduct();
   expect(draft.channels.yandex).toEqual({ enabled: false, price: 0, forceStatus: 'auto', minStock: 0, measure: null, barcodeType: '' });

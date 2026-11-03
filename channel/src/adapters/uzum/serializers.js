@@ -62,7 +62,7 @@ function supportedEntry({ mirror, card }) {
 /** One product in the nomenclature payload. */
 function compositionItem({ card, mirror }, defaults) {
   const price = catalog.priceFor(card, CHANNEL);
-  const oldPrice = Number(card.channels?.[CHANNEL]?.oldPrice) || 0;
+  const oldPrice = catalog.oldPriceFor(card, CHANNEL);
 
   return {
     id: mirror.billzProductId,

@@ -17,6 +17,26 @@ test('catalogue conforms to original YAML and names a measure unit', () => {
   schema('NomenclatureAvailabilityV1', S.availability([entry]));
   assert.equal(S.availability([entry]).items[0].stock, 5);
 });
+for (const [name, own, shop, expected] of [
+  ['channel override', 30, 40, 30],
+  ['shop fallback', 0, 40, 40],
+  ['unset override', undefined, 40, 40],
+  ['shop price equal to channel price', 0, 20, undefined],
+  ['shop price below channel price', 0, 10, undefined],
+  ['no old price', 0, 0, undefined],
+  ['equal override prevents fallback', 20, 40, undefined],
+  ['lower override prevents fallback', 10, 40, undefined],
+]) {
+  test(`Uzum composition old price: ${name}`, () => {
+    const card = { ...entry.card, oldPrice: shop,
+      channels: { uzum: { ...entry.card.channels.uzum, oldPrice: own } } };
+    const body = S.composition([{ ...entry, card }], {});
+    schema('PickerNomenclatureV1', body);
+    assert.equal(body.items[0].price, 20);
+    assert.equal(body.items[0].oldPrice, expected);
+    assert.equal(Object.hasOwn(body.items[0], 'oldPrice'), expected !== undefined);
+  });
+}
 test('measure comes from the name, else the operator setting Yandex shares', () => {
   const item = (card) => S.composition([{ ...entry, card: { ...entry.card, ...card } }], {}).items[0];
   assert.deepEqual(item({ name: 'КРЕМ ДЛЯ РУК 50 МЛ' }).measure, { unit: 'MLT', value: 50 });

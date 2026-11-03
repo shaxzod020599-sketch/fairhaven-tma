@@ -153,7 +153,7 @@ test('Yandex credential fields, grant and scope are required and runtime signing
 test('composition serializes mandatory Yandex fields with independent SKU prices and regional fiscal data', async () => {
   await seed(); await seed('sku-two', { yandex: { price: 345, measure: { unit: 'MLT', value: 100 } } });
   const res = await composition(); assert.equal(res.status, 200); assert.match(res.type, /^application\/json/);
-  assert.deepEqual(res.body.categories, [{ id: 'vitamins', name: 'Vitaminlar' }]);
+  assert.deepEqual(res.body.categories, [{ id: 'vitamins', name: 'Витамины' }]);
   assert.deepEqual(res.body.items[0], { id: 'sku-one', categoryId: 'vitamins', name: 'UZ sku-one',
     description: { general: 'SKU description' }, price: 120.5, vendorCode: 'vendor-sku-one',
     barcode: { type: 'ean13', value: '4601234567893', weightEncoding: 'none' }, measure: { unit: 'GRM', value: 250 },

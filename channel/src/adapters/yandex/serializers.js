@@ -6,10 +6,10 @@ const PIECE_UNITS = new Set(['', 'шт', 'шт.', 'pcs', 'pc', 'piece', 'pieces'
 // Barcode types documented by partner.nomenclature.composition.get.
 const BARCODE_TYPES = new Set(('auspost ausredirect ausreply ausroute aztec c25iata c25ind c25inter c25logic c25matrix codabar codablockf code11 code100 code128 code128b code16k code39 code49 code93 daft datamatrix dotcode dpident dpleit ean128 ean13 ean14 eanx eanx_chk excode39 fim flat hanxin hibc_128 hibc_39 hibc_aztec hibc_blockf hibc_dm hibc_micpdf hibc_pdf hibc_qr isbnx itf14 japanpost kix koreapost logmars mailmark maxicode micropdf417 microqr msi_plessey nve18 onecode pdf417 pdf417trunc pharma pharma_two planet plessey postnet pzn qrcode rm4scc rss14 rss14stack rss14stack_omni rss_exp rss_expstack rss_ltd telepen telepen_num upca upca_chk upce upce_chk vin').split(' '));
 
-// Shown to Yandex customers; ids stay the backend's category keys.
+// Russian labels shown to Yandex customers; ids stay the backend's category keys.
 const CATEGORY_NAMES = {
-  supplements: 'Qo‘shimchalar', vitamins: 'Vitaminlar', hygiene: 'Gigiyena',
-  cosmetics: 'Kosmetika', parapharmaceuticals: 'Parafarmatsevtika', drinks: 'Ichimliklar',
+  supplements: 'Добавки', vitamins: 'Витамины', hygiene: 'Гигиена',
+  cosmetics: 'Косметика', parapharmaceuticals: 'Парафармацевтика', drinks: 'Напитки',
 };
 const SETTING_KEYS = ['channels.defaultMxikCode', 'channels.defaultPackageCode'];
 
@@ -58,7 +58,7 @@ function compositionItem({ card, mirror }, defaults = defaultsFrom()) {
     || !mxik || !packageCode) return null;
   const media = images.imagesFor(card).map(({ url }, order) => ({ url, order }));
   if (!media.length) return null;
-  const oldPrice = Number(settings.oldPrice);
+  const oldPrice = catalog.oldPriceFor(card, 'yandex');
   return {
     id, categoryId, name,
     description: { general: String(card.descriptionUz || card.description || '') },

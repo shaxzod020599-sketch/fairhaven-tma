@@ -14,7 +14,7 @@ import { useToast } from '../../ui/ToastProvider';
 import { ExcelDialog } from './ExcelDialog';
 
 const LIMIT = 24;
-const EMPTY_CHANNEL = { enabled: false, price: 0, forceStatus: 'auto', minStock: 0 };
+const EMPTY_CHANNEL = { enabled: false, price: 0, oldPrice: 0, forceStatus: 'auto', minStock: 0 };
 
 /**
  * Одна строка матрицы каналов.
@@ -54,10 +54,12 @@ function ChannelRow({ product, definition, onSave }) {
 
   const measureChanged = yandex && ['unit', 'value'].some((key) => (draft.measure?.[key] ?? '') !== (value.measure?.[key] ?? ''));
   const barcodeChanged = yandex && (draft.barcodeType ?? '') !== (value.barcodeType ?? '');
-  const changed = measureChanged || barcodeChanged || ['enabled', 'price', 'forceStatus', 'minStock']
+  const oldPriceChanged = definition.oldPrice && (draft.oldPrice ?? 0) !== (value.oldPrice ?? 0);
+  const changed = measureChanged || barcodeChanged || oldPriceChanged || ['enabled', 'price', 'forceStatus', 'minStock']
     .some((key) => (draft[key] ?? '') !== (value[key] ?? ''));
   const enabled = Boolean(draft.enabled);
   const priceMissing = enabled && !Number(draft.price);
+  const oldPrice = draft.oldPrice > 0 ? draft.oldPrice : product.oldPrice > 0 ? product.oldPrice : 0;
 
   const save = async () => {
     if (pending.current) return;
@@ -78,6 +80,7 @@ function ChannelRow({ product, definition, onSave }) {
       await onSave(definition.key, {
         enabled: Boolean(draft.enabled), price: draft.price ?? 0,
         forceStatus: draft.forceStatus || 'auto', minStock: draft.minStock ?? 0,
+        ...(oldPriceChanged ? { oldPrice: draft.oldPrice ?? 0 } : {}),
         ...(measureChanged ? { measure: draft.measure } : {}),
         ...(barcodeChanged ? { barcodeType: draft.barcodeType } : {}),
       });
@@ -109,17 +112,36 @@ function ChannelRow({ product, definition, onSave }) {
           && <small>Вес или объём не указан: Yandex получит его из названия, иначе 100 г. Тип штрихкода определяется сам.</small>}
       </div>
 
-      <label className="fh-channel-field">
-        <span>Цена на этой площадке</span>
-        <NumberInput
-          className={`fh-input fh-mono ${priceMissing ? 'is-invalid' : ''}`}
-          min="0"
-          disabled={!enabled || saving}
-          value={draft.price}
-          onChange={(price) => setDraft({ ...draft, price })}
-        />
-        <small>{priceMissing ? 'Без цены товар не отправится' : 'сум'}</small>
-      </label>
+      <div className="fh-channel-price">
+        <label className="fh-channel-field">
+          <span>Цена на этой площадке</span>
+          <NumberInput
+            className={`fh-input fh-mono ${priceMissing ? 'is-invalid' : ''}`}
+            min="0"
+            disabled={!enabled || saving}
+            value={draft.price}
+            onChange={(price) => setDraft({ ...draft, price })}
+          />
+          <small>{priceMissing ? 'Без цены товар не отправится' : 'сум'}</small>
+        </label>
+        {definition.oldPrice && (
+          <label className="fh-channel-field">
+            <span>Цена до скидки</span>
+            <NumberInput
+              className="fh-input fh-mono"
+              min="0"
+              disabled={!enabled || saving}
+              value={draft.oldPrice}
+              onChange={(oldPrice) => setDraft({ ...draft, oldPrice })}
+            />
+            <small>{oldPrice > 0 && oldPrice <= draft.price && draft.price > 0
+              ? 'Скидка не покажется: цена до скидки должна быть выше цены'
+              : !draft.oldPrice && product.oldPrice > 0
+                ? `пусто — возьмём старую цену сайта: ${formatMoney(product.oldPrice)}`
+                : 'необязательно, зачёркнутая цена'}</small>
+          </label>
+        )}
+      </div>
 
       <label className="fh-channel-field">
         <span>Показывать как</span>

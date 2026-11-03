@@ -9,8 +9,8 @@ export const CATEGORIES = [
 
 export const CHANNELS = [
   { key: 'medicalka', label: 'Medicalka', price: true, minStock: true },
-  { key: 'uzum', label: 'Uzum Tezkor', price: true, minStock: true },
-  { key: 'yandex', label: 'Yandex', price: true, minStock: true },
+  { key: 'uzum', label: 'Uzum Tezkor', price: true, oldPrice: true, minStock: true },
+  { key: 'yandex', label: 'Yandex', price: true, oldPrice: true, minStock: true },
 ];
 
 // Full documented set also accepted by the Yandex foundation serializer.

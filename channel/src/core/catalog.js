@@ -63,6 +63,13 @@ function priceFor(card, channel) {
   return Number(cfg.price) > 0 ? Number(cfg.price) : 0;
 }
 
+/** Positive channel old price wins; otherwise use the shop's, or 0. Callers compare with price. */
+function oldPriceFor(card, channel) {
+  const cfg = channelConfig(card, channel);
+  if (Number(cfg.oldPrice) > 0) return Number(cfg.oldPrice);
+  return Number(card.oldPrice) > 0 ? Number(card.oldPrice) : 0;
+}
+
 function isPublishable(card, mirror, channel) {
   if (!card || !mirror) return false;
   // A product Billz no longer carries must leave the catalogue, not merely
@@ -193,6 +200,7 @@ module.exports = {
   isAvailable,
   isPublishable,
   listForChannel,
+  oldPriceFor,
   priceFor,
   publishedQuantity,
   sellableStock,
