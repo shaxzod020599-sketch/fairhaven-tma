@@ -68,6 +68,11 @@ const channelOrderSchema = new mongoose.Schema({
   billz: {
     draftOrderId: { type: String, default: '' },
     orderNumber: { type: String, default: '' },
+    // The integration key that created the draft ('default' or a channel
+    // name; empty on orders from before per-channel keys, which used the
+    // shared one). Every later call on the draft uses the same key, so one
+    // sale never ends up with two authors in Billz.
+    keyName: { type: String, default: '' },
     // Whether reservedQty on the mirror currently counts this order. Guards the
     // counter against double application: a retry that re-runs a step must not
     // reserve the same units twice, and a release must not subtract twice.

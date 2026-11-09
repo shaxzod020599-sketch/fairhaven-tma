@@ -84,7 +84,15 @@ app.get('/health/detail', async (_req, res) => {
         rejectedReason: lastSync.rejectedReason || undefined,
         durationMs: lastSync.durationMs,
       },
-      billz: { writeEnabled: config.billzWriteEnabled, pendingRequests: billz.limiter.pending },
+      billz: {
+        writeEnabled: config.billzWriteEnabled,
+        pendingRequests: billz.limiter.pending,
+        // Names only, never values: which channels sell under their own key
+        // and payment type rather than the shared ones.
+        ownKeys: Object.keys(config.billz.channels).filter((c) => config.billz.channels[c].secretToken),
+        ownPaymentTypes: Object.keys(config.billz.channels)
+          .filter((c) => config.billz.channels[c].paymentTypeId),
+      },
     });
   } catch (err) {
     logger.error('health detail failed', { err });

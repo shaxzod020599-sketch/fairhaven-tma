@@ -12,6 +12,8 @@ const { limiter } = require('./queue');
  *
  *  - 429 backs off, honouring Retry-After when Billz sends one.
  *  - 401 invalidates the cached token and retries once.
+ *  - `options.billzKey` picks the integration key (see auth.js); without it
+ *    the shared key is used.
  *  - Write verbs are refused unless BILLZ_WRITE_ENABLED is on, so a half-built
  *    sales flow cannot mutate the client's live inventory by accident.
  */
@@ -72,7 +74,7 @@ async function request(method, path, options = {}) {
   let attempt = 0;
 
   for (;;) {
-    const token = await auth.getAccessToken();
+    const token = await auth.getAccessToken(options.billzKey);
 
     let res;
     let parsed;
@@ -105,7 +107,7 @@ async function request(method, path, options = {}) {
     if (res.status === 401 && !retriedAuth) {
       retriedAuth = true;
       logger.warn('billz token rejected, re-authenticating', { path });
-      await auth.invalidate(token);
+      await auth.invalidate(token, options.billzKey);
       // Re-authenticating is not a failed attempt; counting it here used to
       // eat one retry and shorten the backoff ladder for whatever came next.
       continue;

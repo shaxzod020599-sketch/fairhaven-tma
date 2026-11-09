@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const config = require('../config');
 const logger = require('../logger');
 const sale = require('../billz/sale');
+const billzAuth = require('../billz/auth');
 const BillzProduct = require('../models/BillzProduct');
 const ChannelOrder = require('../models/ChannelOrder');
 const { nextValue } = require('../models/Counter');
@@ -377,7 +378,23 @@ async function persistBillzOperation(order, token, fields) {
   return updated;
 }
 
-async function checkpointBillzDraft(order, token, { orderId, orderNumber }) {
+/** The integration key every call on this order's Billz draft must use. */
+function billzKeyOf(order) {
+  return order.billz?.keyName || billzAuth.DEFAULT_KEY;
+}
+
+/**
+ * The payment type a channel's sale settles on: the channel's own when one is
+ * configured, so Billz's by-payment-type report splits the channels, else the
+ * shared one.
+ */
+function paymentTypeFor(channel) {
+  const own = config.billz.channels?.[channel];
+  if (own?.paymentTypeId) return { id: own.paymentTypeId, name: own.paymentTypeName };
+  return { id: config.billz.paymentTypeId, name: config.billz.paymentTypeName };
+}
+
+async function checkpointBillzDraft(order, token, { orderId, orderNumber, keyName }) {
   const updated = await ChannelOrder().findOneAndUpdate(
     {
       _id: order._id,
@@ -387,6 +404,7 @@ async function checkpointBillzDraft(order, token, { orderId, orderNumber }) {
       $set: {
         'billz.draftOrderId': orderId,
         'billz.orderNumber': orderNumber || '',
+        'billz.keyName': keyName || '',
         ...(order.channel === 'yandex' ? { 'yandex.accountingStage': 'draft' } : {}),
       },
     },
@@ -443,6 +461,8 @@ async function reserveOrder(internalOrderId) {
   }
 
   const { order, token } = lease;
+  // Chosen once, here: the draft and everything done to it later carry it.
+  const keyName = billzAuth.keyForChannel(order.channel);
   let draftOrderId = order.billz.draftOrderId;
   let orderNumber = order.billz.orderNumber;
   let reservationApplied = order.billz.reservationApplied;
@@ -468,11 +488,12 @@ async function reserveOrder(internalOrderId) {
         unitPrice: i.unitPrice,
       })),
       comment: `${order.channel} ${order.externalId}`,
+      key: keyName,
       onProgress: async (progress) => {
         if (progress.stage === 'draft_created') {
           draftOrderId = progress.orderId;
           orderNumber = progress.orderNumber;
-          await checkpointBillzDraft(order, token, progress);
+          await checkpointBillzDraft(order, token, { ...progress, keyName });
         }
         await refreshBillzOperationLease(order, token, { beforeEffect: true,
           stage: progress.operation === 'reserve' ? 'reserving' : 'draft' });
@@ -509,6 +530,7 @@ async function reserveOrder(internalOrderId) {
       holdExpiresAt,
       'billz.draftOrderId': draftOrderId,
       'billz.orderNumber': orderNumber,
+      'billz.keyName': keyName,
       'billz.reservationApplied': reservationApplied,
       'billz.pendingApplied': pendingApplied,
       'billz.lastError': '',
@@ -532,6 +554,8 @@ async function reserveOrder(internalOrderId) {
       holdExpiresAt,
       'billz.draftOrderId': draftOrderId || '',
       'billz.orderNumber': orderNumber || '',
+      // A draft left behind is cleaned up with the key that made it.
+      'billz.keyName': draftOrderId ? keyName : '',
       'billz.reservationApplied': reservationApplied,
       'billz.pendingApplied': pendingApplied,
       'billz.lastError': err.message,
@@ -558,7 +582,9 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
   }
 
   const { order, token } = lease;
-  const typeId = paymentTypeId || config.billz.paymentTypeId;
+  const channelType = paymentTypeFor(order.channel);
+  const typeId = paymentTypeId || channelType.id;
+  const typeName = paymentTypeId ? config.billz.paymentTypeName : channelType.name;
   let reservationApplied = order.billz.reservationApplied;
   let pendingApplied = order.billz.pendingApplied;
   let holdExpiresAt = order.holdExpiresAt;
@@ -569,11 +595,12 @@ async function completeOrder(internalOrderId, { paymentTypeId } = {}) {
     if (order.channel === 'yandex') await refreshBillzOperationLease(order, token, { beforeEffect: true, stage: 'paying' });
     await sale.completeSale(order.billz.draftOrderId, {
       paymentTypeId: typeId,
-      paymentTypeName: config.billz.paymentTypeName,
+      paymentTypeName: typeName,
       amount: order.totalAmount,
-      // Every channel sale lands on the same payment type, so this comment is
-      // what tells them apart in Billz — which order, from which marketplace.
+      // The comment ties the Billz sale to one order — which marketplace and
+      // which of its order ids — whatever key and payment type it carries.
       comment: `${order.channel} ${order.externalId}`,
+      key: billzKeyOf(order),
     });
     paymentCompleted = true;
     if (['uzum', 'yandex'].includes(order.channel)) soldAt = new Date();
@@ -765,7 +792,9 @@ async function cancelOrder(internalOrderId, { reason = '' } = {}) {
       const draftOnly = order.channel === 'yandex' && order.yandex?.accountingStage === 'draft'
         && !reservationApplied && order.billz.failureDisposition === '';
       try {
-        if (!draftOnly) await sale.releaseReservation(order.billz.draftOrderId);
+        if (!draftOnly) {
+          await sale.releaseReservation(order.billz.draftOrderId, { key: billzKeyOf(order) });
+        }
         reservationReleased = true;
       } catch (err) {
         // Uzum CANCELLED means the reservation was actually cleaned up.
@@ -778,7 +807,7 @@ async function cancelOrder(internalOrderId, { reason = '' } = {}) {
 
       if (reservationReleased) {
         try {
-          await sale.deleteDraft(order.billz.draftOrderId);
+          await sale.deleteDraft(order.billz.draftOrderId, { key: billzKeyOf(order) });
         } catch (err) {
           if (order.channel === 'yandex') throw err;
           if (err.outcomeUnknown === true) throw err;

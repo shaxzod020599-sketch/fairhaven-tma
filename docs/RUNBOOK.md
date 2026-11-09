@@ -97,6 +97,15 @@ BILLZ_PAYMENT_TYPE_ID=42bb647e-9533-4104-a018-8fd79e8387b3
 BILLZ_PAYMENT_TYPE_NAME=Баланс поставщика
 ```
 
+Har kanal Billz'da o'z nomidan ko'rinishi uchun (aks holda hammasi «medicalka
+api» bo'lib tushadi): Billz → Настройки → Настройки компании → Ключи интеграции
+da kanal nomi bilan kalit oching (umumiy kalit bilan bir xil rol), so'ng
+`.env` ga `BILLZ_SECRET_TOKEN_YANDEX=` / `_UZUM=` / `_MEDICALKA=` / `_BOT=`
+yozing va `pm2 restart channel-hub --update-env`. Tekshirish:
+`curl -s 127.0.0.1:3100/health/detail` → `billz.ownKeys`. Kerak bo'lsa kanalga
+o'z to'lov turi ham: `BILLZ_PAYMENT_TYPE_ID_<KANAL>` (+ `_NAME_<KANAL>`).
+Orqaga qaytarish: qatorni o'chirib, qayta ishga tushirish.
+
 `BILLZ_WRITE_ENABLED=false` — **shunday qoldiring**.
 
 Avval quruq yurish:

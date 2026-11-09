@@ -367,6 +367,18 @@ Ya'ni **bitta sotuvni** har doim zakazigacha kuzatib borish mumkin. «Uzum shu
 oyda qancha keltirdi» degan savol esa Billz hisobotiniki emas, bizning
 panelimizniki bo'ladi.
 
+**2026-11-09 dan — har kanal o'z nomidan.** Billz sotuvning muallifi qilib uni
+yozgan integratsiya kalitini ko'rsatadi. Bitta umumiy kalit bilan Yandex, Uzum
+va Medicalka sotuvlari hammasi «medicalka api» nomidan tushardi — tahlilga
+noqulay. Endi har kanalga o'z kaliti berilishi mumkin
+(`BILLZ_SECRET_TOKEN_YANDEX`, `…_UZUM`, `…_MEDICALKA`, `…_BOT`) va xohlansa o'z
+to'lov turi (`BILLZ_PAYMENT_TYPE_ID_<KANAL>`, `BILLZ_PAYMENT_TYPE_NAME_<KANAL>`).
+Bo'sh qolgani umumiy kalit/turga tushadi. Zakaz qaysi kalit bilan bron
+qilingan bo'lsa, sotuv va bekor qilish ham o'sha kalit bilan bajariladi
+(`channelorders.billz.keyName`), shuning uchun kalitni ish kuni o'rtasida
+qo'shish xavfsiz. `/health/detail` → `billz.ownKeys` / `ownPaymentTypes` qaysi
+kanallar o'z kaliti/turida ekanini (faqat nomlarini) ko'rsatadi.
+
 ### Endpoint nomini taxmin qilish qimmatga tushdi
 
 `cancel_postpone` degan endpoint **umuman yo'q**. Bu nom taxmin qilingan edi va

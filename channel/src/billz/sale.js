@@ -19,6 +19,10 @@ const billz = require('./client');
  * Every call goes through the shared rate limiter in client.js, and every write
  * is refused outright while BILLZ_WRITE_ENABLED is off — so this module is
  * inert until someone deliberately turns it on.
+ *
+ * Every call takes an optional `key`: the integration key the sale is written
+ * with, which Billz shows as the sale's author (see auth.js). All calls on one
+ * draft must use the key that created it.
  */
 
 // Billz answers over a websocket by default; this header makes it reply on the
@@ -33,8 +37,9 @@ function requireCashbox() {
 }
 
 /** Opens an empty draft. Returns its id and the number shown in the Billz UI. */
-async function createDraft({ comment } = {}) {
+async function createDraft({ comment, key } = {}) {
   const response = await billz.request('POST', '/v2/order', {
+    billzKey: key,
     query: { 'Billz-Response-Channel': 'HTTP' },
     headers: HTTP_CHANNEL,
     body: {
@@ -64,7 +69,7 @@ async function createDraft({ comment } = {}) {
  * mechanism for that and requires the product to allow a free price in Billz;
  * `applyLinePrice` below falls back to a manual discount when it does not.
  */
-async function addLine(orderId, { productId, quantity, unitPrice, sellerIds = [] }) {
+async function addLine(orderId, { productId, quantity, unitPrice, sellerIds = [], key }) {
   if (!(quantity > 0)) throw new Error(`quantity must be positive, got ${quantity}`);
 
   const body = {
@@ -78,6 +83,7 @@ async function addLine(orderId, { productId, quantity, unitPrice, sellerIds = []
   };
 
   return billz.request('POST', `/v2/order-product/${orderId}`, {
+    billzKey: key,
     query: { 'Billz-Response-Channel': 'HTTP' },
     headers: HTTP_CHANNEL,
     body,
@@ -92,8 +98,9 @@ async function addLine(orderId, { productId, quantity, unitPrice, sellerIds = []
  * −53000. Verified against the live company, at quantity two, so the per-unit
  * reading is not an artefact of a single-unit test: two units came to 666000.
  */
-async function setLinePrice(orderId, { productId, price }) {
+async function setLinePrice(orderId, { productId, price, key }) {
   return billz.request('POST', `/v2/order-manual-discount/${orderId}`, {
+    billzKey: key,
     query: { 'Billz-Response-Channel': 'HTTP' },
     headers: HTTP_CHANNEL,
     body: { discount_unit: 'CURRENCY', discount_value: price, product_id: productId },
@@ -107,9 +114,10 @@ async function setLinePrice(orderId, { productId, price }) {
  * plausible fulfilment window means an order we lose track of eventually stops
  * holding stock rather than holding it forever.
  */
-async function reserve(orderId, { expiresAt, comment = '' } = {}) {
+async function reserve(orderId, { expiresAt, comment = '', key } = {}) {
   const expiry = expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   return billz.request('POST', '/v2/order/create_postpone', {
+    billzKey: key,
     query: { 'Billz-Response-Channel': 'HTTP' },
     headers: HTTP_CHANNEL,
     body: {
@@ -135,8 +143,9 @@ async function reserve(orderId, { expiresAt, comment = '' } = {}) {
  * order deposits an empty draft in the operator's sales list forever. Callers
  * follow this with `deleteDraft`.
  */
-async function releaseReservation(orderId) {
+async function releaseReservation(orderId, { key } = {}) {
   return billz.request('POST', '/v2/order/return-postpone', {
+    billzKey: key,
     query: { 'Billz-Response-Channel': 'HTTP' },
     headers: HTTP_CHANNEL,
     body: { order_id: orderId },
@@ -150,8 +159,9 @@ async function releaseReservation(orderId) {
  * delete order" until its reservation has been returned, so this always follows
  * `releaseReservation` rather than replacing it.
  */
-async function deleteDraft(orderId) {
+async function deleteDraft(orderId, { key } = {}) {
   return billz.request('DELETE', `/v2/order/${orderId}`, {
+    billzKey: key,
     query: { 'Billz-Response-Channel': 'HTTP' },
     headers: HTTP_CHANNEL,
   });
@@ -164,11 +174,12 @@ async function deleteDraft(orderId) {
  * are settled by transfer rather than cash, and recording them under the wrong
  * type corrupts the till reconciliation rather than just mislabelling a row.
  */
-async function completeSale(orderId, { paymentTypeId, paymentTypeName, amount, comment = '' }) {
+async function completeSale(orderId, { paymentTypeId, paymentTypeName, amount, comment = '', key }) {
   if (!paymentTypeId) {
     throw new Error('a company payment type is required to complete a sale');
   }
   return billz.request('POST', `/v2/order-payment/${orderId}`, {
+    billzKey: key,
     query: { 'Billz-Response-Channel': 'HTTP' },
     headers: HTTP_CHANNEL,
     body: {
@@ -198,8 +209,9 @@ function formatBillzTime(date) {
 }
 
 /** What Billz thinks the draft is worth. */
-async function orderTotal(orderId) {
+async function orderTotal(orderId, { key } = {}) {
   const response = await billz.request('GET', `/v2/order/${orderId}`, {
+    billzKey: key,
     query: { 'Billz-Response-Channel': 'HTTP' },
     headers: HTTP_CHANNEL,
   });
@@ -223,24 +235,24 @@ async function orderTotal(orderId) {
  * manual discount is the documented way to force a price on such a product;
  * both are per unit, verified against the live company.
  */
-async function ensurePricing(orderId, items, { onProgress } = {}) {
+async function ensurePricing(orderId, items, { onProgress, key } = {}) {
   const priced = items.filter((item) => Number(item.unitPrice) > 0);
   if (!priced.length) return; // Billz's own pricing is what we want.
 
   const expected = items.reduce(
     (sum, item) => sum + item.quantity * (Number(item.unitPrice) || 0), 0
   );
-  if (await orderTotal(orderId) === expected) return;
+  if (await orderTotal(orderId, { key }) === expected) return;
 
   logger.warn('billz priced the draft differently — forcing the channel price', { orderId });
   for (const item of priced) {
     if (onProgress) {
       await onProgress({ stage: 'before_write', operation: 'set_line_price', orderId });
     }
-    await setLinePrice(orderId, { productId: item.billzProductId, price: item.unitPrice });
+    await setLinePrice(orderId, { productId: item.billzProductId, price: item.unitPrice, key });
   }
 
-  const corrected = await orderTotal(orderId);
+  const corrected = await orderTotal(orderId, { key });
   if (corrected !== expected) {
     // Refused here, before the reservation. Reserving an order that cannot be
     // paid for holds stock nobody can sell and nobody can release except by
@@ -263,10 +275,10 @@ async function ensurePricing(orderId, items, { onProgress } = {}) {
  * Returns the draft id even when a later step fails, so the caller can release
  * or retry rather than leaving a half-built draft holding stock invisibly.
  */
-async function reserveOrder({ items, comment, expiresAt, sellerIds, onProgress }) {
+async function reserveOrder({ items, comment, expiresAt, sellerIds, onProgress, key }) {
   if (!Array.isArray(items) || !items.length) throw new Error('an order needs at least one line');
 
-  const { orderId, orderNumber } = await createDraft({ comment });
+  const { orderId, orderNumber } = await createDraft({ comment, key });
 
   try {
     if (onProgress) await onProgress({ stage: 'draft_created', orderId, orderNumber });
@@ -279,13 +291,14 @@ async function reserveOrder({ items, comment, expiresAt, sellerIds, onProgress }
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         sellerIds,
+        key,
       });
     }
     // Before the reservation, deliberately: a mispriced draft is cheap to
     // abandon and expensive to discover at payment.
-    await ensurePricing(orderId, items, { onProgress });
+    await ensurePricing(orderId, items, { onProgress, key });
     if (onProgress) await onProgress({ stage: 'before_write', operation: 'reserve', orderId });
-    await reserve(orderId, { expiresAt, comment });
+    await reserve(orderId, { expiresAt, comment, key });
     logger.info('billz reservation created', { orderId, orderNumber, lines: items.length });
     return { orderId, orderNumber };
   } catch (err) {

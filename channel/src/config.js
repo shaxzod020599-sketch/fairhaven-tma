@@ -27,6 +27,14 @@ function bool(name, fallback) {
   return raw === 'true';
 }
 
+// Env suffix per sales channel, e.g. BILLZ_SECRET_TOKEN_YANDEX.
+const BILLZ_CHANNEL_ENV = {
+  medicalka: 'MEDICALKA',
+  uzum: 'UZUM',
+  yandex: 'YANDEX',
+  'fairhaven-bot': 'BOT',
+};
+
 const config = {
   env: process.env.NODE_ENV || 'development',
   port: number('PORT', 3100),
@@ -52,6 +60,21 @@ const config = {
     // payment call. Sent when set, because that call cannot be rehearsed: a
     // refused payment leaves an order reserved but unsold.
     paymentTypeName: process.env.BILLZ_PAYMENT_TYPE_NAME || '',
+    // Billz records the integration key that wrote a sale as its author. With
+    // only the shared key above, every channel's sale reads «medicalka api» and
+    // the channels cannot be told apart in Billz. Each channel may therefore
+    // write with its own key (BILLZ_SECRET_TOKEN_YANDEX, …_UZUM, …_MEDICALKA,
+    // …_BOT) and settle on its own payment type (BILLZ_PAYMENT_TYPE_ID_<CH> +
+    // optional BILLZ_PAYMENT_TYPE_NAME_<CH>). Unset values fall back to the
+    // shared ones, so nothing changes until a channel is given its own.
+    channels: Object.fromEntries(Object.entries(BILLZ_CHANNEL_ENV).map(([channel, suffix]) => [
+      channel,
+      {
+        secretToken: process.env[`BILLZ_SECRET_TOKEN_${suffix}`] || '',
+        paymentTypeId: process.env[`BILLZ_PAYMENT_TYPE_ID_${suffix}`] || '',
+        paymentTypeName: process.env[`BILLZ_PAYMENT_TYPE_NAME_${suffix}`] || '',
+      },
+    ])),
     // Shown to channels as the pharmacy/branch name. Overwritten at boot with
     // the name Billz reports for BILLZ_SHOP_ID.
     shopName: process.env.BILLZ_SHOP_NAME || 'Fairhaven Health',
