@@ -39,6 +39,17 @@ test('pickup orders validate with the client arrival time, client phone and paym
   // A courier order still has to say when the courier comes.
   assert.ok(C.validate({ ...body, discriminator: 'uzum', deliveryInfo: { clientName: 'Client' } }));
 });
+test('Uzum takeaway orders (their own pickup name) validate as pickup', () => {
+  // Field set of the order Uzum sent on 2026-11-11 that was refused before this fix.
+  const takeaway = { ...body, discriminator: 'uzum-takeaway', persons: 1, restaurantId: 'store-1',
+    deliveryInfo: { clientArrivementDate: '2026-11-11T18:20:00+05:00', clientName: 'Client', courierArrivementDate: '2026-11-11T18:20:00+05:00' },
+    paymentInfo: { itemsCost: 10, paymentType: 'CARD' } };
+  assert.equal(C.validate(takeaway), null);
+  assert.equal(C.isPickup(takeaway), true);
+  assert.deepEqual(C.snapshot(takeaway), takeaway);
+  assert.equal(C.validate({ ...takeaway, deliveryInfo: { clientName: 'Client' } }), null);
+  assert.equal(C.isPickup({ ...body, discriminator: 'uzum' }), false);
+});
 test('a rejected order is described by its field names, never its values', () => {
   const shape = C.rejectionShape({ discriminator: 'marketplace', deliveryInfo: { phoneNumber: '+998900000000' }, eatsId: 'x' }, 'Unsupported discriminator');
   assert.deepEqual(shape, { error: 'Unsupported discriminator', discriminator: 'marketplace',

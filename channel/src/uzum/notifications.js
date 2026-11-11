@@ -1,6 +1,7 @@
 const { randomUUID, createHash } = require('node:crypto');
 const { cleanOrder, deadlineAt } = require('./lifecycle');
 const { STOCK, clock, escaped, money, note, payment, timeline } = require('../notify/format');
+const { isPickup } = require('../adapters/uzum/contract');
 const LABEL = { accept: '✅ Принять', ready: '📦 Готов', reject: '❌ Отклонить' };
 const COMMAND = { accept: 'a', ready: 'ready', reject: 'r' };
 function keyboard(row, at) {
@@ -20,7 +21,7 @@ function render(row, at = new Date()) {
   const sent = object(row.rawIn); const delivery = object(sent.deliveryInfo);
   const open = clean.status !== 'CANCELLED';
   // Pickup: the client comes to the shop, phoneNumber is theirs and no courier exists.
-  const pickup = sent.discriminator === 'pickup';
+  const pickup = isPickup(sent);
   const customer = [escaped(clean.customer.name, 200), escaped(clean.customer.phone, 40)].filter(Boolean).join(', ');
   const courierAt = open && !pickup ? clock(delivery.courierArrivementDate, at) : '';
   const courierPhone = open && !pickup ? note(delivery.phoneNumber, 48) : '';

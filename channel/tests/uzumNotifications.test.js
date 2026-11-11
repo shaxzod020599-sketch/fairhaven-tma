@@ -74,6 +74,11 @@ test('pickup card says the client collects it and when, with no courier lines', 
   assert.match(text, /🛍 <b>Самовывоз<\/b>/);
   assert.match(text, /🕒 Клиент придёт: <b>/);
   assert.doesNotMatch(text, /[Кк]урьер/);
+  f.row.rawIn = { discriminator: 'uzum-takeaway', comment: '',
+    deliveryInfo: { clientArrivementDate: '2026-09-08T10:30:00Z', clientName: 'Client', courierArrivementDate: '2026-09-08T10:30:00Z' } };
+  const takeaway = render(f.row, at);
+  assert.match(takeaway, /🛍 <b>Самовывоз<\/b>/); assert.match(takeaway, /🕒 Клиент придёт: <b>/);
+  assert.doesNotMatch(takeaway, /[Кк]урьер/);
   f.row.rawIn = { comment: '', deliveryInfo: { courierArrivementDate: '2026-09-08T10:30:00Z', phoneNumber: '+998900000001' } };
   const courier = render(f.row, at);
   assert.match(courier, /Курьер приедет/); assert.doesNotMatch(courier, /Самовывоз|Клиент придёт/);

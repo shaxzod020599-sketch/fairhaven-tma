@@ -2,12 +2,15 @@
 // Pickup («самовывоз», discriminator "pickup") follows the Yandex Eats schema
 // Uzum's API is copied from: the client's arrival time instead of the
 // courier's, the client's phone in phoneNumber, optional pickupPointId and
-// payment change/total.
+// payment change/total. Uzum's own pickup orders arrive as "uzum-takeaway"
+// (seen in prod 2026-11-11: clientArrivementDate, clientName and
+// courierArrivementDate, no phone), so both names mean pickup.
 const TOP = ['discriminator', 'comment', 'deliveryInfo', 'eatsId', 'items', 'paymentInfo', 'persons', 'promos', 'restaurantId', 'pickupPointId'];
 const ITEM = ['id', 'modifications', 'name', 'price', 'promos', 'quantity', 'labelCodes'];
 const DELIVERY = ['clientName', 'courierArrivementDate', 'phoneNumber', 'clientPhoneNumber', 'clientArrivementDate', 'realPhoneNumber'];
 const PAYMENT = ['itemsCost', 'paymentType', 'change', 'total'];
-const DISCRIMINATORS = ['uzum', 'pickup'];
+const PICKUP = ['pickup', 'uzum-takeaway'];
+const DISCRIMINATORS = ['uzum', ...PICKUP];
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const fields = (v, allowed) => object(v) && Object.keys(v).every((k) => allowed.includes(k));
 const string = (v) => typeof v === 'string';
@@ -54,7 +57,7 @@ function validate(body) {
     const d = body.deliveryInfo;
     // A courier order must say when the courier comes; a pickup order may say
     // when the client comes. Any date that is sent must be a real one.
-    const pickup = body.discriminator === 'pickup';
+    const pickup = isPickup(body);
     if (!fields(d, DELIVERY) || !Object.values(d).every(string)
       || (!pickup && !validTimestamp(d.courierArrivementDate))
       || ['courierArrivementDate', 'clientArrivementDate'].some((k) => d[k] !== undefined && !validTimestamp(d[k]))) return bad('Invalid deliveryInfo');
@@ -75,7 +78,7 @@ function snapshot(body) {
 }
 
 /** The client collects the order at the shop; no Uzum courier comes. */
-function isPickup(body) { return body?.discriminator === 'pickup'; }
+function isPickup(body) { return PICKUP.includes(body?.discriminator); }
 
 /**
  * What a rejected order looked like, without customer data: the type, the
