@@ -1,5 +1,6 @@
 const { randomUUID, createHash } = require('node:crypto');
-const COMMAND = { accept: 'a', cooking: 'c', ready: 'r', reject: 'x', edit: 'e' };
+const { STOCK, clock, escaped, money, note, payment, timeline } = require('../notify/format');
+const COMMAND ={ accept: 'a', cooking: 'c', ready: 'r', reject: 'x', edit: 'e' };
 const LABEL = { accept: '✅ Принять', cooking: '🍳 Готовится', ready: '📦 Готов', reject: '❌ Отклонить', edit: '✏️ Изменить состав' };
 const positive = (number) => Number.isSafeInteger(number) && number > 0;
 const LEASE_MS = 120000;
@@ -18,37 +19,36 @@ function keyboard(row, at = new Date()) {
     return callback ? [[{ text: LABEL[action], callback_data: callback }]] : [];
   }) };
 }
-// Bound escaped units, never cut an entity or a Unicode code point.
-function escaped(value, limit) {
-  const raw = typeof value === 'string' ? value : typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
-  let text = '';
-  for (const point of raw) {
-    const entity = ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[point] || point.toWellFormed();
-    if (text.length + entity.length > limit - 1) return `${text}…`;
-    text += entity;
-  }
-  return text;
-}
-function money(value) {
-  const [whole, fraction] = String(Math.round(Number(value) * 100) / 100 || 0).split('.');
-  return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}${fraction ? `,${fraction}` : ''} UZS`;
-}
 const STATUS = {
   NEW: '🆕 Новый — ждёт решения', ACCEPTED_BY_RESTAURANT: '✅ Принят', COOKING: '🍳 Собирается', READY: '📦 Готов, ждёт курьера',
   TAKEN_BY_COURIER: '🚚 У курьера', DELIVERED: '🏁 Доставлен', CANCELLED: '❌ Отменён',
 };
-const STOCK = {
-  received: 'товар ещё не списан', reserved: 'товар отложен под заказ', sold: 'продано, товар списан',
-  cancelled: 'резерв снят, товар вернулся в продажу', failed: '⚠️ ошибка — проверьте заказ в панели',
-};
+const object = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
+const WAITS_FOR_COURIER = ['NEW', 'ACCEPTED_BY_RESTAURANT', 'COOKING', 'READY'];
+/** When Yandex itself reported a step ("TAKEN_BY_COURIER", "DELIVERED"), from the audit trail. */
+function reportedAt(row, action) {
+  return (row.yandex?.audit || []).find((entry) => entry?.actor?.type === 'yandex'
+    && entry.action === action && entry.outcome === 'received')?.at;
+}
 function render(row, at = new Date()) {
   const clean = require('./lifecycle').cleanOrder(row, at);
   const customer = [escaped(clean.customer.name, 200), escaped(clean.customer.phone, 60)].filter(Boolean).join(', ');
+  // The order as Yandex sent it: the picker needs the courier's arrival time and
+  // the customer's comment, which often carries the instruction that matters.
+  const sent = object(row.yandex?.requestSnapshot); const delivery = object(sent.deliveryInfo);
+  const courierAt = WAITS_FOR_COURIER.includes(clean.status) ? clock(delivery.courierArrivementDate, at) : '';
+  const comment = note(sent.comment, 300);
+  const steps = timeline([['принят', row.yandex?.acceptedAt], ['готов', row.yandex?.readyAt],
+    ['курьер забрал', reportedAt(row, 'TAKEN_BY_COURIER')], ['доставлен', reportedAt(row, 'DELIVERED')]], at);
   const lines = [
     `🛵 <b>Заказ Yandex ${escaped(clean.externalId, 240)}</b>`,
     `Статус: ${STATUS[clean.status] || escaped(clean.status, 64)}`,
     `Billz: ${STOCK[clean.accountingStatus] || escaped(clean.accountingStatus, 64)}`,
+    courierAt ? `🕒 Курьер приедет: <b>${courierAt}</b>` : '',
     customer ? `👤 ${customer}` : '',
+    payment(object(sent.paymentInfo).paymentType),
+    comment ? `💬 Комментарий: ${comment}` : '',
+    steps ? `⏱ ${steps}` : '',
     !clean.enabled ? '⚠️ Yandex отключён' : '',
     !clean.accountingEnabled ? '⚠️ Учёт отключён' : '',
     clean.reconciliationRequired ? '⚠️ Нужна сверка учёта. Откройте панель.' : '',

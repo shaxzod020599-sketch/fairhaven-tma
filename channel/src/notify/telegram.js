@@ -5,6 +5,7 @@ const ChannelOrder = require('../models/ChannelOrder');
 const AdminView = require('../models/AdminView');
 const MedicalkaApproval = require('../models/MedicalkaApproval');
 const MedicalkaSubOrder = require('../models/MedicalkaSubOrder');
+const { clock, mapLink, note } = require('./format');
 
 /**
  * Order cards in the Telegram operations channel.
@@ -205,7 +206,36 @@ function approvalStatus(status) {
   }[status] || escapeHtml(status);
 }
 
-function renderMedicalkaApproval(approval) {
+/** Blocks of lines separated by one blank line; empty lines and empty blocks are dropped. */
+function sections(...blocks) {
+  return blocks.map((block) => block.filter(Boolean).join('\n')).filter(Boolean).join('\n\n');
+}
+
+/** Medicalka's own codes in the operator's words; a code we have not met is shown as sent. */
+function labelled(labels, code) {
+  if (!code) return '';
+  return Object.hasOwn(labels, code) ? labels[code] : escapeHtml(code);
+}
+
+const DELIVERY_LABELS = {
+  delivery: 'Yetkazib berish / Доставка',
+  pickup: 'Olib ketish / Самовывоз',
+};
+
+function deliveryLabel(type) {
+  return type ? `🚚 ${labelled(DELIVERY_LABELS, type)}` : '';
+}
+
+/** Where the order goes: the address Medicalka sent, with a map link when it has a point. */
+function deliveryPlace(data) {
+  if (!data || typeof data !== 'object') return '';
+  const place = data.address && typeof data.address === 'object' ? data.address : data;
+  const address = note(typeof data.address === 'string' ? data.address : place.address, 300);
+  const map = mapLink(place.latitude ?? data.latitude, place.longitude ?? data.longitude, 'xarita / карта');
+  return address || map ? `📍 ${[address, map].filter(Boolean).join(' · ')}` : '';
+}
+
+function renderMedicalkaApproval(approval, at = new Date()) {
   const customerName = [approval.customer?.firstName, approval.customer?.lastName]
     .filter(Boolean).join(' ');
   const lines = (approval.items || []).map((item) => (
@@ -214,18 +244,28 @@ function renderMedicalkaApproval(approval) {
   ));
   const actor = approval.decision?.actorName
     ? `\n👮 ${escapeHtml(approval.decision.actorName)}` : '';
-  return [
-    `🏥 <b>Medicalka zayavka / Заявка</b> · <code>${escapeHtml(approval.checkoutId)}</code>`,
-    '',
-    lines.join('\n'),
-    '',
-    `💰 <b>${formatUZS(approval.subtotal)}</b>`,
-    customerName ? `👤 ${escapeHtml(customerName)}` : '',
-    approval.customer?.phone ? `📞 ${escapeHtml(approval.customer.phone)}` : '',
-    approval.deliveryType ? `🚚 ${escapeHtml(approval.deliveryType)}` : '',
-    '',
-    `${approvalStatus(approval.status)}${actor}`,
-  ].filter((part) => part !== '').join('\n');
+  // Medicalka rejects a request by itself when nobody answers in time, so the
+  // deadline is the most urgent fact on a pending card.
+  const deadline = approval.status === 'pending' ? clock(approval.deadlineAt, at) : '';
+  const remark = note(approval.comment, 300);
+  return sections(
+    [
+      `🏥 <b>Medicalka zayavka / Заявка</b> · <code>${escapeHtml(approval.checkoutId)}</code>`,
+      deadline ? `⏰ Javob muddati / Ответить до: <b>${deadline}</b>` : '',
+    ],
+    lines,
+    [
+      `💰 <b>${formatUZS(approval.subtotal)}</b>`,
+      customerName ? `👤 ${escapeHtml(customerName)}` : '',
+      approval.customer?.phone ? `📞 ${escapeHtml(approval.customer.phone)}` : '',
+      deliveryLabel(approval.deliveryType),
+      deliveryPlace(approval.deliveryData),
+    ],
+    [
+      `${approvalStatus(approval.status)}${actor}`,
+      remark ? `ℹ️ ${remark}` : '',
+    ],
+  );
 }
 
 function approvalKeyboard(id) {
@@ -372,6 +412,36 @@ function createMedicalkaNotifier({
   return { announce, finalize };
 }
 
+const SUB_ORDER_STATUS = {
+  processing: 'Yig‘ilmoqda / В обработке',
+  shipped: 'Jo‘natildi / Отправлен',
+  delivered: 'Yetkazildi / Доставлен',
+  completed: 'Yakunlandi / Завершён',
+  cancelled: 'Bekor qilindi / Отменён',
+};
+
+const SUB_ORDER_PAYMENT = {
+  paid: '✅ To‘langan / Оплачен',
+};
+
+const SUB_ORDER_METHOD = {
+  wallet: 'hamyon / кошелёк',
+  card: 'karta / карта',
+  cash: 'naqd / наличные',
+};
+
+// The sale's progress in Billz (`sale.state`), which is what moves stock.
+const SUB_ORDER_BILLZ = {
+  pending: 'kutilmoqda / ожидает',
+  waiting_payment: 'to‘lov kutilmoqda / ждёт оплаты',
+  waiting_hold: 'bron kutilmoqda / ждёт резерва',
+  processing: 'yozilmoqda / записывается',
+  sold: '✅ sotildi, tovar chiqim qilindi / продано, товар списан',
+  observed: 'faqat kuzatuv, Billzga yozilmaydi / только наблюдение, в Billz не пишется',
+  blocked: '⚠️ to‘xtatildi, panelni tekshiring / остановлено, проверьте панель',
+  failed: '⚠️ xato, panelni tekshiring / ошибка, проверьте панель',
+};
+
 function renderMedicalkaSubOrder(order) {
   const itemLines = (order.items || []).map((item) => (
     `• ${escapeHtml(item.name || item.productId || item.productExternalId)}`
@@ -380,26 +450,31 @@ function renderMedicalkaSubOrder(order) {
   const customerName = [order.customer?.firstName, order.customer?.lastName]
     .filter(Boolean).join(' ');
   const number = order.orderNumber || order.subOrderNumber || order.externalId;
-  const delivery = [order.deliveryProvider, order.courierStatus, order.deliveryServiceStatus]
-    .filter(Boolean).map(escapeHtml).join(' · ');
-  const billzState = order.sale?.reconciliationRequired
-    ? `${order.sale?.state || 'pending'} · reconciliation_required`
-    : (order.sale?.state || 'pending');
-  return [
-    `🏥 <b>Medicalka buyurtma / Заказ</b> · <code>${escapeHtml(number)}</code>`,
-    order.subOrderNumber && order.subOrderNumber !== number
-      ? `Suborder: <code>${escapeHtml(order.subOrderNumber)}</code>` : '',
-    '',
-    itemLines.join('\n'),
-    '',
-    `💰 <b>${formatUZS(order.subtotal)}</b>`,
-    `💳 ${escapeHtml(order.paymentStatus || 'unknown')} · ${escapeHtml(order.paymentMethod || 'unknown')}`,
-    `📦 ${escapeHtml(order.status || 'unknown')}`,
-    delivery ? `🚚 ${delivery}` : '',
-    `🧾 Billz: ${escapeHtml(billzState)}`,
-    customerName ? `👤 ${escapeHtml(customerName)}` : '',
-    order.customer?.phone ? `📞 ${escapeHtml(order.customer.phone)}` : '',
-  ].filter((part) => part !== '').join('\n');
+  const delivery = [
+    labelled(DELIVERY_LABELS, order.deliveryType),
+    ...[order.deliveryProvider, order.courierStatus, order.deliveryServiceStatus].filter(Boolean).map(escapeHtml),
+  ].filter(Boolean).join(' · ');
+  const billzState = labelled(SUB_ORDER_BILLZ, order.sale?.state || 'pending')
+    + (order.sale?.reconciliationRequired ? ' · ⚠️ solishtirish kerak / нужна сверка' : '');
+  return sections(
+    [
+      `🏥 <b>Medicalka buyurtma / Заказ</b> · <code>${escapeHtml(number)}</code>`,
+      order.subOrderNumber && order.subOrderNumber !== number
+        ? `Suborder: <code>${escapeHtml(order.subOrderNumber)}</code>` : '',
+      `📦 ${labelled(SUB_ORDER_STATUS, order.status) || 'unknown'}`,
+    ],
+    itemLines,
+    [
+      `💰 <b>${formatUZS(order.subtotal)}</b>`,
+      `💳 ${labelled(SUB_ORDER_PAYMENT, order.paymentStatus) || 'unknown'} · ${labelled(SUB_ORDER_METHOD, order.paymentMethod) || 'unknown'}`,
+      delivery ? `🚚 ${delivery}` : '',
+      `🧾 Billz: ${billzState}`,
+    ],
+    [
+      customerName ? `👤 ${escapeHtml(customerName)}` : '',
+      order.customer?.phone ? `📞 ${escapeHtml(order.customer.phone)}` : '',
+    ],
+  );
 }
 
 function subOrderFingerprint(order) {

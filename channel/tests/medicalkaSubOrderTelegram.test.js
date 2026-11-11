@@ -77,10 +77,10 @@ test('sub-order lifecycle uses one durable operations-channel card', async () =>
   assert.match(calls[0].payload.text, /ORD-101/);
   assert.match(calls[0].payload.text, /OvaBoost/);
   assert.match(calls[0].payload.text, /42 000 UZS/);
-  assert.match(calls[0].payload.text, /paid/);
-  assert.match(calls[0].payload.text, /processing/);
+  assert.match(calls[0].payload.text, /💳 ✅ To‘langan \/ Оплачен · karta/);
+  assert.match(calls[0].payload.text, /📦 Yig‘ilmoqda \/ В обработке/);
   assert.match(calls[0].payload.text, /searching/);
-  assert.match(calls[0].payload.text, /observed/);
+  assert.match(calls[0].payload.text, /Billz: faqat kuzatuv/);
   assert.doesNotMatch(calls[0].payload.text, /rawIn|password|credential/i);
 
   await MedicalkaSubOrder().updateOne({ _id: row._id }, {
@@ -97,7 +97,7 @@ test('sub-order lifecycle uses one durable operations-channel card', async () =>
   assert.equal(calls[1].method, 'editMessageText');
   assert.equal(calls[1].payload.message_id, 501);
   assert.match(calls[1].payload.text, /courier_assigned/);
-  assert.match(calls[1].payload.text, /sold/);
+  assert.match(calls[1].payload.text, /Billz: ✅ sotildi/);
 
   const stored = await MedicalkaSubOrder().findById(row._id).lean();
   assert.equal(stored.notification.chatId, '-100777');

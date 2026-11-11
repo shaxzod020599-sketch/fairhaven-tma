@@ -29,7 +29,7 @@ test('final status edits every tracked card and clears keyboard, failed edit rem
   const edits = f.calls.filter((c) => c.method === 'editMessageText');
   assert.equal(edits.length, 2);
   for (const call of edits) assert.deepEqual(call.payload.reply_markup.inline_keyboard, []);
-  assert.ok(edits[0].payload.text.includes('READY'));
+  assert.ok(edits[0].payload.text.includes('Статус: 📦 Готов'));
 });
 test('cancelled fulfillment card retains sale accounting and never claims a refund', () => {
   const f = fixture();
@@ -38,7 +38,7 @@ test('cancelled fulfillment card retains sale accounting and never claims a refu
   f.row.uzum.reconciliationRequired = true;
   f.row.uzum.cancelRequested = { at };
   const text = render(f.row, at);
-  assert.match(text, /CANCELLED/);
+  assert.match(text, /Статус: ❌ Отменён/);
   assert.match(text, /Выдача отменена\. Продажа сохранена; возврат не выполнен/);
   assert.equal(text.includes('Ожидается обработка отмены'), false);
   assert.deepEqual(keyboard(f.row, at).inline_keyboard, []);

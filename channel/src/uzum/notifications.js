@@ -1,33 +1,57 @@
 const { randomUUID, createHash } = require('node:crypto');
 const { cleanOrder, deadlineAt } = require('./lifecycle');
+const { STOCK, clock, escaped, money, note, payment, timeline } = require('../notify/format');
 const LABEL = { accept: '✅ Принять', ready: '📦 Готов', reject: '❌ Отклонить' };
 const COMMAND = { accept: 'a', ready: 'ready', reject: 'r' };
 function keyboard(row, at) {
   return { inline_keyboard: cleanOrder(row, at).actions.map((action) => [{ text: LABEL[action], callback_data: `uz:${COMMAND[action]}:${row.internalOrderId}` }]) };
 }
+const STATUS = {
+  NEW: '🆕 Новый — ждёт решения', ACCEPTED_BY_RESTAURANT: '✅ Принят — соберите заказ',
+  READY: '📦 Готов — отдайте курьеру Uzum', CANCELLED: '❌ Отменён',
+};
+const object = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
 function render(row, at = new Date()) {
   const clean = cleanOrder(row, at);
   const deadline = deadlineAt(row);
+  // Uzum never reports courier progress; the order itself carries the only
+  // delivery facts there are: when the courier reaches the shop and how to call.
+  const sent = object(row.rawIn); const delivery = object(sent.deliveryInfo);
+  const open = clean.status !== 'CANCELLED';
+  const customer = [escaped(clean.customer.name, 200), escaped(clean.customer.phone, 40)].filter(Boolean).join(', ');
+  const courierAt = open ? clock(delivery.courierArrivementDate, at) : '';
+  const courierPhone = open ? note(delivery.phoneNumber, 48) : '';
+  const comment = note(sent.comment, 300);
+  const steps = timeline([['принят', row.uzum?.acceptedAt], ['готов', row.uzum?.readyAt]], at);
   const lines = [
-    `🛵 Uzum Tezkor · ${String(row.externalId).slice(0, 64)}`,
-    clean.status,
+    `🛵 <b>Заказ Uzum Tezkor ${escaped(clean.externalId, 64)}</b>`,
+    `Статус: ${STATUS[clean.status] || escaped(clean.status, 64)}`,
+    `Billz: ${STOCK[clean.accountingStatus] || escaped(clean.accountingStatus, 64)}`,
     clean.fulfillmentCancelled ? 'Выдача отменена. Продажа сохранена; возврат не выполнен.' : '',
-    deadline ? `Принять до: ${deadline.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' })} (UTC+05:00)` : 'Срок принятия неизвестен',
-    clean.expired && !row.uzum?.acceptedAt ? 'Срок принятия истёк' : '',
+    clean.status === 'NEW' && !clean.expired ? `⏰ Принять до: <b>${clock(deadline, at)}</b>` : '',
+    !deadline ? 'Срок принятия неизвестен' : '',
+    clean.expired && !row.uzum?.acceptedAt ? '⌛ Срок принятия истёк' : '',
+    courierAt ? `🕒 Курьер приедет: <b>${courierAt}</b>` : '',
+    courierPhone ? `📞 Связь с курьером: ${courierPhone}` : '',
+    customer ? `👤 Клиент: ${customer}` : '',
+    payment(object(sent.paymentInfo).paymentType),
+    comment ? `💬 Комментарий: ${comment}` : '',
+    steps ? `⏱ ${steps}` : '',
     clean.reconciliationRequired ? '⚠️ Нужна сверка учёта. Откройте админ-панель.' : '',
-    clean.inProgress ? 'Решение обрабатывается' : '',
-    clean.cancellationPending ? 'Ожидается обработка отмены' : '',
-    `Итого: ${clean.totalAmount} UZS`,
-    clean.customer.name.slice(0, 200), clean.customer.phone.slice(0, 40),
-    ...(row.items || []).map((item) => `• ${item.name || item.billzProductId} × ${item.quantity} — ${item.unitPrice} UZS`),
+    clean.inProgress ? '⏳ Решение обрабатывается' : '',
+    clean.cancellationPending ? '⏳ Ожидается обработка отмены' : '',
   ].filter(Boolean);
-  let text = ''; let shortened = false;
-  for (const point of lines.join('\n').toWellFormed()) {
-    if (text.length + point.length > 3500) { shortened = true; break; }
-    text += point;
+  let text = `${lines.join('\n')}\n\n<b>Состав:</b>`; let shortened = false;
+  for (const item of clean.items) {
+    const line = `\n• ${escaped(item.name || item.billzProductId, 300)} — ${escaped(item.quantity, 24)} шт × ${money(item.unitPrice)}`;
+    if (text.length + line.length > 3500) { shortened = true; break; }
+    text += line;
   }
   if (shortened) text += '\n… Полный заказ — в админ-панели.';
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  text += `\nИтого: <b>${money(clean.totalAmount)}</b>`;
+  if (clean.actions.includes('accept')) text += '\n\n👉 Проверьте наличие товара и нажмите «✅ Принять».';
+  else if (clean.actions.includes('ready')) text += '\n\n👉 Соберите заказ к приезду курьера и нажмите «📦 Готов».';
+  return `${text}\n<a href="https://admin.fairhaven.uz/orders">Открыть в панели</a>`;
 }
 function createNotifier({
   Model = require('../models/ChannelOrder')(), AdminModel,
