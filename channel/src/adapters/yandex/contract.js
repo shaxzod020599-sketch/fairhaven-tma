@@ -1,4 +1,7 @@
-// Yandex courier delivery only. See partner.order.create; no Uzum schema alias.
+// Yandex courier delivery ("yandex") and client pickup ("pickup", самовывоз).
+// See partner.order.create; no Uzum schema alias. Each type has its own
+// required arrival time: the courier's, or the client's at the shop.
+const ARRIVAL = { yandex: 'courierArrivementDate', pickup: 'clientArrivementDate' };
 function object(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 function text(value) { return typeof value === 'string'; }
 function nonempty(value) { return text(value) && value.trim().length > 0; }
@@ -37,9 +40,10 @@ function validate(body) {
   if (!object(body)) return 'Order must be an object';
   // Reject keys before persistence can strip them and change retry identity.
   if (!safeObjectKeys(body)) return 'Invalid order object keys';
-  if (body.discriminator !== 'yandex') return 'Only yandex courier delivery is supported';
+  if (!Object.hasOwn(ARRIVAL, body.discriminator)) return 'Only yandex courier delivery and pickup are supported';
   if (!text(body.comment) || !nonempty(body.eatsId)) return 'comment and eatsId are required';
-  if (!object(body.deliveryInfo) || !dateTime(body.deliveryInfo.courierArrivementDate)) return 'Valid courierArrivementDate is required';
+  const arrival = ARRIVAL[body.discriminator];
+  if (!object(body.deliveryInfo) || !dateTime(body.deliveryInfo[arrival])) return `Valid ${arrival} is required`;
   const delivery = body.deliveryInfo;
   if (!optionalFields(delivery, ['clientName', 'phoneNumber', 'realPhoneNumber'], text)
     || !optionalFields(delivery, ['isSlotDelivery'], (value) => typeof value === 'boolean')
@@ -53,8 +57,9 @@ function validate(body) {
     && amount(item.quantity) && item.quantity > 0
     && optionalFields(item, ['name'], text) && optionalFields(item, ['originPrice'], amount))) return 'Invalid order items';
   if (!object(body.paymentInfo) || !amount(body.paymentInfo.itemsCost)
-    || !['CARD', 'CASH'].includes(body.paymentInfo.paymentType)) return 'Invalid paymentInfo';
-  if (!optionalFields(body, ['restaurantId', 'brand'], text)
+    || !['CARD', 'CASH'].includes(body.paymentInfo.paymentType)
+    || !optionalFields(body.paymentInfo, ['change', 'total'], amount)) return 'Invalid paymentInfo';
+  if (!optionalFields(body, ['restaurantId', 'brand', 'pickupPointId', 'greetingCardMessage'], text)
     || !optionalFields(body, ['platform'], (value) => ['YE', 'DC', 'LAVKA', 'PHARMA', 'FLOWERS'].includes(value))
     || !optionalFields(body, ['promos'], (value) => Array.isArray(value)
       && value.every((promo) => object(promo) && text(promo.type) && amount(promo.discount)))) return 'Invalid order metadata';
@@ -76,4 +81,13 @@ function validateStatus(body) {
       && value.every((item) => text(item) && item.length <= 512))) return 'Invalid status metadata';
   return null;
 }
-module.exports = { validate, snapshot, validateStatus };
+/** Field names and type of a refused order, never its values (customer data). */
+function rejectionShape(body, error) {
+  const keys = (v) => (object(v) ? Object.keys(v).slice(0, 30) : typeof v);
+  return {
+    error: String(error || '').slice(0, 200),
+    discriminator: typeof body?.discriminator === 'string' ? body.discriminator.slice(0, 32) : typeof body?.discriminator,
+    keys: keys(body), deliveryKeys: keys(body?.deliveryInfo), paymentKeys: keys(body?.paymentInfo),
+  };
+}
+module.exports = { validate, snapshot, validateStatus, rejectionShape };

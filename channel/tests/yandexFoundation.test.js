@@ -399,3 +399,21 @@ test('receipt retry and initial status survive a fresh application and database 
   assert.equal((await call('GET', `/yandex/order/${result.body.orderId}/status`)).body.status, 'NEW');
   assert.deepEqual((await Order.findOne({ channel: 'yandex' }).lean()).rawIn, body);
 });
+
+test('pickup orders are received and read back in the documented pickup shape', async () => {
+  const body = incoming({ discriminator: 'pickup', eatsId: '261111-7654321', pickupPointId: 'shop-1', comment: 'Pickup fixture',
+    deliveryInfo: { clientArrivementDate: '2026-11-11T14:30:00.000+05:00', clientName: 'Local fixture', phoneNumber: '+998900000000' },
+    paymentInfo: { itemsCost: 247, paymentType: 'CARD', change: 0, total: 247 } });
+  const created = await call('POST', '/yandex/order', { body });
+  assert.equal(created.status, 200);
+  assert.deepEqual((await call('POST', '/yandex/order', { body })).body, created.body);
+  assert.deepEqual((await call('GET', `/yandex/order/${created.body.orderId}`)).body, {
+    discriminator: 'pickup', eatsId: body.eatsId, items: [{ id: 'unknown', price: 123.5, quantity: 2 }],
+    deliveryInfo: body.deliveryInfo, paymentInfo: { itemsCost: 247, paymentType: 'CARD' },
+    comment: 'Pickup fixture', restaurantId: 'place-one' });
+  assert.equal((await call('GET', `/yandex/order/${created.body.orderId}/status`)).body.status, 'NEW');
+  assert.equal((await Order.findOne({ channel: 'yandex', externalId: body.eatsId }).lean()).customer.phone, '+998900000000');
+  // Pickup needs the client's arrival time, not the courier's.
+  error(await call('POST', '/yandex/order', { body: incoming({ discriminator: 'pickup', eatsId: '261111-7654322' }) }), 400);
+  error(await call('POST', '/yandex/order', { body: { ...body, eatsId: '261111-7654323', pickupPointId: 7 } }), 400);
+});

@@ -1,8 +1,13 @@
 // Supported YGroceryOrderV2 fields. Keep this boundary independent of Mongo.
-const TOP = ['discriminator', 'comment', 'deliveryInfo', 'eatsId', 'items', 'paymentInfo', 'persons', 'promos', 'restaurantId'];
+// Pickup («самовывоз», discriminator "pickup") follows the Yandex Eats schema
+// Uzum's API is copied from: the client's arrival time instead of the
+// courier's, the client's phone in phoneNumber, optional pickupPointId and
+// payment change/total.
+const TOP = ['discriminator', 'comment', 'deliveryInfo', 'eatsId', 'items', 'paymentInfo', 'persons', 'promos', 'restaurantId', 'pickupPointId'];
 const ITEM = ['id', 'modifications', 'name', 'price', 'promos', 'quantity', 'labelCodes'];
-const DELIVERY = ['clientName', 'courierArrivementDate', 'phoneNumber', 'clientPhoneNumber'];
-const PAYMENT = ['itemsCost', 'paymentType'];
+const DELIVERY = ['clientName', 'courierArrivementDate', 'phoneNumber', 'clientPhoneNumber', 'clientArrivementDate', 'realPhoneNumber'];
+const PAYMENT = ['itemsCost', 'paymentType', 'change', 'total'];
+const DISCRIMINATORS = ['uzum', 'pickup'];
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const fields = (v, allowed) => object(v) && Object.keys(v).every((k) => allowed.includes(k));
 const string = (v) => typeof v === 'string';
@@ -27,7 +32,8 @@ function validate(body) {
   if (!fields(body, TOP)) return bad('Unsupported order fields');
   if (!id(body.eatsId)) return bad('eatsId must be a nonempty string of at most 64 characters');
   if (!string(body.comment) || !Array.isArray(body.promos)) return bad('comment and promos are required');
-  if (body.discriminator !== undefined && body.discriminator !== 'uzum') return bad('Unsupported discriminator', 422);
+  if (body.discriminator !== undefined && !DISCRIMINATORS.includes(body.discriminator)) return bad('Unsupported discriminator', 422);
+  if (body.pickupPointId !== undefined && !id(body.pickupPointId)) return bad('Invalid pickupPointId');
   if (body.restaurantId !== undefined && !id(body.restaurantId)) return bad('Invalid restaurantId');
   if (body.persons !== undefined && (!Number.isSafeInteger(body.persons) || body.persons <= 0)) return bad('Invalid persons');
   if (!Array.isArray(body.items) || !body.items.length || body.items.length > 200) return bad('items must contain 1 to 200 products');
@@ -41,12 +47,17 @@ function validate(body) {
   }
   if (body.paymentInfo !== undefined) {
     const p = body.paymentInfo;
-    if (!fields(p, PAYMENT) || !positive(p.itemsCost) || !['CARD', 'CASH'].includes(p.paymentType)) return bad('Invalid paymentInfo');
+    if (!fields(p, PAYMENT) || !positive(p.itemsCost) || !['CARD', 'CASH'].includes(p.paymentType)
+      || ['change', 'total'].some((k) => p[k] !== undefined && !(typeof p[k] === 'number' && Number.isFinite(p[k]) && p[k] >= 0))) return bad('Invalid paymentInfo');
   }
   if (body.deliveryInfo !== undefined) {
     const d = body.deliveryInfo;
+    // A courier order must say when the courier comes; a pickup order may say
+    // when the client comes. Any date that is sent must be a real one.
+    const pickup = body.discriminator === 'pickup';
     if (!fields(d, DELIVERY) || !Object.values(d).every(string)
-      || !validTimestamp(d.courierArrivementDate)) return bad('Invalid deliveryInfo');
+      || (!pickup && !validTimestamp(d.courierArrivementDate))
+      || ['courierArrivementDate', 'clientArrivementDate'].some((k) => d[k] !== undefined && !validTimestamp(d[k]))) return bad('Invalid deliveryInfo');
   }
   const total = body.items.reduce((sum, item) => sum + item.quantity * item.price, 0);
   if (!positive(total)) return bad('Invalid order total');
@@ -63,4 +74,20 @@ function snapshot(body) {
   return out;
 }
 
-module.exports = { validate, snapshot };
+/** The client collects the order at the shop; no Uzum courier comes. */
+function isPickup(body) { return body?.discriminator === 'pickup'; }
+
+/**
+ * What a rejected order looked like, without customer data: the type, the
+ * field names and why. Enough to see a new order shape in the log.
+ */
+function rejectionShape(body, error) {
+  const keys = (v) => (object(v) ? Object.keys(v).slice(0, 30) : typeof v);
+  return {
+    error: String(error || '').slice(0, 200),
+    discriminator: typeof body?.discriminator === 'string' ? body.discriminator.slice(0, 32) : typeof body?.discriminator,
+    keys: keys(body), deliveryKeys: keys(body?.deliveryInfo), paymentKeys: keys(body?.paymentInfo),
+  };
+}
+
+module.exports = { validate, snapshot, isPickup, rejectionShape };

@@ -66,3 +66,15 @@ test('demoted recipients receive keyboard cleanup only, never current order cont
   assert.equal(demoted.method, 'editMessageReplyMarkup'); assert.equal(demoted.payload.text, undefined);
   assert.equal(f.row.uzum.notification.messages.some((message) => message.chatId === '77'), false);
 });
+test('pickup card says the client collects it and when, with no courier lines', async () => {
+  const f = fixture();
+  f.row.rawIn = { discriminator: 'pickup', comment: '',
+    deliveryInfo: { clientArrivementDate: '2026-09-08T10:30:00Z', clientName: 'Client', phoneNumber: '+998900000000' } };
+  const text = render(f.row, at);
+  assert.match(text, /🛍 <b>Самовывоз<\/b>/);
+  assert.match(text, /🕒 Клиент придёт: <b>/);
+  assert.doesNotMatch(text, /[Кк]урьер/);
+  f.row.rawIn = { comment: '', deliveryInfo: { courierArrivementDate: '2026-09-08T10:30:00Z', phoneNumber: '+998900000001' } };
+  const courier = render(f.row, at);
+  assert.match(courier, /Курьер приедет/); assert.doesNotMatch(courier, /Самовывоз|Клиент придёт/);
+});

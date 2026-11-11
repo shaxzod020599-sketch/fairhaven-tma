@@ -576,3 +576,13 @@ test('Yandex single-attempt transport allows only three fixed Telegram methods',
   }
   assert.equal(f.calls.length, 3); assert.ok(f.calls.every((call) => call.redirect === 'error'));
 });
+test('pickup card says the client collects it and when, with no courier time', async () => {
+  const { render } = require('../src/yandex/notifications');
+  const input = await row({ requestSnapshot: { discriminator: 'pickup', items: [],
+    deliveryInfo: { clientArrivementDate: '2026-09-08T10:30:00Z', clientName: 'Customer', phoneNumber: '+998000000000' } } });
+  const text = render(input, at);
+  assert.match(text, /🛍 <b>Самовывоз<\/b>/); assert.match(text, /🕒 Клиент придёт: <b>/);
+  assert.doesNotMatch(text, /Курьер приедет/);
+  const courier = render(await row({ requestSnapshot: { discriminator: 'yandex', items: [], deliveryInfo: { courierArrivementDate: '2026-09-08T10:30:00Z' } } }), at);
+  assert.match(courier, /Курьер приедет/); assert.doesNotMatch(courier, /Самовывоз/);
+});

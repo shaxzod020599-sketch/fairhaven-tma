@@ -23,3 +23,25 @@ test('delivery timestamps require real calendar dates and valid clock/offset fie
     assert.ok(C.validate({ ...body, deliveryInfo: { courierArrivementDate: timestamp } }), timestamp);
   }
 });
+test('pickup orders validate with the client arrival time, client phone and payment extras', () => {
+  const pickup = { ...body, discriminator: 'pickup', pickupPointId: 'shop-1',
+    deliveryInfo: { clientArrivementDate: '2026-11-11T14:30:00.000+05:00', clientName: 'Client', phoneNumber: '+998900000000', realPhoneNumber: '998900000000' },
+    paymentInfo: { itemsCost: 10, paymentType: 'CARD', change: 0, total: 10 } };
+  assert.equal(C.validate(pickup), null);
+  assert.equal(C.isPickup(pickup), true);
+  assert.equal(C.isPickup(body), false);
+  assert.deepEqual(C.snapshot(pickup), pickup);
+  assert.equal(C.validate({ ...body, discriminator: 'pickup' }), null);
+  assert.ok(C.validate({ ...pickup, deliveryInfo: { ...pickup.deliveryInfo, clientArrivementDate: 'soon' } }));
+  assert.ok(C.validate({ ...pickup, paymentInfo: { ...pickup.paymentInfo, change: -1 } }));
+  assert.ok(C.validate({ ...pickup, pickupPointId: '' }));
+  assert.equal(C.validate({ ...body, discriminator: 'marketplace' }).code, 422);
+  // A courier order still has to say when the courier comes.
+  assert.ok(C.validate({ ...body, discriminator: 'uzum', deliveryInfo: { clientName: 'Client' } }));
+});
+test('a rejected order is described by its field names, never its values', () => {
+  const shape = C.rejectionShape({ discriminator: 'marketplace', deliveryInfo: { phoneNumber: '+998900000000' }, eatsId: 'x' }, 'Unsupported discriminator');
+  assert.deepEqual(shape, { error: 'Unsupported discriminator', discriminator: 'marketplace',
+    keys: ['discriminator', 'deliveryInfo', 'eatsId'], deliveryKeys: ['phoneNumber'], paymentKeys: 'undefined' });
+  assert.doesNotMatch(JSON.stringify(shape), /99890/);
+});

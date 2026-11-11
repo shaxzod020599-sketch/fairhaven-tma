@@ -81,9 +81,19 @@ function prices(items, vat) {
   return { items: items.map(({ id, price, oldPrice }) => ({ id, price, vat, ...(oldPrice !== undefined ? { oldPrice } : {}) })) };
 }
 
+const PICKUP_DELIVERY = ['clientArrivementDate', 'clientName', 'phoneNumber', 'realPhoneNumber'];
 function order(record) {
-  return { discriminator: 'yandex', eatsId: record.externalId,
-    items: record.items.map((item) => ({ id: item.billzProductId, price: item.unitPrice, quantity: item.quantity })) };
+  const items = record.items.map((item) => ({ id: item.billzProductId, price: item.unitPrice, quantity: item.quantity }));
+  const sent = record.yandex?.requestSnapshot || {};
+  if (sent.discriminator !== 'pickup') return { discriminator: 'yandex', eatsId: record.externalId, items };
+  // PickupOrderUpdate also requires deliveryInfo and paymentInfo. itemsCost
+  // follows the assembled lines, which picking may have changed.
+  const delivery = sent.deliveryInfo || {};
+  const itemsCost = Math.round(items.reduce((sum, item) => sum + item.price * item.quantity, 0) * 100) / 100;
+  return { discriminator: 'pickup', eatsId: record.externalId, items,
+    deliveryInfo: Object.fromEntries(PICKUP_DELIVERY.filter((key) => typeof delivery[key] === 'string').map((key) => [key, delivery[key]])),
+    paymentInfo: { itemsCost, paymentType: sent.paymentInfo?.paymentType || 'CARD' },
+    ...['comment', 'restaurantId', 'brand', 'platform'].reduce((out, key) => (typeof sent[key] === 'string' ? { ...out, [key]: sent[key] } : out), {}) };
 }
 
 function orderStatus(record) {

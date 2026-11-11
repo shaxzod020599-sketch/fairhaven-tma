@@ -10,6 +10,7 @@ const STATUS = {
   NEW: '🆕 Новый — ждёт решения', ACCEPTED_BY_RESTAURANT: '✅ Принят — соберите заказ',
   READY: '📦 Готов — отдайте курьеру Uzum', CANCELLED: '❌ Отменён',
 };
+const PICKUP_STATUS = { READY: '📦 Готов — выдайте клиенту' };
 const object = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
 function render(row, at = new Date()) {
   const clean = cleanOrder(row, at);
@@ -18,20 +19,25 @@ function render(row, at = new Date()) {
   // delivery facts there are: when the courier reaches the shop and how to call.
   const sent = object(row.rawIn); const delivery = object(sent.deliveryInfo);
   const open = clean.status !== 'CANCELLED';
+  // Pickup: the client comes to the shop, phoneNumber is theirs and no courier exists.
+  const pickup = sent.discriminator === 'pickup';
   const customer = [escaped(clean.customer.name, 200), escaped(clean.customer.phone, 40)].filter(Boolean).join(', ');
-  const courierAt = open ? clock(delivery.courierArrivementDate, at) : '';
-  const courierPhone = open ? note(delivery.phoneNumber, 48) : '';
+  const courierAt = open && !pickup ? clock(delivery.courierArrivementDate, at) : '';
+  const courierPhone = open && !pickup ? note(delivery.phoneNumber, 48) : '';
+  const clientAt = open && pickup ? clock(delivery.clientArrivementDate, at) : '';
   const comment = note(sent.comment, 300);
   const steps = timeline([['принят', row.uzum?.acceptedAt], ['готов', row.uzum?.readyAt]], at);
   const lines = [
     `🛵 <b>Заказ Uzum Tezkor ${escaped(clean.externalId, 64)}</b>`,
-    `Статус: ${STATUS[clean.status] || escaped(clean.status, 64)}`,
+    pickup ? '🛍 <b>Самовывоз</b> — клиент заберёт заказ сам' : '',
+    `Статус: ${(pickup && PICKUP_STATUS[clean.status]) || STATUS[clean.status] || escaped(clean.status, 64)}`,
     `Billz: ${STOCK[clean.accountingStatus] || escaped(clean.accountingStatus, 64)}`,
     clean.fulfillmentCancelled ? 'Выдача отменена. Продажа сохранена; возврат не выполнен.' : '',
     clean.status === 'NEW' && !clean.expired ? `⏰ Принять до: <b>${clock(deadline, at)}</b>` : '',
     !deadline ? 'Срок принятия неизвестен' : '',
     clean.expired && !row.uzum?.acceptedAt ? '⌛ Срок принятия истёк' : '',
     courierAt ? `🕒 Курьер приедет: <b>${courierAt}</b>` : '',
+    clientAt ? `🕒 Клиент придёт: <b>${clientAt}</b>` : '',
     courierPhone ? `📞 Связь с курьером: ${courierPhone}` : '',
     customer ? `👤 Клиент: ${customer}` : '',
     payment(object(sent.paymentInfo).paymentType),
@@ -50,7 +56,10 @@ function render(row, at = new Date()) {
   if (shortened) text += '\n… Полный заказ — в админ-панели.';
   text += `\nИтого: <b>${money(clean.totalAmount)}</b>`;
   if (clean.actions.includes('accept')) text += '\n\n👉 Проверьте наличие товара и нажмите «✅ Принять».';
-  else if (clean.actions.includes('ready')) text += '\n\n👉 Соберите заказ к приезду курьера и нажмите «📦 Готов».';
+  else if (clean.actions.includes('ready')) {
+    text += pickup ? '\n\n👉 Соберите заказ к приходу клиента и нажмите «📦 Готов».'
+      : '\n\n👉 Соберите заказ к приезду курьера и нажмите «📦 Готов».';
+  }
   return `${text}\n<a href="https://admin.fairhaven.uz/orders">Открыть в панели</a>`;
 }
 function createNotifier({

@@ -72,7 +72,11 @@ router.post('/order', async (req, res, next) => {
   try {
     if (!config.yandex.placeId) return fail(res, 500, 'Integration is not configured');
     const invalid = contract.validate(req.body);
-    if (invalid) return fail(res, 400, invalid);
+    if (invalid) {
+      // A refused order never reaches Mongo or Telegram; this line is the only trace of it.
+      logger.warn('yandex order rejected', contract.rejectionShape(req.body, invalid));
+      return fail(res, 400, invalid);
+    }
     if (req.body.restaurantId !== undefined && req.body.restaurantId !== config.yandex.placeId) return fail(res, 400, 'restaurantId does not match this place');
     const result = await receipt.receive(req.body, config.yandex.placeId);
     if (result.conflict) return fail(res, 400, 'eatsId already exists with a different order');

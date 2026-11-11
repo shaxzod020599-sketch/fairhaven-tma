@@ -23,6 +23,7 @@ const STATUS = {
   NEW: '🆕 Новый — ждёт решения', ACCEPTED_BY_RESTAURANT: '✅ Принят', COOKING: '🍳 Собирается', READY: '📦 Готов, ждёт курьера',
   TAKEN_BY_COURIER: '🚚 У курьера', DELIVERED: '🏁 Доставлен', CANCELLED: '❌ Отменён',
 };
+const PICKUP_STATUS = { READY: '📦 Готов, ждёт клиента', DELIVERED: '🏁 Выдан клиенту' };
 const object = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
 const WAITS_FOR_COURIER = ['NEW', 'ACCEPTED_BY_RESTAURANT', 'COOKING', 'READY'];
 /** When Yandex itself reported a step ("TAKEN_BY_COURIER", "DELIVERED"), from the audit trail. */
@@ -36,15 +37,20 @@ function render(row, at = new Date()) {
   // The order as Yandex sent it: the picker needs the courier's arrival time and
   // the customer's comment, which often carries the instruction that matters.
   const sent = object(row.yandex?.requestSnapshot); const delivery = object(sent.deliveryInfo);
-  const courierAt = WAITS_FOR_COURIER.includes(clean.status) ? clock(delivery.courierArrivementDate, at) : '';
+  // Pickup: the client collects the order at the shop; no Yandex courier comes.
+  const pickup = sent.discriminator === 'pickup';
+  const courierAt = !pickup && WAITS_FOR_COURIER.includes(clean.status) ? clock(delivery.courierArrivementDate, at) : '';
+  const clientAt = pickup && WAITS_FOR_COURIER.includes(clean.status) ? clock(delivery.clientArrivementDate, at) : '';
   const comment = note(sent.comment, 300);
   const steps = timeline([['принят', row.yandex?.acceptedAt], ['готов', row.yandex?.readyAt],
     ['курьер забрал', reportedAt(row, 'TAKEN_BY_COURIER')], ['доставлен', reportedAt(row, 'DELIVERED')]], at);
   const lines = [
     `🛵 <b>Заказ Yandex ${escaped(clean.externalId, 240)}</b>`,
-    `Статус: ${STATUS[clean.status] || escaped(clean.status, 64)}`,
+    pickup ? '🛍 <b>Самовывоз</b> — клиент заберёт заказ сам' : '',
+    `Статус: ${(pickup && PICKUP_STATUS[clean.status]) || STATUS[clean.status] || escaped(clean.status, 64)}`,
     `Billz: ${STOCK[clean.accountingStatus] || escaped(clean.accountingStatus, 64)}`,
     courierAt ? `🕒 Курьер приедет: <b>${courierAt}</b>` : '',
+    clientAt ? `🕒 Клиент придёт: <b>${clientAt}</b>` : '',
     customer ? `👤 ${customer}` : '',
     payment(object(sent.paymentInfo).paymentType),
     comment ? `💬 Комментарий: ${comment}` : '',

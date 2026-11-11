@@ -132,7 +132,9 @@ async function readOrder(body) {
     items,
     customer: {
       name: (body.deliveryInfo?.clientName || '').slice(0, 200),
-      phone: (body.deliveryInfo?.clientPhoneNumber || '').slice(0, 40),
+      // On a courier order phoneNumber is the courier's line; on pickup it is the client's.
+      phone: (body.deliveryInfo?.clientPhoneNumber
+        || (contract.isPickup(body) ? body.deliveryInfo?.phoneNumber || body.deliveryInfo?.realPhoneNumber : '') || '').slice(0, 40),
       address: '',
     },
   };
@@ -142,7 +144,11 @@ router.post('/order', async (req, res, next) => {
   try {
     if (!config.uzum.storeId) return fail(res, 503, 'UZUM_STORE_ID is not configured');
     const invalid = contract.validate(req.body);
-    if (invalid) return fail(res, invalid.code, invalid.error);
+    if (invalid) {
+      // A refused order never reaches Mongo or Telegram; this line is the only trace of it.
+      logger.warn('uzum order rejected', { status: invalid.code, ...contract.rejectionShape(req.body, invalid.error) });
+      return fail(res, invalid.code, invalid.error);
+    }
     if (req.body.restaurantId !== undefined && req.body.restaurantId !== config.uzum.storeId) return fail(res, 422, 'restaurantId does not match this store');
     const snapshot = contract.snapshot(req.body);
     const existing = await ChannelOrder().findOne({ channel: CHANNEL, externalId: req.body.eatsId }).lean();
@@ -151,7 +157,10 @@ router.post('/order', async (req, res, next) => {
       return res.json({ orderId: existing.internalOrderId, result: 'OK' });
     }
     const parsed = await readOrder(req.body);
-    if (parsed.error) return fail(res, parsed.code, parsed.error);
+    if (parsed.error) {
+      logger.warn('uzum order rejected', { status: parsed.code, error: parsed.error.slice(0, 200), discriminator: req.body.discriminator || '' });
+      return fail(res, parsed.code, parsed.error);
+    }
 
     const { order, created } = await orders.acceptOrder(CHANNEL, {
       externalId: parsed.externalId,
