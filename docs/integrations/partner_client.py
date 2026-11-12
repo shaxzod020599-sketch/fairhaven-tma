@@ -9,7 +9,7 @@ webhook. Зависимость одна — requests.
     export FAIRHAVEN_SECRET='fhp_s_…'     # секрет заказов
     python partner_client.py              # тестовый цикл (только в режиме test)
 
-Подробное руководство — partner-api.ru.md, контракт — partner-api.openapi.yaml.
+Руководство — partner-api.ru.md, контракт — partner-api.openapi.yaml.
 """
 from __future__ import annotations
 
