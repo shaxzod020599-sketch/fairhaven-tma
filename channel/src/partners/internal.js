@@ -10,6 +10,7 @@ const registry = require('./registry');
 const partnerOrders = require('./orders');
 const webhooks = require('./webhooks');
 const S = require('./serializers');
+const catalog = require('../core/catalog');
 
 /**
  * Admin and bot surface for partners, under /internal/partners (internal token).
@@ -76,9 +77,10 @@ function readPatch(body = {}) {
 
 async function summary(doc) {
   const channel = Partner.channelOf(doc.code);
-  const [keys, total, waiting, last, pendingEvents, failedEvents, lastDelivered] = await Promise.all([
+  const [keys, total, testTotal, waiting, last, pendingEvents, failedEvents, lastDelivered] = await Promise.all([
     ChannelKey().find({ channel, active: true }).sort({ createdAt: -1 }).lean(),
     PartnerOrder().countDocuments({ partnerCode: doc.code, test: false }),
+    PartnerOrder().countDocuments({ partnerCode: doc.code, test: true }),
     PartnerOrder().countDocuments({ partnerCode: doc.code, status: 'new' }),
     PartnerOrder().findOne({ partnerCode: doc.code }).sort({ createdAt: -1 }).select('createdAt').lean(),
     PartnerEvent().countDocuments({ partnerCode: doc.code, state: 'pending' }),
@@ -104,6 +106,7 @@ async function summary(doc) {
     })),
     stats: {
       liveOrders: total,
+      testOrders: testTotal,
       waiting,
       lastOrderAt: last?.createdAt || null,
       webhookPending: pendingEvents,
@@ -115,7 +118,13 @@ async function summary(doc) {
 
 router.get('/', wrap(async (_req, res) => {
   const docs = await Partner().find({}).sort({ createdAt: 1 }).lean();
-  res.json({ partners: await Promise.all(docs.map(summary)) });
+  // How many products every partner can see right now (the catalogue is shared),
+  // so the panel can say "open products first" instead of leaving partners on
+  // an empty catalogue. null when the count fails: the list must still load.
+  const products = await catalog.listForChannel(partnerOrders.CATALOG_CHANNEL, { limit: 0 })
+    .then((result) => result.total)
+    .catch((err) => { logger.warn('partner catalog count failed', { error: err.message }); return null; });
+  res.json({ partners: await Promise.all(docs.map(summary)), catalog: { products } });
 }));
 
 router.post('/', wrap(async (req, res) => {

@@ -8,6 +8,11 @@ const audit = require('../services/adminAudit');
  * recognises, and records every action that hands out or changes access.
  */
 
+const path = require('path');
+
+// The partner guide the admin sends with the keys (built from partner-api.ru.md).
+const GUIDE_PDF = path.resolve(__dirname, '../../docs/integrations/FairHaven-Partner-API.pdf');
+
 const CODE = /^[a-z][a-z0-9-]{2,23}$/;
 const ID = /^[a-f\d]{24}$/i;
 
@@ -43,6 +48,12 @@ function validCode(req, res) {
   }
   return code;
 }
+
+exports.guide = (_req, res) => {
+  res.download(GUIDE_PDF, 'FairHaven-Partner-API.pdf', (err) => {
+    if (err && !res.headersSent) res.status(404).json({ success: false, error: 'partner_guide_missing' });
+  });
+};
 
 exports.list = async (_req, res) => {
   try {

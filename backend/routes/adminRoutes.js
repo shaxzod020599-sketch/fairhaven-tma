@@ -95,6 +95,7 @@ router.post('/medicalka/sub-orders/:id/cancel', medicalka.cancelSubOrder);
 router.post('/medicalka/sub-orders/:id/labels', medicalka.addSubOrderLabel);
 // Partner API partners (our own contract, any number of partners)
 router.get('/partners', partners.list);
+router.get('/partners/guide.pdf', partners.guide);
 router.post('/partners', partners.create);
 router.post('/partners/orders/:id/decision', partners.decide);
 router.post('/partners/orders/:id/cancel', partners.cancel);

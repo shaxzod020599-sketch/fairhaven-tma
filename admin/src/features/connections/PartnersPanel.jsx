@@ -12,13 +12,13 @@ import { useToast } from '../../ui/ToastProvider';
  * Партнёры по API FairHaven — любой сервис, которому мы отдаём каталог,
  * остатки и принимаем от него заказы по одному общему договору (Partner API).
  *
- * Новый партнёр — это запись здесь, а не новая программа: код, ключи, режим.
- * Цена и «показывать партнёрам» общие для всех и задаются на странице «Товары»
- * в строке «Партнёры (API)».
+ * Новый партнёр — это запись здесь, а не новая программа. Карточка партнёра
+ * ведёт по шагам подключения; редкие технические настройки спрятаны во
+ * вкладке «Настройки».
  */
 
 export const MODE = {
-  test: { label: 'Тест', tone: 'warning', hint: 'Заказы проверочные: склад и Billz не трогаются, решение приходит само.' },
+  test: { label: 'Тест', tone: 'warning', hint: 'Проверочные заказы: склад и Billz не трогаются, решение приходит само.' },
   live: { label: 'Работает', tone: 'success', hint: 'Настоящие заказы: товар бронируется, оператор принимает в Telegram.' },
   off: { label: 'Выключен', tone: 'danger', hint: 'Партнёр не может ни читать каталог, ни отправлять заказы.' },
 };
@@ -36,6 +36,7 @@ const ERRORS = {
   partner_invalid_code: 'Код: латинские буквы, цифры и дефис, от 3 до 24 символов, начинается с буквы.',
   partner_invalid_name: 'Введите название партнёра.',
   partner_encryption_unavailable: 'На сервере не настроен ключ шифрования — без него секреты партнёра сохранить нельзя.',
+  partner_guide_missing: 'Файл инструкции не найден на сервере.',
   webhook_url_invalid: 'Адрес вебхука указан неверно.',
   webhook_url_not_https: 'Адрес вебхука должен начинаться с https://',
   webhook_url_has_credentials: 'Адрес вебхука не должен содержать логин и пароль.',
@@ -49,6 +50,8 @@ const ERRORS = {
   channel_hub_unreachable: 'Сервис каналов недоступен.',
 };
 
+const PRODUCTS_PATH = 'Товары → карточка товара → «Где продаётся» → строка «Партнёры (API)»: включите переключатель и укажите цену';
+
 export function partnerError(err) {
   return ERRORS[err?.code] || err?.message || 'Не удалось выполнить действие.';
 }
@@ -60,6 +63,25 @@ function useMounted() {
     return () => { mounted.current = false; };
   }, []);
   return mounted;
+}
+
+function saveBlob({ blob, filename }) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename || 'FairHaven-Partner-API.pdf';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function GuideButton({ api, onError, variant = 'secondary' }) {
+  const [busy, setBusy] = useState(false);
+  const download = async () => {
+    if (busy) return;
+    setBusy(true);
+    try { saveBlob(await api.guide()); } catch (err) { onError(partnerError(err)); } finally { setBusy(false); }
+  };
+  return <Button size="sm" variant={variant} disabled={busy} onClick={download}>{busy ? 'Скачиваем…' : 'Скачать инструкцию (PDF)'}</Button>;
 }
 
 function SecretBoxes({ items }) {
@@ -94,9 +116,65 @@ function keyItems(keys, webhookSecret) {
   ].filter(Boolean);
 }
 
+function lastUse(partner) {
+  return (partner.keys || []).map((key) => key.lastUsedAt).filter(Boolean).sort().pop() || null;
+}
+
+/** The four connection steps, in order; the first one not done is the current one. */
+export function partnerSteps(partner, products) {
+  const used = lastUse(partner);
+  const testOrders = partner.stats?.testOrders || 0;
+  const live = partner.mode === 'live';
+  return [
+    {
+      key: 'products',
+      title: 'Откройте товары для партнёров',
+      done: products > 0,
+      text: products > 0
+        ? `Партнёры видят товаров: ${products}. Добавить или убрать: ${PRODUCTS_PATH}.`
+        : products === null
+          ? `Не удалось посчитать товары. Проверьте: ${PRODUCTS_PATH}.`
+          : `Сейчас партнёр видит пустой каталог. ${PRODUCTS_PATH}.`,
+    },
+    {
+      key: 'keys',
+      title: 'Передайте партнёру ключи и инструкцию',
+      done: Boolean(used),
+      text: used
+        ? `Партнёр подключился — последний запрос ${formatDateTime(used)}.`
+        : 'Отправьте программисту партнёра два ключа (они показывались один раз при добавлении) и PDF-инструкцию. Ключи не сохранились — выпустите новые.',
+    },
+    {
+      key: 'test',
+      title: 'Партнёр проверяет заказы в тесте',
+      done: testOrders > 0 || live,
+      text: testOrders > 0
+        ? `Проверочных заказов: ${testOrders}. Склад и Billz они не трогали.`
+        : 'Ждём первый проверочный заказ от партнёра. В тесте заказы решаются сами, склад и Billz не трогаются.',
+    },
+    {
+      key: 'live',
+      title: 'Включите настоящие заказы',
+      done: live,
+      text: live
+        ? 'Партнёр работает: каждый заказ бронирует товар и приходит оператору в Telegram.'
+        : partner.mode === 'off'
+          ? 'Партнёр выключен. Включите тест или настоящие заказы, когда будете готовы.'
+          : 'Когда партнёр сообщит, что проверки прошли, включите настоящие заказы.',
+    },
+  ];
+}
+
+function nextStepText(partner, products) {
+  if (partner.mode === 'off') return 'Выключен';
+  if (partner.stats?.waiting) return `Ждут решения: ${partner.stats.waiting}`;
+  const next = partnerSteps(partner, products).find((step) => !step.done);
+  return next ? `Следующий шаг: ${next.title.toLowerCase()}` : 'Подключение завершено';
+}
+
 // Mounted only while open, so the one-time secrets disappear with the window.
 function CreatePartnerDialog({ api, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: '', code: '', decisionMinutes: 5, webhookUrl: '' });
+  const [form, setForm] = useState({ name: '', code: '', decisionMinutes: 5 });
   const [created, setCreated] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -111,7 +189,6 @@ function CreatePartnerDialog({ api, onClose, onSaved }) {
         name: form.name.trim(),
         code: form.code.trim().toLowerCase(),
         decisionMinutes: Number(form.decisionMinutes) || 5,
-        ...(form.webhookUrl.trim() ? { webhookUrl: form.webhookUrl.trim() } : {}),
       });
       if (!mounted.current) return;
       const data = response?.data;
@@ -132,36 +209,33 @@ function CreatePartnerDialog({ api, onClose, onSaved }) {
       open
       title={created ? `Партнёр «${created.partner?.name}» добавлен` : 'Добавить партнёра'}
       description={created
-        ? 'Ключи показываются только сейчас. Передайте их партнёру вместе с документацией по защищённому каналу.'
-        : 'Партнёр сразу получает тестовый режим: может читать каталог и отправлять проверочные заказы, склад не трогается.'}
+        ? 'Осталось передать партнёру ключи и инструкцию.'
+        : 'Партнёр начинает в тестовом режиме: видит каталог и отправляет проверочные заказы, склад не трогается.'}
       onClose={() => !busy && onClose()}
       closeDisabled={busy}
       width="680px"
     >
       {created ? <>
-        <div className="fh-secret-warning">Сохраните ключи сейчас — после закрытия окна их не будет видно. Потеряли — выпустите новые.</div>
+        <div className="fh-secret-warning">Скопируйте ключи сейчас — после закрытия окна их не будет видно. Потеряли — выпустите новые в карточке партнёра.</div>
         <SecretBoxes items={keyItems(created.keys, created.webhookSecret)} />
-        <div className="fh-next-note"><b>Что дальше</b><p>
-          Адрес API: <span className="fh-mono">https://api.fairhaven.uz/partner/v1</span>. Отправьте партнёру ключи и документацию
-          (docs/integrations). Когда тестовые заказы у него проходят — переключите режим на «Работает».
+        <div className="fh-next-note"><b>Отправьте программисту партнёра</b><p>
+          1) оба ключа, 2) PDF-инструкцию. Дальше откройте карточку партнёра — там видно, на каком он шаге.
         </p></div>
+        <div><GuideButton api={api} variant="primary" onError={setError} /></div>
       </> : <div className="fh-form-stack">
-        <Field label="Название" hint="Как партнёр будет подписан в Telegram и в панели.">
+        <Field label="Название" hint="Как партнёр будет подписан в Telegram и в панели. Например: Darmon">
           <input className="fh-input" maxLength={80} disabled={busy} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </Field>
-        <Field label="Код" hint="Латиница, цифры и дефис. Нельзя поменять потом. Например: apteka24">
+        <Field label="Код" hint="Короткое имя для системы и Billz: латиница, цифры, дефис. Потом не меняется. Например: darmon">
           <input className="fh-input fh-mono" maxLength={24} disabled={busy} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toLowerCase() })} />
         </Field>
         <Field label="Минут на решение" hint="Если оператор не ответил за это время, заказ отклоняется сам и бронь снимается.">
           <input className="fh-input" type="number" min={1} max={60} disabled={busy} value={form.decisionMinutes} onChange={(e) => setForm({ ...form, decisionMinutes: e.target.value })} />
         </Field>
-        <Field label="Адрес вебхука (необязательно)" hint="Куда сообщать партнёру о смене статуса заказа. Только https://">
-          <input className="fh-input fh-mono" maxLength={500} disabled={busy} value={form.webhookUrl} onChange={(e) => setForm({ ...form, webhookUrl: e.target.value })} placeholder="https://partner.example/fairhaven/webhook" />
-        </Field>
       </div>}
       {error && <div className="fh-error-note" role="alert">{error}</div>}
       <div className="fh-dialog-actions">
-        <Button disabled={busy} onClick={onClose}>{created ? 'Закрыть окно' : 'Отмена'}</Button>
+        <Button disabled={busy} onClick={onClose}>{created ? 'Готово' : 'Отмена'}</Button>
         {!created && <Button variant="primary" disabled={busy || !valid} onClick={save}>{busy ? 'Создаём…' : 'Добавить и выпустить ключи'}</Button>}
       </div>
     </Dialog>
@@ -197,9 +271,16 @@ const ACT_CONFIRM = {
   cancel: 'Отменить принятый заказ? Бронь в Billz снимется, партнёр получит отмену.',
 };
 
-function PartnerDialog({ partner, api, onClose, onSaved }) {
+const TABS = [
+  { key: 'setup', label: 'Подключение' },
+  { key: 'orders', label: 'Заказы' },
+  { key: 'settings', label: 'Настройки' },
+];
+
+function PartnerDialog({ partner, products, api, onClose, onSaved }) {
   const toast = useToast();
   const mounted = useMounted();
+  const [tab, setTab] = useState('setup');
   const [form, setForm] = useState({
     name: partner.name,
     decisionMinutes: partner.decisionMinutes,
@@ -307,85 +388,132 @@ function PartnerDialog({ partner, api, onClose, onSaved }) {
     order: ACT_CONFIRM[confirm.action],
   })[confirm.type];
 
+  const steps = partnerSteps(partner, products);
+  const current = steps.find((step) => !step.done)?.key;
+  const waiting = orders?.filter((order) => order.status === 'new' && !order.test).length || 0;
+  const mode = MODE[partner.mode] || { label: partner.mode, tone: 'neutral' };
+
   return (
-    <Dialog open title={`${partner.name} · ${partner.code}`} description={MODE[partner.mode]?.hint} onClose={() => !busy && onClose()} closeDisabled={busy} width="860px">
-      <div className="fh-form-stack">
-        <section className="fh-partner-section">
-          <h3>Режим</h3>
-          <div className="fh-partner-modes">
-            {Object.entries(MODE).map(([mode, def]) => (
-              <Button key={mode} size="sm" variant={partner.mode === mode ? 'primary' : 'secondary'} disabled={busy || partner.mode === mode}
-                onClick={() => setConfirm({ type: 'mode', mode })}>{def.label}</Button>
-            ))}
-          </div>
-        </section>
+    <Dialog open title={partner.name} description={`Код: ${partner.code}`} onClose={() => !busy && onClose()} closeDisabled={busy} width="760px">
+      <div className="fh-partner-dialog-head">
+        <Badge tone={mode.tone}>{mode.label}</Badge>
+        <span>{mode.hint}</span>
+      </div>
 
-        {confirm && <div className="fh-info-note" role="alertdialog">
-          <p>{confirmText}</p>
-          <div className="fh-dialog-actions">
-            <Button disabled={busy} onClick={() => setConfirm(null)}>Отмена</Button>
-            <Button variant={confirm.type === 'mode' && confirm.mode === 'live' ? 'primary' : 'danger'} disabled={busy} onClick={confirmed}>{busy ? 'Выполняем…' : 'Да, подтверждаю'}</Button>
-          </div>
-        </div>}
+      <div className="fh-tabs fh-partner-tabs" role="tablist" aria-label="Разделы партнёра">
+        {TABS.map((item) => <button key={item.key} type="button" role="tab" aria-selected={tab === item.key}
+          className={tab === item.key ? 'is-active' : ''} onClick={() => setTab(item.key)}>
+          {item.label}{item.key === 'orders' && waiting ? ` · ${waiting}` : ''}
+        </button>)}
+      </div>
 
-        {shown && <div className="fh-form-stack">
-          <div className="fh-secret-warning">{shown.title}: сохраните сейчас — после закрытия окна значение не будет видно.</div>
-          <SecretBoxes items={shown.items} />
-          <div><Button size="sm" onClick={() => setShown(null)}>Скрыть</Button></div>
-        </div>}
+      {confirm && <div className="fh-info-note" role="alertdialog">
+        <p>{confirmText}</p>
+        <div className="fh-dialog-actions">
+          <Button disabled={busy} onClick={() => setConfirm(null)}>Отмена</Button>
+          <Button variant={confirm.type === 'mode' && confirm.mode === 'live' ? 'primary' : 'danger'} disabled={busy} onClick={confirmed}>{busy ? 'Выполняем…' : 'Да, подтверждаю'}</Button>
+        </div>
+      </div>}
 
-        {error && <div className="fh-error-note" role="alert">{error}</div>}
+      {shown && <div className="fh-form-stack">
+        <div className="fh-secret-warning">{shown.title}: скопируйте сейчас — после закрытия окна значение не будет видно.</div>
+        <SecretBoxes items={shown.items} />
+        <div><Button size="sm" onClick={() => setShown(null)}>Скрыть</Button></div>
+      </div>}
 
-        <section className="fh-partner-section">
-          <h3>Заказы</h3>
-          {orders === null ? <p>Загружаем…</p> : orders.length === 0 ? <p>Заказов пока нет.</p>
+      {error && <div className="fh-error-note" role="alert">{error}</div>}
+
+      {tab === 'setup' && <div className="fh-form-stack">
+        <ol className="fh-partner-steps">
+          {steps.map((step, index) => (
+            <li key={step.key} className={step.done ? 'is-done' : step.key === current ? 'is-current' : ''}>
+              <span className="fh-partner-steps__mark" aria-hidden="true">{step.done ? '✓' : index + 1}</span>
+              <div>
+                <b>{step.title}</b>
+                <p>{step.text}</p>
+                {step.key === 'keys' && <div className="fh-partner-modes">
+                  <GuideButton api={api} variant={step.key === current ? 'primary' : 'secondary'} onError={setError} />
+                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirm({ type: 'keys' })}>Выпустить новые ключи</Button>
+                </div>}
+                {step.key === 'live' && !step.done && partner.mode !== 'off' && <div className="fh-partner-modes">
+                  <Button size="sm" variant={step.key === current ? 'primary' : 'secondary'} disabled={busy}
+                    onClick={() => setConfirm({ type: 'mode', mode: 'live' })}>Включить настоящие заказы</Button>
+                </div>}
+              </div>
+            </li>
+          ))}
+        </ol>
+        <div className="fh-partner-mode-line">
+          <span>Доступ партнёра: <b>{mode.label}</b></span>
+          {partner.mode !== 'test' && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirm({ type: 'mode', mode: 'test' })}>Перевести в тест</Button>}
+          {partner.mode === 'off' && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirm({ type: 'mode', mode: 'live' })}>Включить настоящие заказы</Button>}
+          {partner.mode !== 'off' && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirm({ type: 'mode', mode: 'off' })}>Выключить партнёра</Button>}
+        </div>
+      </div>}
+
+      {tab === 'orders' && <div className="fh-form-stack">
+        <p className="fh-partner-muted">Новые настоящие заказы оператор принимает в Telegram — здесь те же кнопки и история. Проверочные заказы решаются сами.</p>
+        <div>
+          {orders === null ? <p>Загружаем…</p> : orders.length === 0 ? <p className="fh-partner-muted">Заказов пока нет.</p>
             : orders.map((order) => <OrderRow key={order._id} order={order} busy={busy} onAct={(o, action) => setConfirm({ type: 'order', order: o, action })} />)}
-          <div><Button size="sm" variant="ghost" disabled={busy} onClick={loadOrders}>Обновить заказы</Button></div>
-        </section>
+        </div>
+        <div><Button size="sm" variant="ghost" disabled={busy} onClick={loadOrders}>Обновить</Button></div>
+      </div>}
 
-        <section className="fh-partner-section">
-          <h3>Настройки</h3>
-          <div className="fh-partner-fields">
-            <Field label="Название"><input className="fh-input" maxLength={80} disabled={busy} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Минут на решение" hint="Без ответа заказ отклоняется сам."><input className="fh-input" type="number" min={1} max={60} disabled={busy} value={form.decisionMinutes} onChange={(e) => setForm({ ...form, decisionMinutes: e.target.value })} /></Field>
-            <Field label="Адрес вебхука" hint="Пусто — уведомления не отправляются."><input className="fh-input fh-mono" maxLength={500} disabled={busy} value={form.webhookUrl} onChange={(e) => setForm({ ...form, webhookUrl: e.target.value })} /></Field>
-            <Field label="Заметка"><input className="fh-input" maxLength={500} disabled={busy} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></Field>
+      {tab === 'settings' && <div className="fh-form-stack">
+        <div className="fh-partner-fields">
+          <Field label="Название"><input className="fh-input" maxLength={80} disabled={busy} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+          <Field label="Минут на решение" hint="Без ответа оператора заказ отклоняется сам."><input className="fh-input" type="number" min={1} max={60} disabled={busy} value={form.decisionMinutes} onChange={(e) => setForm({ ...form, decisionMinutes: e.target.value })} /></Field>
+        </div>
+        <Field label="Заметка" hint="Для себя: контакт партнёра, договорённости."><input className="fh-input" maxLength={500} disabled={busy} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></Field>
+        <div><Button variant="primary" disabled={busy || !form.name.trim()} onClick={saveSettings}>Сохранить</Button></div>
+
+        <details className="fh-partner-more">
+          <summary>Ключи доступа</summary>
+          <div className="fh-form-stack">
+            {partner.keys?.length
+              ? partner.keys.map((key) => <p key={key.fingerprint} className="fh-partner-key">
+                <b>{key.kind === 'secret' ? 'Ключ для заказов' : 'Ключ для чтения'}</b> <span className="fh-mono">{key.fingerprint}</span>{' '}
+                <small>{key.lastUsedAt ? `использован ${formatDateTime(key.lastUsedAt)}` : 'ещё не использовался'}</small>
+              </p>)
+              : <p className="fh-partner-muted">Действующих ключей нет.</p>}
+            <div><Button size="sm" disabled={busy} onClick={() => setConfirm({ type: 'keys' })}>Выпустить новые ключи</Button></div>
           </div>
-          <div><Button variant="primary" disabled={busy || !form.name.trim()} onClick={saveSettings}>Сохранить настройки</Button></div>
-        </section>
+        </details>
 
-        <section className="fh-partner-section">
-          <h3>Доступ</h3>
-          {partner.keys?.length
-            ? partner.keys.map((key) => <p key={key.fingerprint} className="fh-partner-key">
-              <b>{key.kind === 'secret' ? 'Ключ для заказов' : 'Ключ для чтения'}</b> <span className="fh-mono">{key.fingerprint}</span>{' '}
-              <small>{key.lastUsedAt ? `использован ${formatDateTime(key.lastUsedAt)}` : 'ещё не использовался'}</small>
-            </p>)
-            : <p>Действующих ключей нет.</p>}
-          <div className="fh-partner-modes">
-            <Button size="sm" disabled={busy} onClick={() => setConfirm({ type: 'keys' })}>Выпустить новые ключи</Button>
-            <Button size="sm" disabled={busy} onClick={showWebhookSecret}>Показать секрет вебхуков</Button>
-            <Button size="sm" disabled={busy} onClick={() => setConfirm({ type: 'webhook-rotate' })}>Заменить секрет вебхуков</Button>
-            <Button size="sm" disabled={busy || !partner.webhookUrl} onClick={testWebhook}>Проверить вебхук</Button>
+        <details className="fh-partner-more">
+          <summary>Уведомления партнёру (вебхук) — заполняет программист</summary>
+          <div className="fh-form-stack">
+            <p className="fh-partner-muted">Необязательно. Если партнёр даст адрес, мы будем сообщать ему о смене статуса заказа.</p>
+            <Field label="Адрес вебхука" hint="Только https://. Пусто — уведомления не отправляются."><input className="fh-input fh-mono" maxLength={500} disabled={busy} value={form.webhookUrl} onChange={(e) => setForm({ ...form, webhookUrl: e.target.value })} placeholder="https://partner.example/fairhaven/webhook" /></Field>
+            <div className="fh-partner-modes">
+              <Button size="sm" variant="primary" disabled={busy || !form.name.trim()} onClick={saveSettings}>Сохранить адрес</Button>
+              <Button size="sm" disabled={busy || !partner.webhookUrl} onClick={testWebhook}>Проверить</Button>
+              <Button size="sm" disabled={busy} onClick={showWebhookSecret}>Показать секрет</Button>
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirm({ type: 'webhook-rotate' })}>Заменить секрет</Button>
+            </div>
           </div>
-        </section>
+        </details>
 
-        <section className="fh-partner-section">
-          <h3>Billz</h3>
-          <p>По умолчанию продажи партнёра идут под общим ключом магазина. Можно дать партнёру свой ключ и тип оплаты — тогда в Billz его продажи видны отдельно.</p>
-          <div className="fh-partner-fields">
+        <details className="fh-partner-more">
+          <summary>Billz — отдельный учёт продаж (необязательно)</summary>
+          <div className="fh-form-stack">
+            <p className="fh-partner-muted">По умолчанию продажи партнёра идут под общим ключом магазина. Свой ключ и тип оплаты нужны, только если продажи этого партнёра надо видеть в Billz отдельно.</p>
             <Field label="Свой ключ Billz" hint={partner.billz?.hasSecret ? 'Ключ сохранён. Введите новый, чтобы заменить.' : 'Не задан — используется общий ключ.'}>
               <input className="fh-input fh-mono" type="password" autoComplete="new-password" disabled={busy} value={form.billzSecret} onChange={(e) => setForm({ ...form, billzSecret: e.target.value })} />
             </Field>
-            <Field label="ID типа оплаты в Billz"><input className="fh-input fh-mono" disabled={busy} value={form.billzPaymentTypeId} onChange={(e) => setForm({ ...form, billzPaymentTypeId: e.target.value })} /></Field>
-            <Field label="Название типа оплаты"><input className="fh-input" disabled={busy} value={form.billzPaymentTypeName} onChange={(e) => setForm({ ...form, billzPaymentTypeName: e.target.value })} /></Field>
+            <div className="fh-partner-fields">
+              <Field label="ID типа оплаты в Billz"><input className="fh-input fh-mono" disabled={busy} value={form.billzPaymentTypeId} onChange={(e) => setForm({ ...form, billzPaymentTypeId: e.target.value })} /></Field>
+              <Field label="Название типа оплаты"><input className="fh-input" disabled={busy} value={form.billzPaymentTypeName} onChange={(e) => setForm({ ...form, billzPaymentTypeName: e.target.value })} /></Field>
+            </div>
+            <div className="fh-partner-modes">
+              <Button size="sm" variant="primary" disabled={busy} onClick={saveBillz}>Сохранить Billz</Button>
+              {partner.billz?.hasSecret && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirm({ type: 'billz-remove' })}>Удалить свой ключ</Button>}
+            </div>
           </div>
-          <div className="fh-partner-modes">
-            <Button variant="primary" disabled={busy} onClick={saveBillz}>Сохранить Billz</Button>
-            {partner.billz?.hasSecret && <Button variant="ghost" disabled={busy} onClick={() => setConfirm({ type: 'billz-remove' })}>Удалить свой ключ</Button>}
-          </div>
-        </section>
-      </div>
+        </details>
+      </div>}
+
       <div className="fh-dialog-actions">
         <Button disabled={busy} onClick={onClose}>Закрыть</Button>
       </div>
@@ -395,6 +523,7 @@ function PartnerDialog({ partner, api, onClose, onSaved }) {
 
 export function PartnersPanel({ api = partnersApi }) {
   const [partners, setPartners] = useState(null);
+  const [products, setProducts] = useState(null);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   const [openCode, setOpenCode] = useState('');
@@ -403,6 +532,8 @@ export function PartnersPanel({ api = partnersApi }) {
     try {
       const response = await api.list();
       setPartners(Array.isArray(response?.data?.partners) ? response.data.partners : []);
+      const count = response?.data?.catalog?.products;
+      setProducts(Number.isFinite(count) ? count : null);
       setError('');
     } catch (err) {
       setPartners([]);
@@ -420,33 +551,33 @@ export function PartnersPanel({ api = partnersApi }) {
         <div>
           <p className="fh-eyebrow">PARTNER API</p>
           <h2>Партнёры</h2>
-          <p>
-            Любой сервис, которому нужны наш каталог и остатки, подключается по одному общему API — без отдельной разработки.
-            Цена и «показывать партнёрам» задаются на странице «Товары», в строке «Партнёры (API)».
-          </p>
+          <p>Сервисы, которые берут наш каталог и остатки и присылают заказы. Добавьте партнёра и откройте его карточку — там шаги подключения.</p>
         </div>
         <Button variant="primary" onClick={() => setCreating(true)}>Добавить партнёра</Button>
       </div>
       {error && <div className="fh-stale-note">{error}</div>}
+      {partners && !error && products === 0 && <div className="fh-stale-note">
+        Партнёры пока не видят ни одного товара. {PRODUCTS_PATH}.
+      </div>}
+      {partners && !error && products > 0 && <p className="fh-partner-muted">Открыто партнёрам товаров: <b>{products}</b></p>}
       {partners === null && <p>Загружаем…</p>}
-      {partners?.length === 0 && !error && <p>Партнёров пока нет.</p>}
+      {partners?.length === 0 && !error && <p className="fh-partner-muted">Партнёров пока нет.</p>}
       {partners?.map((partner) => (
-        <div className="fh-key-row" key={partner.code}>
+        <div className="fh-key-row fh-partner-row" key={partner.code}>
           <div>
             <b>{partner.name}</b>
-            <small className="fh-mono">{partner.code}</small>
+            <small>код {partner.code}</small>
           </div>
           <Badge tone={MODE[partner.mode]?.tone || 'neutral'}>{MODE[partner.mode]?.label || partner.mode}</Badge>
           <span className="fh-key-row__when">
-            {partner.stats?.waiting ? `Ждут решения: ${partner.stats.waiting} · ` : ''}
-            {partner.stats?.lastOrderAt ? `Последний заказ ${formatDateTime(partner.stats.lastOrderAt)}` : 'Заказов ещё не было'}
+            {nextStepText(partner, products)}
             {partner.stats?.webhookFailed ? ` · Вебхуков не доставлено: ${partner.stats.webhookFailed}` : ''}
           </span>
           <Button size="sm" onClick={() => setOpenCode(partner.code)}>Открыть</Button>
         </div>
       ))}
       {creating && <CreatePartnerDialog api={api} onClose={() => setCreating(false)} onSaved={load} />}
-      {open && <PartnerDialog key={open.code} partner={open} api={api} onClose={() => setOpenCode('')} onSaved={load} />}
+      {open && <PartnerDialog key={open.code} partner={open} products={products} api={api} onClose={() => setOpenCode('')} onSaved={load} />}
     </Card>
   );
 }

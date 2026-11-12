@@ -1,9 +1,10 @@
-import { apiRequest } from './client';
+import { apiRequest, downloadRequest } from './client';
 
 const code = (value) => encodeURIComponent(value);
 
 export const partnersApi = {
   list: () => apiRequest('/partners'),
+  guide: () => downloadRequest('/partners/guide.pdf'),
   create: (body) => apiRequest('/partners', { method: 'POST', body }),
   update: (partner, body) => apiRequest(`/partners/${code(partner)}`, { method: 'PATCH', body }),
   issueKeys: (partner) => apiRequest(`/partners/${code(partner)}/keys`, { method: 'POST', body: {} }),

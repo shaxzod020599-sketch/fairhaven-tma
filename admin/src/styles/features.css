@@ -637,9 +637,26 @@
 
 /* ── Partner API partners (Connections page) ─────────────────────────────── */
 .fh-partners-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
-.fh-partner-section { display: grid; gap: 10px; padding-top: 16px; border-top: 1px solid var(--fh-line-soft); }
-.fh-partner-section h3 { margin: 0; color: var(--fh-burgundy-deep); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
-.fh-partner-section p { margin: 0; color: var(--fh-muted); line-height: 1.5; }
+.fh-partner-muted { margin: 0; color: var(--fh-muted); line-height: 1.5; }
+.fh-partner-row small { color: var(--fh-muted); }
+.fh-partner-dialog-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; color: var(--fh-muted); font-size: 13px; line-height: 1.45; }
+.fh-partner-tabs { margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--fh-line-soft); }
+.fh-partner-steps { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.fh-partner-steps li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 14px; padding: 14px 0; border-top: 1px solid var(--fh-line-soft); }
+.fh-partner-steps li:first-child { border-top: 0; padding-top: 4px; }
+.fh-partner-steps b { display: block; font-size: 15px; }
+.fh-partner-steps p { margin: 4px 0 0; color: var(--fh-muted); font-size: 13px; line-height: 1.5; }
+.fh-partner-steps .fh-partner-modes { margin-top: 10px; }
+.fh-partner-steps__mark { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--fh-line); color: var(--fh-muted); font-size: 13px; font-weight: 800; }
+.fh-partner-steps li.is-done .fh-partner-steps__mark { border-color: transparent; background: var(--fh-success-wash); color: var(--fh-success); }
+.fh-partner-steps li.is-done b { color: var(--fh-muted); }
+.fh-partner-steps li.is-current .fh-partner-steps__mark { border-color: var(--fh-burgundy); background: var(--fh-burgundy); color: #fff; }
+.fh-partner-steps li.is-current b { color: var(--fh-burgundy-deep); }
+.fh-partner-mode-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--fh-canvas); font-size: 13px; }
+.fh-partner-mode-line > span { margin-right: auto; }
+.fh-partner-more { border: 1px solid var(--fh-line-soft); border-radius: 12px; padding: 0 14px; }
+.fh-partner-more summary { padding: 13px 0; font-weight: 800; font-size: 14px; cursor: pointer; }
+.fh-partner-more[open] { padding-bottom: 14px; }
 .fh-partner-modes { display: flex; flex-wrap: wrap; gap: 8px; }
 .fh-partner-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .fh-partner-key { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
