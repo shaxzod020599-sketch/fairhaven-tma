@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FairHaven Partner API · v1 — руководство для партнёров</title>
+<style>
+@page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+@page :first { margin: 0; }
+:root {
+  --green-900: #12352a; --green-800: #1a4a3a; --green-700: #22604b; --green-600: #2f7a5f;
+  --green-100: #e5f0ea; --green-50: #f3f8f5; --sand: #f7f5f0; --ink: #1f2a26; --muted: #5d6b65;
+  --line: #d9e3dd; --code-bg: #f4f6f4; --accent: #b8925a;
+}
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; font-family: -apple-system, "Helvetica Neue", "Segoe UI", Arial, sans-serif;
+  color: var(--ink); font-size: 10.2pt; line-height: 1.55; background: #fff; }
+code, pre { font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+.cover { height: 297mm; width: 210mm; position: relative; overflow: hidden;
+  background: linear-gradient(160deg, var(--green-900) 0%, var(--green-800) 55%, var(--green-700) 100%);
+  color: #fff; padding: 34mm 22mm 22mm; page-break-after: always; break-after: page; }
+.cover .leaf { position: absolute; right: -40mm; top: 40mm; width: 170mm; height: 170mm; border-radius: 50%;
+  border: 1.2px solid rgba(255,255,255,.12); }
+.cover .leaf.l2 { right: -10mm; top: 80mm; width: 120mm; height: 120mm; border-color: rgba(184,146,90,.35); }
+.cover .brand { font-size: 11pt; letter-spacing: .32em; text-transform: uppercase; color: #cfe3d8; }
+.cover .brand b { color: #fff; }
+.cover h1 { font-size: 38pt; line-height: 1.08; margin: 44mm 0 6mm; font-weight: 650; letter-spacing: -.01em; }
+.cover h1 .dot { color: var(--accent); }
+.cover .sub { font-size: 14pt; color: #d6e8de; max-width: 135mm; }
+.cover .rule { width: 26mm; height: 3px; background: var(--accent); margin: 10mm 0; border-radius: 2px; }
+.cover dl { display: grid; grid-template-columns: 34mm 1fr; gap: 3mm 6mm; font-size: 10.5pt; margin: 0; max-width: 150mm; }
+.cover dt { color: #a9c9b8; }
+.cover dd { margin: 0; color: #fff; }
+.cover dd code { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); color: #fff; padding: 1px 6px; border-radius: 4px; font-size: 9.5pt; }
+.cover .foot { position: absolute; left: 22mm; right: 22mm; bottom: 18mm; font-size: 9pt; color: #a9c9b8;
+  border-top: 1px solid rgba(255,255,255,.18); padding-top: 4mm; display: flex; justify-content: space-between; }
+.wrap { max-width: 180mm; margin: 0 auto; }
+.toc-page { page-break-after: always; break-after: page; padding-top: 4mm; }
+.toc-page h2.toc-title { border: 0; margin-top: 0; }
+.intro p { font-size: 10.6pt; }
+.intro { background: var(--green-50); border: 1px solid var(--line); border-radius: 8px; padding: 4mm 6mm; margin-bottom: 8mm; }
+ol.toc { list-style: none; padding: 0; margin: 0; columns: 1; }
+ol.toc li { border-bottom: 1px dotted var(--line); }
+ol.toc a { display: flex; gap: 4mm; padding: 2.4mm 0; color: var(--ink); text-decoration: none; font-size: 11pt; }
+ol.toc .n { order: -1; width: 9mm; color: var(--green-600); font-weight: 600; }
+h2 { font-size: 16pt; color: var(--green-800); margin: 10mm 0 3mm; padding-bottom: 2mm;
+  border-bottom: 2px solid var(--green-100); page-break-after: avoid; break-after: avoid; font-weight: 650; }
+h3 { font-size: 12pt; color: var(--green-700); margin: 6mm 0 2mm; page-break-after: avoid; break-after: avoid; font-weight: 650; }
+p { margin: 0 0 2.6mm; }
+a { color: var(--green-700); }
+strong { color: #10251d; }
+:not(pre) > code { background: var(--green-50); border: 1px solid #e1ebe5; border-radius: 3px; padding: 0 3px;
+  font-size: 8.9pt; color: #154736; word-break: break-word; }
+.url { color: var(--green-700); word-break: break-all; }
+.code, .diagram { position: relative; margin: 2mm 0 4mm; border-radius: 6px; page-break-inside: avoid; break-inside: avoid; }
+.code { background: var(--code-bg); border: 1px solid var(--line); border-left: 3px solid var(--green-600); }
+.code pre { margin: 0; padding: 3mm 4mm; font-size: 8.2pt; line-height: 1.45; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; color: #1d2b25; }
+.code .lang { position: absolute; top: 1.2mm; right: 2.5mm; font-size: 7pt; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.diagram { background: var(--sand); border: 1px solid #e8e1d3; }
+.diagram pre { margin: 0; padding: 4mm 5mm; font-size: 8.3pt; line-height: 1.32; white-space: pre; color: #2b3a33; }
+table { width: 100%; border-collapse: collapse; margin: 2mm 0 5mm; font-size: 9pt; line-height: 1.42; }
+thead { display: table-header-group; }
+th { background: var(--green-800); color: #fff; text-align: left; font-weight: 600; padding: 2mm 2.6mm; }
+th:first-child { border-top-left-radius: 5px; } th:last-child { border-top-right-radius: 5px; }
+td { padding: 1.8mm 2.6mm; border-bottom: 1px solid var(--line); vertical-align: top; word-break: break-word; }
+tbody tr:nth-child(even) td { background: #fafcfb; }
+tr { page-break-inside: avoid; break-inside: avoid; }
+td code { font-size: 8.3pt; }
+td:first-child code, td:nth-child(2) code { white-space: nowrap; word-break: normal; }
+th code { background: transparent; border: 0; color: #fff; padding: 0; font-size: 8.6pt; }
+ul, ol { margin: 0 0 3mm; padding-left: 6mm; }
+li { margin: 0 0 1.2mm; }
+ul.checklist { list-style: none; padding-left: 0; }
+ul.checklist li { position: relative; padding-left: 7mm; }
+ul.checklist .box { position: absolute; left: 0; top: 1.2mm; width: 3.4mm; height: 3.4mm; border: 1.4px solid var(--green-600); border-radius: 2px; }
+.endnote { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid var(--line); color: var(--muted); font-size: 9pt; }
+@media screen {
+  body { background: #e9eeeb; }
+  .cover { margin: 0 auto; box-shadow: 0 2px 18px rgba(0,0,0,.15); }
+  .sheet { background: #fff; max-width: 210mm; margin: 8mm auto; padding: 16mm 15mm; box-shadow: 0 2px 18px rgba(0,0,0,.08); }
+}
+</style>
+</head>
+<body>
+<section class="cover">
+  <div class="leaf"></div><div class="leaf l2"></div>
+  <div class="brand"><b>FairHaven</b> Health</div>
+  <h1>FairHaven Partner API<span class="dot"> ·</span> v1</h1>
+  <div class="sub">Руководство для разработчиков партнёра: каталог, остатки, заказы и уведомления о статусах</div>
+  <div class="rule"></div>
+  <dl>
+    <dt>Базовый адрес</dt><dd><code>https://api.fairhaven.uz/partner/v1</code></dd>
+    <dt>Спецификация</dt><dd><code>https://api.fairhaven.uz/partner/openapi.yaml</code></dd>
+    <dt>Формат</dt><dd>HTTPS + JSON, ключ в заголовке <code>Authorization: Bearer</code></dd>
+    <dt>Версия</dt><dd>1.0 · ноябрь 2026</dd>
+  </dl>
+  <div class="foot"><span>FairHaven Health · аптека</span><span>Конфиденциально — для партнёров FairHaven</span></div>
+</section>
+<div class="sheet">
+<div class="wrap">
+<section class="toc-page">
+  <div class="intro"><p>Руководство для разработчиков партнёра: как подключиться к API аптеки FairHaven Health, получать каталог и остатки, отправлять заказы и узнавать решение аптеки.</p><p>Это обычный HTTPS + JSON. Примеры — на <code>curl</code>, Python и Node.js, но подойдёт любой язык. Готовый модуль на Python со всеми методами — <code>partner_client.py</code>. Машиночитаемый контракт (OpenAPI 3) — <code>partner-api.openapi.yaml</code>, он же доступен по адресу <code>https://api.fairhaven.uz/partner/openapi.yaml</code> (импортируется в Postman, Insomnia или Swagger Editor).</p></div>
+  <h2 class="toc-title">Содержание</h2>
+  <ol class="toc"><li><a href="#s1"><span class="t">Что умеет API</span><span class="n">1</span></a></li><li><a href="#s2"><span class="t">Что понадобится</span><span class="n">2</span></a></li><li><a href="#s3"><span class="t">Режимы подключения</span><span class="n">3</span></a></li><li><a href="#s4"><span class="t">Быстрый старт (5 минут)</span><span class="n">4</span></a></li><li><a href="#s5"><span class="t">Общие правила</span><span class="n">5</span></a></li><li><a href="#s6"><span class="t">Каталог</span><span class="n">6</span></a></li><li><a href="#s7"><span class="t">Остатки</span><span class="n">7</span></a></li><li><a href="#s8"><span class="t">Лимиты</span><span class="n">8</span></a></li><li><a href="#s9"><span class="t">Заказы</span><span class="n">9</span></a></li><li><a href="#s10"><span class="t">Ошибки</span><span class="n">10</span></a></li><li><a href="#s11"><span class="t">Webhooks — уведомления о смене статуса</span><span class="n">11</span></a></li><li><a href="#s12"><span class="t">Без webhook: опрос</span><span class="n">12</span></a></li><li><a href="#s13"><span class="t">Тестовый режим: что проверить</span><span class="n">13</span></a></li><li><a href="#s14"><span class="t">Переход в боевой режим</span><span class="n">14</span></a></li><li><a href="#s15"><span class="t">Частые вопросы</span><span class="n">15</span></a></li></ol>
+</section>
+<main>
+<h2 id="s1">1. Что умеет API</h2>
+<table><thead><tr><th>Задача</th><th>Метод</th></tr></thead><tbody><tr><td>Проверить ключ и режим подключения</td><td><code>GET /me</code></td></tr><tr><td>Каталог: названия, бренды, штрихкоды, ИКПУ, фото, цены</td><td><code>GET /products</code>, <code>GET /products/{id}</code></td></tr><tr><td>Остатки и цены всех товаров</td><td><code>GET /stock</code></td></tr><tr><td>Отправить заказ</td><td><code>POST /orders</code></td></tr><tr><td>Узнать статус заказа</td><td><code>GET /orders/{order_id}</code>, <code>GET /orders</code></td></tr><tr><td>Отменить заказ</td><td><code>POST /orders/{order_id}/cancel</code></td></tr><tr><td>Подтвердить, что заказ доставлен и оплачен</td><td><code>POST /orders/{order_id}/complete</code></td></tr><tr><td>Проверить свой webhook</td><td><code>POST /webhook/test</code></td></tr><tr><td>Получать смену статуса без опроса</td><td>webhook <code>order.status_changed</code></td></tr></tbody></table>
+<p>Как устроена работа в двух словах: вы показываете своим покупателям наш каталог с нашими остатками, отправляете нам заказ, аптека принимает или отклоняет его в течение нескольких минут, принятый заказ резервируется, вы доставляете его покупателю и сообщаете нам, что заказ доставлен и оплачен — в этот момент продажа проводится в нашем учёте.</p>
+<h2 id="s2">2. Что понадобится</h2>
+<table><thead><tr><th>Что</th><th>Значение</th></tr></thead><tbody><tr><td>Базовый адрес</td><td><code>https://api.fairhaven.uz/partner/v1</code></td></tr><tr><td>Токен чтения</td><td><code>fhp_t_…</code> — выдаётся при подключении</td></tr><tr><td>Секрет заказов</td><td><code>fhp_s_…</code> — выдаётся при подключении</td></tr><tr><td>Секрет подписи webhook</td><td><code>whsec_…</code> — выдаётся, когда вы сообщите адрес webhook</td></tr><tr><td>Ваш адрес webhook (необязательно)</td><td><code>https://…</code> — сообщаете нам вы</td></tr></tbody></table>
+<p>Ключи присылаются отдельным сообщением, не вместе с этим документом. Храните их в переменных окружения или в хранилище секретов — не в коде, не в репозитории и не в логах. Если ключ мог утечь, напишите нам: мы выпустим новую пару, старая перестанет работать сразу.</p>
+<h3>Как передавать ключ</h3>
+<p>В заголовке <code>Authorization</code>:</p>
+<div class="code"><pre>Authorization: Bearer fhp_t_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</pre></div>
+<p>или, если вашему HTTP-клиенту так удобнее, в заголовке <code>X-Api-Key</code>:</p>
+<div class="code"><pre>X-Api-Key: fhp_t_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</pre></div>
+<p>Ключ в адресе (<code>?token=</code>) не принимается.</p>
+<h3>Два ключа — две задачи</h3>
+<table><thead><tr><th>Ключ</th><th>Что можно</th></tr></thead><tbody><tr><td>Токен чтения <code>fhp_t_…</code></td><td><code>/me</code>, каталог, остатки, просмотр заказов</td></tr><tr><td>Секрет заказов <code>fhp_s_…</code></td><td>всё то же <strong>плюс</strong> создание, отмена и завершение заказов, <code>/webhook/test</code></td></tr></tbody></table>
+<p>Токен чтения можно спокойно отдать сервису, который только синхронизирует витрину. Секрет заказов нужен только той части вашей системы, которая оформляет заказы. Если на метод заказов отправить токен чтения, ответ будет <code>401 unauthorized</code> с понятным текстом: <code>this endpoint needs the order secret (fhp_s_…); the read token was sent</code>.</p>
+<h2 id="s3">3. Режимы подключения</h2>
+<table><thead><tr><th>Режим</th><th>Что происходит</th></tr></thead><tbody><tr><td><code>test</code></td><td>Работает весь API. Каталог и остатки — настоящие. Заказы проходят все статусы, но <strong>не трогают</strong> реальный склад и учёт, аптека их не видит. Решение по заказу принимает робот примерно через 10–15 секунд.</td></tr><tr><td><code>live</code></td><td>Боевой режим: заказы получает оператор аптеки, товар резервируется, после <code>complete</code> проводится продажа.</td></tr><tr><td><code>off</code></td><td>Доступ выключен: любой запрос отвечает <code>403 partner_disabled</code>.</td></tr></tbody></table>
+<p>Каждый партнёр начинает в режиме <code>test</code>. Когда вы прошли тестовые сценарии (раздел 12), мы вместе проверяем интеграцию и переключаем вас в <code>live</code>. Ключи при этом <strong>не меняются</strong>. Текущий режим всегда виден в <code>GET /me</code> → <code>partner.mode</code>, а у каждого заказа есть поле <code>test: true/false</code>.</p>
+<h2 id="s4">4. Быстрый старт (5 минут)</h2>
+<p>Положите ключи в переменные окружения:</p>
+<div class="code"><span class="lang">bash</span><pre>export FAIRHAVEN_TOKEN=&#x27;fhp_t_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX&#x27;
+export FAIRHAVEN_SECRET=&#x27;fhp_s_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX&#x27;
+export FH=&#x27;https://api.fairhaven.uz/partner/v1&#x27;</pre></div>
+<p><strong>Шаг 1. Проверьте ключ.</strong></p>
+<div class="code"><span class="lang">bash</span><pre>curl -s &quot;$FH/me&quot; -H &quot;Authorization: Bearer $FAIRHAVEN_TOKEN&quot;</pre></div>
+<div class="code"><span class="lang">json</span><pre>{
+  &quot;partner&quot;: { &quot;code&quot;: &quot;demo_partner&quot;, &quot;name&quot;: &quot;Demo Partner&quot;, &quot;mode&quot;: &quot;test&quot; },
+  &quot;key&quot;: &quot;token&quot;,
+  &quot;shop&quot;: { &quot;name&quot;: &quot;FAIRHAVEN HEALTH&quot; },
+  &quot;webhook_configured&quot;: false,
+  &quot;server_time&quot;: &quot;2026-11-12T08:00:00.000Z&quot;
+}</pre></div>
+<p><strong>Шаг 2. Возьмите остатки.</strong></p>
+<div class="code"><span class="lang">bash</span><pre>curl -s &quot;$FH/stock?limit=500&quot; -H &quot;Authorization: Bearer $FAIRHAVEN_TOKEN&quot;</pre></div>
+<div class="code"><span class="lang">json</span><pre>{
+  &quot;items&quot;: [
+    { &quot;product_id&quot;: 701, &quot;quantity&quot;: 12, &quot;available&quot;: true, &quot;price&quot;: 145000 },
+    { &quot;product_id&quot;: 702, &quot;quantity&quot;: 0, &quot;available&quot;: false, &quot;price&quot;: 89000 }
+  ],
+  &quot;total&quot;: 2, &quot;limit&quot;: 500, &quot;offset&quot;: 0,
+  &quot;generated_at&quot;: &quot;2026-11-12T08:00:01.000Z&quot;
+}</pre></div>
+<p><strong>Шаг 3. Отправьте тестовый заказ.</strong></p>
+<div class="code"><span class="lang">bash</span><pre>curl -s -X POST &quot;$FH/orders&quot; \
+  -H &quot;Authorization: Bearer $FAIRHAVEN_SECRET&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{
+        &quot;order_id&quot;: &quot;TEST-0001&quot;,
+        &quot;items&quot;: [ { &quot;product_id&quot;: 701, &quot;quantity&quot;: 2 } ],
+        &quot;customer&quot;: { &quot;name&quot;: &quot;Тестовый покупатель&quot;, &quot;phone&quot;: &quot;+998900000000&quot; },
+        &quot;delivery&quot;: { &quot;type&quot;: &quot;courier&quot;, &quot;address&quot;: &quot;Ташкент, тестовый адрес, 1&quot; }
+      }&#x27;</pre></div>
+<p>Ответ <code>201</code> — заказ в статусе <code>new</code>, в поле <code>decision_deadline</code> — до какого времени аптека ответит.</p>
+<p><strong>Шаг 4. Узнайте решение</strong> (через 10–15 секунд в тестовом режиме):</p>
+<div class="code"><span class="lang">bash</span><pre>curl -s &quot;$FH/orders/TEST-0001&quot; -H &quot;Authorization: Bearer $FAIRHAVEN_TOKEN&quot;</pre></div>
+<p>Статус <code>accepted</code> — товар зарезервирован, можно доставлять.</p>
+<p><strong>Шаг 5. Подтвердите доставку и оплату.</strong></p>
+<div class="code"><span class="lang">bash</span><pre>curl -s -X POST &quot;$FH/orders/TEST-0001/complete&quot; \
+  -H &quot;Authorization: Bearer $FAIRHAVEN_SECRET&quot;</pre></div>
+<p>Статус <code>completed</code> — цикл пройден.</p>
+<h2 id="s5">5. Общие правила</h2>
+<ul><li><strong>Формат.</strong> Запросы и ответы — JSON в UTF-8. Для <code>POST</code> с телом указывайте <code>Content-Type: application/json</code>. Тело больше 256 КБ отклоняется (<code>413 payload_too_large</code>).</li><li><strong>Деньги</strong> — целое число сумов (UZS), без тийинов и без дробной части: <code>145000</code> значит 145 000 сум.</li><li><strong>Количество</strong> — целые штуки (<code>unit: &quot;pcs&quot;</code>).</li><li><strong>Время</strong> — ISO 8601 в UTC, например <code>2026-11-12T08:00:00.000Z</code>. Ташкент — UTC+5.</li><li><strong>Постраничный вывод</strong> — у <code>/products</code>, <code>/stock</code>, <code>/orders</code>: параметры <code>limit</code> (1–500, по умолчанию 100) и <code>offset</code> (с 0). Ответ: <code>{&quot;items&quot;: [...], &quot;total&quot;: N, &quot;limit&quot;: L, &quot;offset&quot;: O}</code>. Чтобы забрать всё, увеличивайте <code>offset</code> на <code>limit</code>, пока <code>offset &lt; total</code>.</li><li><strong>Ошибки</strong> всегда в одном виде (исключение — <code>429</code>, см. раздел 8):</li></ul>
+<div class="code"><span class="lang">json</span><pre>{
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;insufficient_stock&quot;,
+    &quot;message&quot;: &quot;not enough stock for some items&quot;,
+    &quot;details&quot;: { &quot;items&quot;: [ { &quot;product_id&quot;: 701, &quot;requested&quot;: 5, &quot;available&quot;: 3 } ] }
+  }
+}</pre></div>
+<p>Решения в вашем коде принимайте по <code>error.code</code> (он стабилен), <code>message</code> — пояснение для человека, <code>details</code> есть не всегда.</p>
+<h2 id="s6">6. Каталог</h2>
+<h3><code>GET /products</code> — список товаров</h3>
+<p>Параметры: <code>limit</code>, <code>offset</code>, <code>search</code> (поиск по названию, бренду, артикулу или штрихкоду, до 100 символов, без учёта регистра). Сортировка — по названию.</p>
+<div class="code"><span class="lang">bash</span><pre>curl -s &quot;$FH/products?limit=100&amp;offset=0&quot; -H &quot;Authorization: Bearer $FAIRHAVEN_TOKEN&quot;
+curl -s &quot;$FH/products?search=4600000000000&quot; -H &quot;Authorization: Bearer $FAIRHAVEN_TOKEN&quot;</pre></div>
+<p>Один товар:</p>
+<div class="code"><span class="lang">json</span><pre>{
+  &quot;id&quot;: 701,
+  &quot;name&quot;: &quot;Витамин D3 2000 МЕ, 60 капсул&quot;,
+  &quot;name_uz&quot;: &quot;D3 vitamini 2000 XB, 60 kapsula&quot;,
+  &quot;brand&quot;: &quot;Example Brand&quot;,
+  &quot;category&quot;: &quot;vitamins&quot;,
+  &quot;category_name&quot;: &quot;Витамины&quot;,
+  &quot;barcode&quot;: &quot;4600000000000&quot;,
+  &quot;sku&quot;: &quot;EX-D3-60&quot;,
+  &quot;description&quot;: &quot;…&quot;,
+  &quot;description_uz&quot;: &quot;…&quot;,
+  &quot;images&quot;: [&quot;https://api.fairhaven.uz/…/701-1.jpg&quot;],
+  &quot;mxik&quot;: &quot;00000000000000000&quot;,
+  &quot;package_code&quot;: &quot;0000000&quot;,
+  &quot;unit&quot;: &quot;pcs&quot;,
+  &quot;price&quot;: 145000,
+  &quot;old_price&quot;: 160000,
+  &quot;quantity&quot;: 12,
+  &quot;available&quot;: true,
+  &quot;updated_at&quot;: &quot;2026-11-12T07:55:00.000Z&quot;
+}</pre></div>
+<table><thead><tr><th>Поле</th><th>Что это</th></tr></thead><tbody><tr><td><code>id</code></td><td>Номер товара у нас. Используйте его в заказах (<code>product_id</code>).</td></tr><tr><td><code>name</code>, <code>name_uz</code></td><td>Название на русском и узбекском (узбекского может не быть — пустая строка).</td></tr><tr><td><code>brand</code>, <code>category</code>, <code>category_name</code></td><td>Бренд и категория. Коды категорий: <code>cosmetics</code>, <code>parapharmaceuticals</code>, <code>supplements</code>, <code>vitamins</code>, <code>hygiene</code>, <code>drinks</code>.</td></tr><tr><td><code>barcode</code>, <code>sku</code></td><td>Штрихкод и артикул.</td></tr><tr><td><code>description</code>, <code>description_uz</code></td><td>Описание (может быть пустым).</td></tr><tr><td><code>images</code></td><td>Ссылки на фото, первое — главное.</td></tr><tr><td><code>mxik</code>, <code>package_code</code></td><td>ИКПУ и код упаковки для фискального чека.</td></tr><tr><td><code>price</code></td><td>Цена за штуку в сумах — по ней будет посчитан заказ.</td></tr><tr><td><code>old_price</code></td><td>Цена до скидки, только если она больше <code>price</code>, иначе <code>null</code>.</td></tr><tr><td><code>quantity</code>, <code>available</code></td><td>Сколько можно заказать прямо сейчас (как в <code>/stock</code>).</td></tr><tr><td><code>updated_at</code></td><td>Когда карточка менялась последний раз.</td></tr></tbody></table>
+<h3><code>GET /products/{id}</code> — один товар</h3>
+<div class="code"><span class="lang">bash</span><pre>curl -s &quot;$FH/products/701&quot; -H &quot;Authorization: Bearer $FAIRHAVEN_TOKEN&quot;</pre></div>
+<p>Если товара больше нет в каталоге — <code>404 product_not_found</code>.</p>
+<p><strong>Как часто обновлять каталог.</strong> Карточки меняются редко: достаточно полной выгрузки раз в час или раз в сутки. Цены и количество берите из <code>/stock</code>.</p>
+<h2 id="s7">7. Остатки</h2>
+<h3><code>GET /stock</code> — остатки и цены всех товаров каталога</h3>
+<div class="code"><span class="lang">bash</span><pre>curl -s &quot;$FH/stock?limit=500&amp;offset=0&quot; -H &quot;Authorization: Bearer $FAIRHAVEN_TOKEN&quot;</pre></div>
+<div class="code"><span class="lang">json</span><pre>{
+  &quot;items&quot;: [
+    { &quot;product_id&quot;: 701, &quot;quantity&quot;: 12, &quot;available&quot;: true,  &quot;price&quot;: 145000 },
+    { &quot;product_id&quot;: 702, &quot;quantity&quot;: 0,  &quot;available&quot;: false, &quot;price&quot;: 89000 }
+  ],
+  &quot;total&quot;: 2, &quot;limit&quot;: 500, &quot;offset&quot;: 0,
+  &quot;generated_at&quot;: &quot;2026-11-12T08:00:01.000Z&quot;
+}</pre></div>
+<p>Важно:</p>
+<ul><li>В ответе <strong>все</strong> товары каталога, в том числе закончившиеся — с <code>quantity: 0</code> и <code>available: false</code>. Товар, который пропал из списка, <strong>убран из каталога</strong>: снимите его с вашей витрины.</li><li><code>quantity</code> — сколько можно продать именно вам: остаток в аптеке минус заказы других каналов продаж минус страховой запас для торгового зала. Заказывать больше этого числа нельзя.</li><li><code>price</code> может меняться — всегда показывайте покупателю цену из последнего ответа.</li><li>Рекомендуемая частота опроса — раз в 1–5 минут (одна страница на 500 товаров обычно покрывает весь каталог).</li><li>Остаток меняется между запросами. Окончательную проверку делает <code>POST /orders</code>: если товара уже не хватает, вы получите <code>409 insufficient_stock</code> с точными числами (раздел 9).</li></ul>
+<h2 id="s8">8. Лимиты</h2>
+<table><thead><tr><th>Что</th><th>Лимит</th></tr></thead><tbody><tr><td>Запросов на один ключ</td><td>240 в минуту</td></tr><tr><td>Отклонённых запросов (неверный ключ и т. п.) с одного IP</td><td>300 за 5 минут</td></tr><tr><td>Строк в заказе</td><td>до 50</td></tr><tr><td>Количество в строке</td><td>1–999</td></tr><tr><td><code>order_id</code></td><td>до 64 печатных ASCII-символов без пробелов</td></tr><tr><td>Размер тела запроса</td><td>256 КБ</td></tr><tr><td><code>limit</code> в списках</td><td>1–500</td></tr></tbody></table>
+<p>При превышении лимита запросов ответ — <code>429</code> с телом <code>{&quot;detail&quot;: &quot;Too many requests — slow down and retry&quot;}</code> (не в общем формате ошибок) и заголовком <code>Retry-After</code> — через сколько секунд можно продолжать. Текущий расход виден в заголовках <code>RateLimit</code> и <code>RateLimit-Policy</code> каждого ответа. При опросе по рекомендациям этого документа лимит не достигается.</p>
+<h2 id="s9">9. Заказы</h2>
+<h3>9.1 Создание: <code>POST /orders</code> (секрет заказов)</h3>
+<div class="code"><span class="lang">bash</span><pre>curl -s -X POST &quot;$FH/orders&quot; \
+  -H &quot;Authorization: Bearer $FAIRHAVEN_SECRET&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{
+        &quot;order_id&quot;: &quot;A-100045&quot;,
+        &quot;items&quot;: [
+          { &quot;product_id&quot;: 701, &quot;quantity&quot;: 2 },
+          { &quot;product_id&quot;: 705, &quot;quantity&quot;: 1 }
+        ],
+        &quot;customer&quot;: { &quot;name&quot;: &quot;Тестовый покупатель&quot;, &quot;phone&quot;: &quot;+998900000000&quot; },
+        &quot;delivery&quot;: { &quot;type&quot;: &quot;courier&quot;, &quot;address&quot;: &quot;Ташкент, тестовый адрес, 1&quot;, &quot;comment&quot;: &quot;Домофон 00&quot; },
+        &quot;comment&quot;: &quot;Позвонить за 15 минут&quot;
+      }&#x27;</pre></div>
+<table><thead><tr><th>Поле</th><th>Обязательно</th><th>Что это</th></tr></thead><tbody><tr><td><code>order_id</code></td><td>да</td><td><strong>Ваш</strong> уникальный номер заказа: до 64 печатных ASCII-символов без пробелов. По нему вы потом получаете, отменяете и завершаете заказ.</td></tr><tr><td><code>items[]</code></td><td>да</td><td>1–50 строк <code>{product_id, quantity}</code>; <code>quantity</code> — 1–999. Две строки с одним товаром складываются в одну.</td></tr><tr><td><code>customer.name</code></td><td>нет</td><td>Имя покупателя, до 100 символов.</td></tr><tr><td><code>customer.phone</code></td><td>нет</td><td>Телефон, до 32 символов.</td></tr><tr><td><code>delivery.type</code></td><td>нет</td><td><code>courier</code> (по умолчанию) или <code>pickup</code> (самовывоз из аптеки).</td></tr><tr><td><code>delivery.address</code></td><td>нет</td><td>Адрес, до 300 символов.</td></tr><tr><td><code>delivery.comment</code></td><td>нет</td><td>Комментарий к доставке, до 500 символов.</td></tr><tr><td><code>comment</code></td><td>нет</td><td>Комментарий к заказу, до 500 символов.</td></tr><tr><td><code>test_outcome</code></td><td>нет</td><td>Только в режиме <code>test</code>: <code>&quot;reject&quot;</code> — робот отклонит заказ. Любое другое значение или отсутствие — примет. В режиме <code>live</code> игнорируется.</td></tr></tbody></table>
+<p>Цены в запросе не передаются и не принимаются: заказ всегда считается по нашему каталогу. Цена и сумма каждой строки возвращаются в ответе — сверьте их со своими.</p>
+<p><strong>Ответы:</strong></p>
+<table><thead><tr><th>Код</th><th>Когда</th></tr></thead><tbody><tr><td><code>201</code></td><td>Новый заказ создан, статус <code>new</code>.</td></tr><tr><td><code>200</code></td><td>Заказ с таким <code>order_id</code> у вас уже есть — возвращён он, ничего не изменено.</td></tr><tr><td><code>404 product_not_found</code></td><td>Товара нет в каталоге; в <code>details.product_id</code> — какого.</td></tr><tr><td><code>409 insufficient_stock</code></td><td>Не хватает остатка; в <code>details.items</code> — что, сколько просили и сколько есть.</td></tr><tr><td><code>422 validation_error</code></td><td>Ошибка в данных запроса; в <code>message</code> — что именно.</td></tr></tbody></table>
+<p>Ответ на создание (и на любой запрос заказа) — заказ целиком:</p>
+<div class="code"><span class="lang">json</span><pre>{
+  &quot;id&quot;: 1042,
+  &quot;order_id&quot;: &quot;A-100045&quot;,
+  &quot;status&quot;: &quot;new&quot;,
+  &quot;reason&quot;: null,
+  &quot;test&quot;: true,
+  &quot;items&quot;: [
+    { &quot;product_id&quot;: 701, &quot;name&quot;: &quot;Витамин D3 2000 МЕ, 60 капсул&quot;, &quot;quantity&quot;: 2, &quot;price&quot;: 145000, &quot;total&quot;: 290000 },
+    { &quot;product_id&quot;: 705, &quot;name&quot;: &quot;Омега-3, 90 капсул&quot;, &quot;quantity&quot;: 1, &quot;price&quot;: 210000, &quot;total&quot;: 210000 }
+  ],
+  &quot;total&quot;: 500000,
+  &quot;customer&quot;: { &quot;name&quot;: &quot;Тестовый покупатель&quot;, &quot;phone&quot;: &quot;+998900000000&quot; },
+  &quot;delivery&quot;: { &quot;type&quot;: &quot;courier&quot;, &quot;address&quot;: &quot;Ташкент, тестовый адрес, 1&quot;, &quot;comment&quot;: &quot;Домофон 00&quot; },
+  &quot;comment&quot;: &quot;Позвонить за 15 минут&quot;,
+  &quot;decision_deadline&quot;: &quot;2026-11-12T08:05:00.000Z&quot;,
+  &quot;created_at&quot;: &quot;2026-11-12T08:00:00.000Z&quot;,
+  &quot;updated_at&quot;: &quot;2026-11-12T08:00:00.000Z&quot;,
+  &quot;history&quot;: [
+    { &quot;status&quot;: &quot;new&quot;, &quot;at&quot;: &quot;2026-11-12T08:00:00.000Z&quot;, &quot;reason&quot;: null }
+  ]
+}</pre></div>
+<table><thead><tr><th>Поле</th><th>Что это</th></tr></thead><tbody><tr><td><code>id</code></td><td>Номер заказа у нас — назовите его, если звоните в аптеку.</td></tr><tr><td><code>order_id</code></td><td>Ваш номер.</td></tr><tr><td><code>status</code></td><td><code>new</code>, <code>accepted</code>, <code>rejected</code>, <code>cancelled</code>, <code>completed</code> (раздел 9.2).</td></tr><tr><td><code>reason</code></td><td>Причина для <code>rejected</code> / <code>cancelled</code>, иначе <code>null</code>.</td></tr><tr><td><code>test</code></td><td><code>true</code> — тестовый заказ, склад и учёт не затронуты.</td></tr><tr><td><code>items[].price</code>, <code>items[].total</code>, <code>total</code></td><td>Цена за штуку, сумма строки и сумма заказа в сумах — по нашему каталогу.</td></tr><tr><td><code>decision_deadline</code></td><td>До какого времени аптека ответит. Есть только у статуса <code>new</code>, у остальных — <code>null</code>.</td></tr><tr><td><code>history</code></td><td>Все смены статуса по порядку: <code>{status, at, reason}</code>.</td></tr></tbody></table>
+<h3>9.2 Жизненный цикл заказа</h3>
+<div class="diagram"><pre>                    POST /orders
+                         │
+                         ▼
+                   ┌───────────┐  аптека отклонила или
+                   │    new    │─ не ответила вовремя ───────▶ rejected
+                   └───────────┘  (rejected_by_shop / timeout)
+                     │       │
+       аптека приняла│       │ POST /cancel (вы)
+      (товар в резерве)      └──────────────────────────────▶ cancelled
+                     ▼                                          ▲
+                   ┌───────────┐  POST /cancel (вы)             │
+                   │ accepted  │─ или отмена аптекой ───────────┘
+                   └───────────┘  (ваш текст / cancelled_by_partner /
+                         │         cancelled_by_shop)
+     POST /complete (вы):│
+   доставлен и оплачен   ▼
+                   ┌───────────┐
+                   │ completed │  продажа проведена в учёте аптеки
+                   └───────────┘</pre></div>
+<table><thead><tr><th>Статус</th><th>Что значит</th><th>Что с товаром (режим <code>live</code>)</th><th>Ваши действия</th></tr></thead><tbody><tr><td><code>new</code></td><td>Заказ получен, аптека решает.</td><td>Сразу снят с продажи в других каналах.</td><td>Ждать решения; можно отменить.</td></tr><tr><td><code>accepted</code></td><td>Аптека приняла.</td><td>Зарезервирован в учёте аптеки.</td><td>Доставить; затем <code>complete</code> или <code>cancel</code>.</td></tr><tr><td><code>rejected</code></td><td>Аптека отклонила или не ответила вовремя.</td><td>Возвращён в продажу.</td><td>Сообщить покупателю. Финальный статус.</td></tr><tr><td><code>cancelled</code></td><td>Отменён вами или аптекой.</td><td>Возвращён в продажу.</td><td>Финальный статус.</td></tr><tr><td><code>completed</code></td><td>Вы подтвердили доставку и оплату.</td><td>Продан.</td><td>Финальный статус.</td></tr></tbody></table>
+<p>Значения <code>reason</code>:</p>
+<table><thead><tr><th><code>reason</code></th><th>Статус</th><th>Когда</th></tr></thead><tbody><tr><td><code>rejected_by_shop</code></td><td><code>rejected</code></td><td>Оператор аптеки отклонил заказ (в тесте — робот по <code>test_outcome: &quot;reject&quot;</code>).</td></tr><tr><td><code>timeout</code></td><td><code>rejected</code></td><td>Аптека не ответила до <code>decision_deadline</code> (только <code>live</code>).</td></tr><tr><td><code>cancelled_by_partner</code></td><td><code>cancelled</code></td><td>Вы отменили заказ без указания причины.</td></tr><tr><td>ваш текст</td><td><code>cancelled</code></td><td>Вы отменили заказ и передали <code>reason</code>.</td></tr><tr><td><code>cancelled_by_shop</code></td><td><code>cancelled</code></td><td>Аптека отменила заказ со своей стороны.</td></tr></tbody></table>
+<p><strong>Окно решения.</strong> Аптека отвечает на заказ в течение окна решения — по умолчанию 5 минут (точное время каждого заказа — в <code>decision_deadline</code>). Если оператор не успел, заказ автоматически становится <code>rejected</code> с причиной <code>timeout</code>, а товар возвращается в продажу. В тестовом режиме решение принимает робот через ~10–15 секунд.</p>
+<h3>9.3 Полная последовательность</h3>
+<div class="diagram"><pre>Вы                                       FairHaven
+│                                            │
+│ GET /stock (раз в 1–5 мин)                 │
+│───────────────────────────────────────────▶│
+│◀─────────────── остатки и цены ────────────│
+│                                            │
+│ POST /orders {order_id, items, …}          │
+│───────────────────────────────────────────▶│ товар снят с продажи
+│◀──────── 201 {status:&quot;new&quot;,                │ в других каналах,
+│              decision_deadline}            │ оператор видит заказ
+│                                            │
+│           … до decision_deadline …         │ оператор принимает
+│                                            │ (или отклоняет / таймаут)
+│◀─── webhook order.status_changed ──────────│
+│     {status:&quot;accepted&quot;}  (или опрос        │ товар в резерве
+│      GET /orders/{order_id})               │
+│                                            │
+│ доставка покупателю, оплата                │
+│                                            │
+│ POST /orders/{order_id}/complete           │
+│───────────────────────────────────────────▶│ продажа проведена
+│◀──────── 200 {status:&quot;completed&quot;}          │
+│◀─── webhook order.status_changed ──────────│
+│                                            │
+│ (если покупатель отказался)                │
+│ POST /orders/{order_id}/cancel {reason}    │
+│───────────────────────────────────────────▶│ резерв снят
+│◀──────── 200 {status:&quot;cancelled&quot;}          │</pre></div>
+<p>Каждая смена статуса — в том числе вызванная вашим же <code>cancel</code> или <code>complete</code> — приходит и webhook-событием. Это нормально: обрабатывайте событие идемпотентно (раздел 10).</p>
+<h3>9.4 Получение заказа: <code>GET /orders/{order_id}</code></h3>
+<div class="code"><span class="lang">bash</span><pre>curl -s &quot;$FH/orders/A-100045&quot; -H &quot;Authorization: Bearer $FAIRHAVEN_TOKEN&quot;</pre></div>
+<p>По <strong>вашему</strong> <code>order_id</code>. Подходит любой ключ. Нет такого заказа — <code>404 order_not_found</code>.</p>
+<h3>9.5 Список заказов: <code>GET /orders</code></h3>
+<div class="code"><span class="lang">bash</span><pre>curl -s &quot;$FH/orders?status=accepted&amp;limit=100&amp;offset=0&quot; -H &quot;Authorization: Bearer $FAIRHAVEN_TOKEN&quot;</pre></div>
+<p>Новые сверху. Фильтр <code>status</code> — один из <code>new</code>, <code>accepted</code>, <code>rejected</code>, <code>cancelled</code>, <code>completed</code> (другое значение — <code>422 validation_error</code>). Удобно для сверки в конце дня и для восстановления после сбоя на вашей стороне.</p>
+<h3>9.6 Отмена: <code>POST /orders/{order_id}/cancel</code> (секрет заказов)</h3>
+<div class="code"><span class="lang">bash</span><pre>curl -s -X POST &quot;$FH/orders/A-100045/cancel&quot; \
+  -H &quot;Authorization: Bearer $FAIRHAVEN_SECRET&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;reason&quot;: &quot;Покупатель отказался&quot;}&#x27;</pre></div>
+<p>Можно из статусов <code>new</code> и <code>accepted</code>. Тело необязательно; <code>reason</code> — до 200 символов, попадёт в поле <code>reason</code> заказа (без него — <code>cancelled_by_partner</code>). Резерв снимается, товар возвращается в продажу. Из других статусов — <code>409 invalid_status</code> (в <code>details.status</code> — текущий статус).</p>
+<h3>9.7 Завершение: <code>POST /orders/{order_id}/complete</code> (секрет заказов)</h3>
+<div class="code"><span class="lang">bash</span><pre>curl -s -X POST &quot;$FH/orders/A-100045/complete&quot; -H &quot;Authorization: Bearer $FAIRHAVEN_SECRET&quot;</pre></div>
+<p>Вызывайте, когда заказ <strong>доставлен и оплачен</strong> покупателем. Только из статуса <code>accepted</code>. В этот момент продажа проводится в учёте аптеки, поэтому:</p>
+<ul><li>не вызывайте <code>complete</code> заранее «на всякий случай» — отменить проведённую продажу через API нельзя;</li><li>если покупатель отказался — вызывайте <code>cancel</code>, а не <code>complete</code>;</li><li>повторный <code>complete</code> ничего не меняет и отвечает <code>409 invalid_status</code> с <code>details.status: &quot;completed&quot;</code> — считайте это успехом;</li><li>при <code>503 billz_unavailable</code> повторите через минуту;</li><li>при <code>503 sale_pending_review</code> <strong>не повторяйте</strong>: продажу проверяет аптека, статус сменится сам — следите за webhook или опрашивайте заказ.</li></ul>
+<h2 id="s10">10. Ошибки</h2>
+<table><thead><tr><th>HTTP</th><th><code>error.code</code></th><th>Что значит</th><th>Что делать</th></tr></thead><tbody><tr><td>400</td><td><code>invalid_json</code></td><td>Тело запроса — не JSON.</td><td>Исправьте формирование тела и <code>Content-Type</code>.</td></tr><tr><td>401</td><td><code>unauthorized</code></td><td>Ключ не передан, неверен, отозван, или на метод заказов отправлен токен чтения.</td><td>Проверьте заголовок и какой ключ используется. Не повторяйте в цикле.</td></tr><tr><td>403</td><td><code>partner_disabled</code></td><td>Доступ партнёра выключен (режим <code>off</code>).</td><td>Свяжитесь с FairHaven.</td></tr><tr><td>404</td><td><code>product_not_found</code></td><td>Товара нет в каталоге (<code>details.product_id</code>).</td><td>Обновите каталог, уберите товар с витрины.</td></tr><tr><td>404</td><td><code>order_not_found</code></td><td>Нет заказа с таким <code>order_id</code> у вас.</td><td>Проверьте <code>order_id</code>.</td></tr><tr><td>404</td><td><code>not_found</code></td><td>Нет такого адреса API.</td><td>Проверьте путь и метод.</td></tr><tr><td>409</td><td><code>insufficient_stock</code></td><td>Не хватает остатка: <code>details.items[] = {product_id, requested, available}</code>.</td><td>Предложите покупателю доступное количество и отправьте заказ заново с <strong>новым</strong> <code>order_id</code> (или с тем же, см. FAQ).</td></tr><tr><td>409</td><td><code>invalid_status</code></td><td>Действие недоступно в текущем статусе (<code>details.status</code>).</td><td>Получите заказ и действуйте по его статусу.</td></tr><tr><td>409</td><td><code>order_busy</code></td><td>Заказ прямо сейчас меняется другим действием.</td><td>Повторите через несколько секунд.</td></tr><tr><td>409</td><td><code>webhook_not_configured</code></td><td><code>POST /webhook/test</code>, а адрес webhook ещё не задан.</td><td>Сообщите нам адрес.</td></tr><tr><td>413</td><td><code>payload_too_large</code></td><td>Тело больше 256 КБ.</td><td>Уменьшите запрос.</td></tr><tr><td>422</td><td><code>validation_error</code></td><td>Ошибка в данных; <code>message</code> говорит, в каком поле.</td><td>Исправьте запрос. Повтор без изменений не поможет.</td></tr><tr><td>429</td><td>— (тело <code>{&quot;detail&quot;: …}</code>)</td><td>Превышен лимит запросов.</td><td>Подождите <code>Retry-After</code> секунд, снизьте частоту.</td></tr><tr><td>500</td><td><code>internal_error</code></td><td>Внутренняя ошибка.</td><td>Повторите позже; если повторяется — напишите нам.</td></tr><tr><td>503</td><td><code>billz_unavailable</code></td><td>Учётная система аптеки не ответила.</td><td>Повторите через минуту.</td></tr><tr><td>503</td><td><code>billz_writes_disabled</code></td><td>Проведение продаж временно выключено.</td><td>Повторите позже.</td></tr><tr><td>503</td><td><code>release_failed</code></td><td>Не удалось снять резерв при отмене.</td><td>Повторите через минуту.</td></tr><tr><td>503</td><td><code>sale_pending_review</code></td><td>Продажа в учёте под проверкой аптеки.</td><td><strong>Не повторяйте.</strong> Статус сменится сам.</td></tr></tbody></table>
+<p>Сетевые ошибки и таймауты при <code>POST /orders</code> безопасно повторять с тем же <code>order_id</code> — второй заказ не создастся.</p>
+<h2 id="s11">11. Webhooks — уведомления о смене статуса</h2>
+<p>Чтобы не опрашивать заказы, сообщите нам адрес <code>https://…</code> (только HTTPS, без логина и пароля в адресе, до 500 символов). Мы пришлём <strong>секрет подписи</strong> <code>whsec_…</code> — им вы проверяете, что запрос пришёл от нас.</p>
+<h3>11.1 Что приходит</h3>
+<p><code>POST</code> на ваш адрес, <code>Content-Type: application/json</code>, <code>User-Agent: FairHaven-Webhooks/1.0</code>:</p>
+<div class="code"><pre>X-FairHaven-Event: order.status_changed
+X-FairHaven-Event-Id: 6733a1f0c2e4b5a6d7e8f901
+X-FairHaven-Timestamp: 1762934400
+X-FairHaven-Signature: v1=5d41402abc4b2a76b9719d911017c592…</pre></div>
+<div class="code"><span class="lang">json</span><pre>{
+  &quot;id&quot;: &quot;6733a1f0c2e4b5a6d7e8f901&quot;,
+  &quot;type&quot;: &quot;order.status_changed&quot;,
+  &quot;created_at&quot;: &quot;2026-11-12T08:02:10.000Z&quot;,
+  &quot;data&quot;: { &quot;id&quot;: 1042, &quot;order_id&quot;: &quot;A-100045&quot;, &quot;status&quot;: &quot;accepted&quot;, &quot;…&quot;: &quot;заказ целиком, как в GET /orders/{order_id}&quot; }
+}</pre></div>
+<table><thead><tr><th>Поле / заголовок</th><th>Что это</th></tr></thead><tbody><tr><td><code>id</code>, <code>X-FairHaven-Event-Id</code></td><td>Уникальный id события. Повторная доставка приходит с тем же id.</td></tr><tr><td><code>type</code>, <code>X-FairHaven-Event</code></td><td><code>order.status_changed</code> или <code>ping</code> (проверка).</td></tr><tr><td><code>created_at</code></td><td>Время, когда произошло событие. Одинаково во всех повторных доставках.</td></tr><tr><td><code>data</code></td><td>Для <code>order.status_changed</code> — заказ целиком в состоянии на момент события. Для <code>ping</code> — <code>{&quot;message&quot;: &quot;FairHaven webhook test&quot;}</code>.</td></tr><tr><td><code>X-FairHaven-Timestamp</code></td><td>Время отправки, Unix-секунды.</td></tr><tr><td><code>X-FairHaven-Signature</code></td><td><code>v1=</code> + hex HMAC-SHA256.</td></tr></tbody></table>
+<p>События приходят по каждой смене статуса: <code>accepted</code>, <code>rejected</code>, <code>cancelled</code>, <code>completed</code>. Создание заказа событием не сопровождается — его результат вы получаете в ответе на <code>POST /orders</code>. Тестовые заказы тоже присылают события (с <code>data.test: true</code>).</p>
+<h3>11.2 Как отвечать</h3>
+<ul><li>Ответьте любым кодом <code>2xx</code> <strong>быстро</strong> (до 10 секунд), тело ответа не читается. Тяжёлую обработку делайте после ответа, в очереди.</li><li>Любой другой код, перенаправление (<code>3xx</code> не выполняется), таймаут 10 секунд или сетевая ошибка — неудача. Повторы: через 10 с, 1 мин, 5 мин, 15 мин, 1 ч, 3 ч, 6 ч, 12 ч; после этого событие больше не отправляется (заказ по-прежнему доступен через <code>GET /orders/{order_id}</code>).</li><li>Доставка «как минимум один раз»: одно событие может прийти дважды. Запоминайте обработанные <code>id</code> и пропускайте повторы.</li><li>Порядок сохраняется: пока более старое событие не доставлено, более новые ваших заказов ждут его. Новый статус не обгонит старый.</li><li>События, возникшие, пока адрес webhook не был задан, позже не досылаются — сверьтесь через <code>GET /orders</code>.</li></ul>
+<h3>11.3 Проверка подписи</h3>
+<p>Подпись считается от <strong>сырого тела запроса</strong> (байты как пришли, до разбора JSON):</p>
+<div class="code"><pre>signature = hex( HMAC-SHA256( webhook_secret, &quot;&lt;X-FairHaven-Timestamp&gt;.&lt;сырое тело&gt;&quot; ) )
+X-FairHaven-Signature: v1=&lt;signature&gt;</pre></div>
+<p>Проверьте подпись сравнением за постоянное время и отклоняйте запросы со временем старше ~5 минут (защита от повтора перехваченного запроса). Каждая повторная попытка подписывается заново, со свежим временем.</p>
+<p><strong>Python (Flask):</strong></p>
+<div class="code"><span class="lang">python</span><pre>import hashlib, hmac, os, time
+from flask import Flask, request, abort
+
+app = Flask(__name__)
+WEBHOOK_SECRET = os.environ[&quot;FAIRHAVEN_WEBHOOK_SECRET&quot;]  # whsec_…
+seen_ids = set()  # в продакшене — таблица в БД с уникальным ключом
+
+
+def verify(secret: str, timestamp: str, raw_body: bytes, signature: str, max_age: int = 300) -&gt; bool:
+    try:
+        ts = int(timestamp)
+    except (TypeError, ValueError):
+        return False
+    if abs(time.time() - ts) &gt; max_age:
+        return False
+    expected = hmac.new(secret.encode(), timestamp.encode() + b&quot;.&quot; + raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(f&quot;v1={expected}&quot;, signature or &quot;&quot;)
+
+
+@app.post(&quot;/fairhaven/webhook&quot;)
+def fairhaven_webhook():
+    raw = request.get_data()  # сырые байты, до разбора JSON
+    if not verify(WEBHOOK_SECRET,
+                  request.headers.get(&quot;X-FairHaven-Timestamp&quot;, &quot;&quot;),
+                  raw,
+                  request.headers.get(&quot;X-FairHaven-Signature&quot;, &quot;&quot;)):
+        abort(401)
+    event = request.get_json()
+    if event[&quot;id&quot;] in seen_ids:
+        return &quot;&quot;, 204  # повтор — уже обработали
+    seen_ids.add(event[&quot;id&quot;])
+    if event[&quot;type&quot;] == &quot;order.status_changed&quot;:
+        order = event[&quot;data&quot;]
+        # поставьте в очередь: обновить заказ order[&quot;order_id&quot;] → order[&quot;status&quot;]
+    return &quot;&quot;, 204</pre></div>
+<p><strong>Node.js (Express):</strong></p>
+<div class="code"><span class="lang">js</span><pre>const crypto = require(&#x27;crypto&#x27;);
+const express = require(&#x27;express&#x27;);
+
+const app = express();
+const WEBHOOK_SECRET = process.env.FAIRHAVEN_WEBHOOK_SECRET; // whsec_…
+const seenIds = new Set(); // в продакшене — таблица в БД с уникальным ключом
+
+function verify(secret, timestamp, rawBody, signature, maxAge = 300) {
+  const ts = Number(timestamp);
+  if (!Number.isInteger(ts) || Math.abs(Date.now() / 1000 - ts) &gt; maxAge) return false;
+  const expected = &#x27;v1=&#x27; + crypto.createHmac(&#x27;sha256&#x27;, secret)
+    .update(`${timestamp}.`).update(rawBody).digest(&#x27;hex&#x27;);
+  const a = Buffer.from(expected);
+  const b = Buffer.from(String(signature || &#x27;&#x27;));
+  return a.length === b.length &amp;&amp; crypto.timingSafeEqual(a, b);
+}
+
+// express.raw — чтобы получить тело байтами, а не уже разобранный JSON
+app.post(&#x27;/fairhaven/webhook&#x27;, express.raw({ type: &#x27;application/json&#x27; }), (req, res) =&gt; {
+  if (!verify(WEBHOOK_SECRET, req.get(&#x27;X-FairHaven-Timestamp&#x27;), req.body, req.get(&#x27;X-FairHaven-Signature&#x27;))) {
+    return res.sendStatus(401);
+  }
+  const event = JSON.parse(req.body.toString(&#x27;utf8&#x27;));
+  if (seenIds.has(event.id)) return res.sendStatus(204);
+  seenIds.add(event.id);
+  if (event.type === &#x27;order.status_changed&#x27;) {
+    const order = event.data;
+    // поставьте в очередь: обновить заказ order.order_id → order.status
+  }
+  return res.sendStatus(204);
+});
+
+app.listen(3000);</pre></div>
+<p>Частая ошибка — считать подпись от заново сериализованного JSON (<code>JSON.stringify(req.body)</code>, <code>json.dumps(...)</code>): порядок ключей и пробелы могут отличаться, подпись не сойдётся. Берите сырое тело.</p>
+<h3>11.4 Проверка адреса: <code>POST /webhook/test</code> (секрет заказов)</h3>
+<div class="code"><span class="lang">bash</span><pre>curl -s -X POST &quot;$FH/webhook/test&quot; -H &quot;Authorization: Bearer $FAIRHAVEN_SECRET&quot;</pre></div>
+<p>Мы сразу отправим на ваш адрес событие <code>ping</code> (подписанное так же, как настоящие) и вернём результат:</p>
+<div class="code"><span class="lang">json</span><pre>{ &quot;delivered&quot;: true, &quot;status_code&quot;: 204, &quot;error&quot;: null }</pre></div>
+<p><code>delivered: false</code> — смотрите <code>status_code</code> (что ответил ваш сервер) или <code>error</code> (<code>timeout</code>, <code>network_error</code>). Ping отправляется один раз, без повторов.</p>
+<h2 id="s12">12. Без webhook: опрос</h2>
+<p>Webhook не обязателен. Без него:</p>
+<ol><li>После <code>POST /orders</code> опрашивайте <code>GET /orders/{order_id}</code> раз в 10–30 секунд, пока статус <code>new</code>. Решение придёт не позже <code>decision_deadline</code> (плюс несколько секунд).</li><li>Заказы в <code>accepted</code> можно проверять реже — раз в несколько минут: аптека может отменить заказ (<code>cancelled_by_shop</code>) или завершённая продажа может выйти из проверки (<code>sale_pending_review</code>).</li><li>Для сверки — <code>GET /orders?status=new</code> и <code>GET /orders?status=accepted</code>.</li></ol>
+<p>Даже с webhook полезно раз в 10–15 минут сверять открытые заказы опросом — на случай, если ваш сервер был недоступен дольше суток.</p>
+<h2 id="s13">13. Тестовый режим: что проверить</h2>
+<p>В режиме <code>test</code> пройдите эти сценарии. Используйте для тестовых заказов <code>order_id</code> с отдельным префиксом (например, <code>TEST-…</code>) — так их проще отличать в логах. Тестовые и боевые заказы ведутся раздельно: номер, использованный в тесте, после перехода в <code>live</code> создаёт новый боевой заказ, а <code>GET /orders/{order_id}</code> показывает заказ того режима, в котором партнёр сейчас работает.</p>
+<table><thead><tr><th>№</th><th>Сценарий</th><th>Ожидаемый результат</th></tr></thead><tbody><tr><td>1</td><td><code>GET /me</code> токеном и секретом</td><td><code>200</code>, <code>mode: &quot;test&quot;</code>, <code>key</code> — <code>token</code> / <code>secret</code>.</td></tr><tr><td>2</td><td>Запрос без ключа и с неверным ключом</td><td><code>401 unauthorized</code>.</td></tr><tr><td>3</td><td><code>POST /orders</code> токеном чтения</td><td><code>401 unauthorized</code> («needs the order secret»).</td></tr><tr><td>4</td><td>Полная выгрузка <code>/products</code> и <code>/stock</code> постранично</td><td>Число строк = <code>total</code>; товары с <code>quantity: 0</code> на витрине помечены «нет в наличии».</td></tr><tr><td>5</td><td>Заказ → ждать → <code>accepted</code> → <code>complete</code></td><td><code>201 new</code> → <code>accepted</code> (~10–15 с) → <code>200 completed</code>.</td></tr><tr><td>6</td><td>Заказ с <code>&quot;test_outcome&quot;: &quot;reject&quot;</code></td><td><code>rejected</code>, <code>reason: &quot;rejected_by_shop&quot;</code>; покупателю показан отказ.</td></tr><tr><td>7</td><td>Заказ → <code>cancel</code> пока <code>new</code></td><td><code>cancelled</code>, <code>reason</code> — ваш текст или <code>cancelled_by_partner</code>.</td></tr><tr><td>8</td><td>Заказ → <code>accepted</code> → <code>cancel</code></td><td><code>cancelled</code>.</td></tr><tr><td>9</td><td>Повтор <code>POST /orders</code> с тем же <code>order_id</code></td><td><code>200</code>, тот же <code>id</code>, второй заказ не создан.</td></tr><tr><td>10</td><td>Заказ на количество больше <code>quantity</code> из <code>/stock</code></td><td><code>409 insufficient_stock</code>, в <code>details.items</code> — сколько есть.</td></tr><tr><td>11</td><td>Заказ с несуществующим <code>product_id</code></td><td><code>404 product_not_found</code>.</td></tr><tr><td>12</td><td>Заказ без <code>items</code> / с <code>quantity: 0</code> / без <code>order_id</code></td><td><code>422 validation_error</code>.</td></tr><tr><td>13</td><td><code>complete</code> для заказа в <code>new</code> или <code>rejected</code></td><td><code>409 invalid_status</code>.</td></tr><tr><td>14</td><td>Повторный <code>complete</code></td><td><code>409 invalid_status</code>, <code>details.status: &quot;completed&quot;</code> — ваш код считает это успехом.</td></tr><tr><td>15</td><td><code>POST /webhook/test</code></td><td><code>delivered: true</code>; ваш сервер принял ping и проверил подпись.</td></tr><tr><td>16</td><td>Webhook с испорченной подписью или старым временем (подделайте сами)</td><td>Ваш сервер отвечает отказом и не меняет заказ.</td></tr><tr><td>17</td><td>Один и тот же webhook дважды</td><td>Второй раз ничего не меняется.</td></tr><tr><td>18</td><td>Ваш webhook временно отвечает <code>500</code></td><td>Событие приходит повторно через 10 с, 1 мин…</td></tr><tr><td>19</td><td>Ответ <code>429</code> (имитация на вашей стороне)</td><td>Клиент ждёт <code>Retry-After</code> и продолжает.</td></tr></tbody></table>
+<p>В тестовом режиме остатки настоящие, поэтому сценарий 10 проверяется на реальных числах, но заказы их не уменьшают.</p>
+<h2 id="s14">14. Переход в боевой режим</h2>
+<p>Перед переключением в <code>live</code>:</p>
+<ul class="checklist"><li><span class="box"></span>Все сценарии раздела 13 пройдены.</li><li><span class="box"></span>Ключи лежат в переменных окружения / хранилище секретов, не в коде и не в логах; секрет заказов есть только у сервиса оформления заказов.</li><li><span class="box"></span>Витрина берёт цены и количество из <code>/stock</code> и обновляет их не реже раза в 5 минут; товары, пропавшие из <code>/stock</code>, снимаются с продажи.</li><li><span class="box"></span><code>order_id</code> боевых заказов уникальны и не пересекаются с тестовыми.</li><li><span class="box"></span>Покупатель видит отказ, если заказ <code>rejected</code> (в том числе по <code>timeout</code>).</li><li><span class="box"></span><code>complete</code> вызывается только после доставки и оплаты; отказ покупателя ведёт к <code>cancel</code>.</li><li><span class="box"></span>Webhook проверяет подпись и время, отвечает быстро, пропускает повторы — или настроен опрос по разделу 12.</li><li><span class="box"></span>Есть контакт ответственного с вашей стороны на случай проблем.</li></ul>
+<p>Затем согласуем с вами время, вместе проведём первый реальный заказ и переключим режим. Ключи не меняются — меняется только <code>partner.mode</code> в <code>GET /me</code>.</p>
+<h2 id="s15">15. Частые вопросы</h2>
+<p>**Товар закончился между запросом <code>/stock</code> и заказом. Что будет?** Заказ не создастся: ответ <code>409 insufficient_stock</code>, в <code>details.items</code> — по каждому товару <code>requested</code> (сколько просили) и <code>available</code> (сколько есть сейчас). Ни одна строка заказа не резервируется. Предложите покупателю доступное количество и отправьте заказ заново.</p>
+<p><strong>Можно ли повторно отправить заказ, если ответ не дошёл?</strong> Да, это безопасно: отправьте его с тем же <code>order_id</code>. Если заказ уже создан, придёт <code>200</code> с сохранённым заказом, второго не будет. Учтите: при повторе возвращается <strong>первоначальный</strong> заказ, новое тело запроса не применяется. Чтобы оформить другой состав, используйте новый <code>order_id</code>. Если первая попытка закончилась ошибкой (<code>409</code>, <code>422</code>, <code>404</code>), заказ не создан, и тот же <code>order_id</code> можно использовать снова.</p>
+<p><strong>Как узнать решение аптеки?</strong> Webhook <code>order.status_changed</code> (раздел 11) или опрос <code>GET /orders/{order_id}</code> (раздел 12). Решение придёт не позже <code>decision_deadline</code>: <code>accepted</code> — принят, <code>rejected</code> — отклонён (<code>reason</code> покажет, отклонил оператор или истекло время).</p>
+<p><strong>Можно ли изменить заказ (состав, адрес)?</strong> Нет. Отмените заказ (<code>cancel</code>) и отправьте новый с новым <code>order_id</code>.</p>
+<p><strong>Сколько держится резерв по принятому заказу?</strong> Пока вы не вызовете <code>complete</code> или <code>cancel</code> (или аптека не отменит заказ). Пожалуйста, закрывайте заказы сразу после доставки или отказа — пока резерв висит, товар недоступен другим покупателям.</p>
+<p><strong>Почему цена в заказе отличается от цены на моей витрине?</strong> Заказ всегда считается по текущей цене нашего каталога. Если цена изменилась после вашего последнего <code>/stock</code>, в ответе на <code>POST /orders</code> будет новая цена. Обновляйте <code>/stock</code> чаще или сверяйте <code>total</code> ответа со своим и при расхождении отменяйте заказ.</p>
+<p><strong>Самовывоз поддерживается?</strong> Да: <code>&quot;delivery&quot;: {&quot;type&quot;: &quot;pickup&quot;}</code>. Адрес можно не указывать.</p>
+<p>**Что значит <code>test: true</code> у заказа в боевом режиме?** Это заказ, созданный ещё в тестовом режиме: режим фиксируется при создании заказа. Склад и учёт он не трогает.</p>
+<p>**Пришёл <code>503 sale_pending_review</code> на <code>complete</code>. Что делать?** Ничего не повторять. Учётная система ответила неоднозначно, и продажу проверяет сотрудник аптеки. Когда он закончит, статус заказа сменится сам и придёт webhook.</p>
+<p><strong>Нужно ли подтверждать webhook телом ответа?</strong> Нет, важен только код <code>2xx</code>. Тело ответа не читается.</p>
+<p><strong>Как получить спецификацию для Postman / Swagger?</strong> <code>https://api.fairhaven.uz/partner/openapi.yaml</code> — без ключа.</p>
+<p class="endnote">FairHaven Health · Partner API v1. Вопросы по подключению — вашему контакту в FairHaven.</p>
+</main>
+</div>
+</div>
+</body>
+</html>

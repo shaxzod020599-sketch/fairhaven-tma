@@ -254,6 +254,13 @@ test('live: hold on arrival, Billz reservation on accept, sale under the partner
   const created = await call('POST', '/partner/v1/orders', { key: keys.secret, body: order('L-1') });
   assert.equal(created.status, 201);
   assert.equal(created.body.test, false);
+  // An order_id first used while testing is a brand-new real order once live.
+  const reused = await call('POST', '/partner/v1/orders', { key: keys.secret, body: order('t-1', [{ product_id: 701, quantity: 1 }]) });
+  assert.equal(reused.status, 201);
+  assert.equal(reused.body.test, false);
+  assert.equal((await call('GET', '/partner/v1/orders/t-1', { key: keys.token })).body.test, false);
+  assert.equal((await call('POST', '/partner/v1/orders/t-1/cancel', { key: keys.secret, body: {} })).body.status, 'cancelled');
+
   const ledger = await ChannelOrder().findOne({ channel: 'partner:apteka24', externalId: 'L-1' }).lean();
   assert.equal(ledger.status, 'received');
   assert.equal(ledger.billz.pendingApplied, true);

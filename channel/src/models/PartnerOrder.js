@@ -77,7 +77,9 @@ const partnerOrderSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-partnerOrderSchema.index({ partnerCode: 1, externalId: 1 }, { unique: true });
+// Test and live orders are separate books: an order_id used while testing
+// must not swallow the real order that later reuses it.
+partnerOrderSchema.index({ partnerCode: 1, externalId: 1, test: 1 }, { unique: true });
 partnerOrderSchema.index({ partnerCode: 1, createdAt: -1 });
 partnerOrderSchema.index({ 'notification.pending': 1 });
 partnerOrderSchema.index({ 'notification.stale': 1 });

@@ -41,8 +41,9 @@ function checkUrl(value) {
   return { ok: true, url: url.toString() };
 }
 
-async function post(partner, { id, type, payload }) {
-  const body = JSON.stringify({ id, type, created_at: new Date().toISOString(), data: payload });
+async function post(partner, { id, type, payload, createdAt }) {
+  // created_at is when the event happened, the same on every retry.
+  const body = JSON.stringify({ id, type, created_at: new Date(createdAt || Date.now()).toISOString(), data: payload });
   const timestamp = String(Math.floor(Date.now() / 1000));
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), config.partners.webhookTimeoutMs);
@@ -78,7 +79,9 @@ async function deliver(event) {
     await PartnerEvent().updateOne({ _id: event._id }, { $set: { state: 'skipped' } });
     return 'skipped';
   }
-  const result = await post(partner, { id: String(event._id), type: event.type, payload: event.payload });
+  const result = await post(partner, {
+    id: String(event._id), type: event.type, payload: event.payload, createdAt: event.createdAt,
+  });
   const attempts = (event.attempts || 0) + 1;
   if (result.ok) {
     await PartnerEvent().updateOne({ _id: event._id }, {

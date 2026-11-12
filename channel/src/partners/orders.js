@@ -155,10 +155,11 @@ async function createOrder(partner, body) {
   }
 
   const Model = PartnerOrder();
-  const existing = await Model.findOne({ partnerCode: partner.code, externalId }).lean();
+  // Idempotency is per book: a test order_id reused once live is a new order.
+  const test = partner.mode === 'test';
+  const existing = await Model.findOne({ partnerCode: partner.code, externalId, test }).lean();
   if (existing) return { order: existing, created: false };
 
-  const test = partner.mode === 'test';
   const testOutcome = body?.test_outcome === 'reject' ? 'reject' : 'accept';
   const items = await resolveItems(body?.items);
   const delivery = readDelivery(body?.delivery);
@@ -215,15 +216,19 @@ async function createOrder(partner, body) {
     return { order: created.toObject(), created: true };
   } catch (err) {
     if (err.code === 11000) {
-      const winner = await Model.findOne({ partnerCode: partner.code, externalId }).lean();
+      const winner = await Model.findOne({ partnerCode: partner.code, externalId, test }).lean();
       if (winner) return { order: winner, created: false };
     }
     throw err;
   }
 }
 
-async function findOrder(partnerCode, externalId) {
-  return PartnerOrder().findOne({ partnerCode, externalId: String(externalId || '') }).lean();
+// The partner sees the book of its current mode: test orders while testing,
+// real ones once live.
+async function findOrder(partner, externalId) {
+  return PartnerOrder().findOne({
+    partnerCode: partner.code, externalId: String(externalId || ''), test: partner.mode === 'test',
+  }).lean();
 }
 
 async function listOrders(partnerCode, { status, limit, offset }) {

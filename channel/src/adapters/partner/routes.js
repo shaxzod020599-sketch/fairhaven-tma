@@ -183,12 +183,14 @@ router.get('/orders', read, wrap(async (req, res) => {
 }));
 
 router.get('/orders/:orderId', read, wrap(async (req, res) => {
-  const order = await partnerOrders.findOrder(req.partner.code, req.params.orderId);
+  const order = await partnerOrders.findOrder(req.partner, req.params.orderId);
   if (!order) return sendError(res, 404, 'order_not_found', 'order not found');
   res.json(S.order(order));
 }));
 
-const own = (req) => ({ partnerCode: req.partner.code, externalId: String(req.params.orderId) });
+const own = (req) => ({
+  partnerCode: req.partner.code, externalId: String(req.params.orderId), test: req.partner.mode === 'test',
+});
 
 router.post('/orders/:orderId/cancel', write, wrap(async (req, res) => {
   const order = await partnerOrders.cancel(req.partner, own(req), { reason: req.body?.reason, by: 'partner' });
