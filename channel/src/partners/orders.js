@@ -231,8 +231,10 @@ async function findOrder(partner, externalId) {
   }).lean();
 }
 
-async function listOrders(partnerCode, { status, limit, offset }) {
-  const filter = { partnerCode };
+async function listOrders(partnerCode, { status, limit, offset, test }) {
+  // Same book as the single-order endpoints: test orders while testing, real
+  // ones once live. `test` undefined (operator views) lists both.
+  const filter = { partnerCode, ...(test === undefined ? {} : { test: Boolean(test) }) };
   if (status) filter.status = status;
   const [items, total] = await Promise.all([
     PartnerOrder().find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit).lean(),
@@ -369,15 +371,34 @@ async function complete(partner, filter) {
       logger.warn('partner order sale failed', { code: order.partnerCode, number: order.number, uncertain, err });
       fail(503, uncertain ? 'sale_pending_review' : 'billz_unavailable',
         uncertain
-          ? 'the sale is being checked by the shop; do not resend, the status will change by itself'
+          ? 'the sale is being checked by the shop; the order becomes completed by itself once confirmed (retrying complete after 10-15 minutes is also safe)'
           : 'the sale could not be recorded yet; retry in a minute');
     }
   }
   return finish(partner, order, { status: 'completed', by: 'partner' });
 }
 
+/**
+ * A sale the shop confirmed after a review (the ledger is `sold`) completes
+ * the partner order too, so a partner told "being checked" is not left
+ * waiting on an order that will never change.
+ */
+async function completeConfirmedSale(partner, filter) {
+  const order = await claim({ ...filter, test: false }, ['accepted'], 'complete');
+  if (!order) return null;
+  const ledger = order.channelOrderId
+    ? await ChannelOrder().findOne({ internalOrderId: order.channelOrderId }).select('status').lean()
+    : null;
+  if (ledger?.status !== 'sold') {
+    await unlock(order);
+    return null;
+  }
+  return finish(partner, order, { status: 'completed', by: 'shop' });
+}
+
 module.exports = {
   CATALOG_CHANNEL,
+  completeConfirmedSale,
   PartnerApiError,
   createOrder,
   findOrder,

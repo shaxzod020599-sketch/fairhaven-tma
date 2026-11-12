@@ -72,7 +72,10 @@ if (config.partners.enabled) {
     if (err?.type === 'entity.too.large') {
       return res.status(413).json({ error: { code: 'payload_too_large', message: 'request body is too large' } });
     }
-    return next(err);
+    // Anything else is ours: keep the documented error shape for partners too.
+    logger.error('partner api error', { err });
+    if (res.headersSent) return next(err);
+    return res.status(500).json({ error: { code: 'internal_error', message: 'internal error' } });
   });
 }
 
@@ -207,6 +210,13 @@ async function start() {
   config.billz.shopCreatedAt = firstSync?.createdAt || new Date();
 
   logger.info('billz key verified', { shop: shop.name, shopId: shop.id });
+
+  // Partner keys and partner Billz keys must be known before the first request,
+  // or an order finished in the first instants would use the shop's key.
+  if (config.partners.enabled) {
+    await require('./partners/registry').load()
+      .catch((err) => logger.warn('partner registry load failed', { err }));
+  }
 
   const server = app.listen(config.port, config.host, () => {
     logger.info('channel-hub listening', { host: config.host, port: config.port });

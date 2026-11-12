@@ -12,16 +12,19 @@ info:
     * Деньги — целое число сумов (UZS), количество — целые штуки, время — ISO 8601 (UTC).
     * Ошибка всегда имеет вид `{"error": {"code": "...", "message": "...", "details": {...}}}`.
       Исключение — превышение лимита запросов (240 в минуту на ключ): `429` с телом
-      `{"detail": "..."}` и заголовком `Retry-After` (секунды).
-    * Тело запроса больше 256 КБ — `413 payload_too_large`, не JSON — `400 invalid_json`.
-    * Полное руководство: https://api.fairhaven.uz/partner/openapi.yaml (этот файл) и
-      документ «FairHaven Partner API · v1», который присылается вместе с ключами.
+      `{"detail": "..."}` и заголовком `Retry-After` (секунды); при общем лимите на
+      IP (300 в минуту) — `429` с телом `{"error": "rate_limited"}` без `Retry-After`.
+    * Тело запроса больше 256 КБ — `413` (ответ может быть не в JSON), не JSON — `400 invalid_json`.
+    * Эта спецификация доступна по адресу https://api.fairhaven.uz/partner/openapi.yaml.
+      Полное руководство — документ «FairHaven Partner API · v1», который присылается
+      вместе с ключами.
   contact:
     name: FairHaven Health
 servers:
   - url: https://api.fairhaven.uz/partner/v1
 security:
   - bearerAuth: []
+  - apiKeyHeader: []
 tags:
   - name: Access
   - name: Catalogue
@@ -207,7 +210,8 @@ paths:
         После этого вызова продажа проводится в нашем учёте. Повторный вызов
         ничего не меняет и отвечает `409 invalid_status` с `details.status: "completed"` —
         считайте такой ответ успехом. При `503 sale_pending_review` не повторяйте
-        вызов: продажу проверяет аптека, статус сменится сам.
+        сразу: продажу проверяет аптека; после подтверждения заказ сам станет
+        `completed`. Если через 15 минут он всё ещё `accepted` — повторите вызов.
       parameters:
         - $ref: "#/components/parameters/OrderId"
       responses:
@@ -240,6 +244,11 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
+    apiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: "Тот же ключ, что и в заголовке Authorization (Bearer), можно передавать так."
   parameters:
     Limit:
       name: limit
@@ -285,7 +294,8 @@ components:
       description: |
         Временная ошибка учёта (`billz_unavailable`, `billz_writes_disabled`,
         `release_failed`) — повторите через минуту. `sale_pending_review` — не
-        повторяйте, статус заказа сменится сам.
+        повторяйте сразу: после проверки заказ сам станет `completed`; если через
+        15 минут он всё ещё `accepted` — повторите `complete`.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -313,7 +323,7 @@ components:
         partner:
           type: object
           properties:
-            code: { type: string, example: demo_partner }
+            code: { type: string, example: demo-partner }
             name: { type: string }
             mode: { type: string, enum: [test, live] }
         key: { type: string, enum: [token, secret] }

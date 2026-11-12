@@ -178,7 +178,9 @@ router.get('/orders', read, wrap(async (req, res) => {
   if (status && !require('../../models/PartnerOrder').STATUSES.includes(status)) {
     return sendError(res, 422, 'validation_error', 'unknown status filter');
   }
-  const { items, total } = await partnerOrders.listOrders(req.partner.code, { status, limit, offset });
+  const { items, total } = await partnerOrders.listOrders(req.partner.code, {
+    status, limit, offset, test: req.partner.mode === 'test',
+  });
   res.json(S.page(items.map(S.order), total, { limit, offset }));
 }));
 

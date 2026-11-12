@@ -45,6 +45,27 @@ async function decideExpired() {
   return due.length;
 }
 
+// A sale the shop confirmed after a review closes the partner order as well.
+async function completeConfirmedSales() {
+  const accepted = await PartnerOrder().find({
+    test: false, status: 'accepted', channelOrderId: { $ne: '' },
+    $or: [{ 'lock.op': '' }, { 'lock.op': null }],
+  }).select('partnerCode channelOrderId').limit(200).lean();
+  if (!accepted.length) return 0;
+  const sold = new Set((await ChannelOrder().find({
+    internalOrderId: { $in: accepted.map((o) => o.channelOrderId) }, status: 'sold',
+  }).select('internalOrderId').lean()).map((l) => l.internalOrderId));
+  let done = 0;
+  for (const order of accepted.filter((o) => sold.has(o.channelOrderId))) {
+    try {
+      if (await partnerOrders.completeConfirmedSale(registry.get(order.partnerCode), { _id: order._id })) done += 1;
+    } catch (err) {
+      logger.warn('partner confirmed-sale sync failed', { id: String(order._id), err });
+    }
+  }
+  return done;
+}
+
 async function releaseOrphanHolds() {
   const orphans = await ChannelOrder().find({
     channel: /^partner:/,
@@ -74,6 +95,7 @@ function start() {
     try {
       await decideExpired();
       await releaseOrphanHolds();
+      await completeConfirmedSales();
       await notifier.drain();
       await webhooks.drain();
     } catch (err) {
@@ -98,4 +120,4 @@ function start() {
   };
 }
 
-module.exports = { start, decideExpired, releaseOrphanHolds };
+module.exports = { start, decideExpired, releaseOrphanHolds, completeConfirmedSales };

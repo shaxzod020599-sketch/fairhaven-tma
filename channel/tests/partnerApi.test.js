@@ -423,3 +423,35 @@ test('admin: list, key rotation revokes the old pair, switching off locks the pa
   assert.equal(off.body.error.code, 'partner_disabled');
   await setMode('test');
 });
+
+test('live: a sale under review completes by itself once the shop confirms it; lists follow the mode', async () => {
+  await setMode('live');
+  const created = await call('POST', '/partner/v1/orders', { key: keys.secret, body: order('R-1', [{ product_id: 701, quantity: 1 }]) });
+  assert.equal(created.status, 201);
+  const stored = await PartnerOrder().findOne({ externalId: 'R-1', test: false }).lean();
+  assert.equal((await internal('POST', `/orders/${stored._id}/decision`, { action: 'accept' })).status, 200);
+
+  // The live list shows only real orders, even though test ones exist.
+  const list = await call('GET', '/partner/v1/orders?limit=100', { key: keys.token });
+  assert.ok(list.body.items.length > 0);
+  assert.equal(list.body.items.every((o) => o.test === false), true);
+
+  const original = sale.completeSale;
+  sale.completeSale = async () => { throw Object.assign(new Error('billz timed out'), { outcomeUnknown: true }); };
+  try {
+    const pending = await call('POST', '/partner/v1/orders/R-1/complete', { key: keys.secret });
+    assert.equal(pending.status, 503);
+    assert.equal(pending.body.error.code, 'sale_pending_review');
+  } finally {
+    sale.completeSale = original;
+  }
+  assert.equal(await runtime.completeConfirmedSales(), 0);
+
+  // The shop checks Billz and records the sale as done.
+  await ChannelOrder().updateOne({ internalOrderId: stored.channelOrderId }, { $set: { status: 'sold' } });
+  assert.equal(await runtime.completeConfirmedSales(), 1);
+  const done = await call('GET', '/partner/v1/orders/R-1', { key: keys.token });
+  assert.equal(done.body.status, 'completed');
+  assert.ok(await PartnerEvent().exists({ orderNumber: stored.number, 'payload.status': 'completed' }));
+  await setMode('test');
+});

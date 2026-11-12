@@ -96,11 +96,12 @@ class RateLimited(FairHavenError):
 
 
 class RetryLater(FairHavenError):
-    """5xx — временная ошибка: повторите позже (кроме sale_pending_review)."""
+    """5xx — временная ошибка: повторите позже (sale_pending_review — не раньше чем через 15 минут)."""
 
 
 class SalePendingReview(RetryLater):
-    """503 sale_pending_review — НЕ повторяйте: статус заказа сменится сам."""
+    """503 sale_pending_review — не повторяйте сразу: после проверки заказ сам станет completed.
+    Если через 15 минут он всё ещё accepted — повторите complete (это безопасно)."""
 
 
 _BY_CODE = {
@@ -277,7 +278,7 @@ class PartnerClient:
         """POST /orders/{order_id}/complete — заказ доставлен И оплачен; проводит продажу.
 
         Повторный вызов для уже завершённого заказа считается успехом: вернётся
-        текущий заказ. SalePendingReview — не повторять, статус сменится сам.
+        текущий заказ. SalePendingReview — не повторять сразу (см. класс SalePendingReview).
         """
         try:
             return self._request("POST", f"/orders/{_path(order_id)}/complete", write=True)
@@ -393,11 +394,14 @@ def _demo() -> None:
     print(f"[3] {order_id}: {cancelled['status']} ({cancelled['reason']})")
 
     # 4. Больше, чем есть
-    try:
-        client.create_order(new_id(), [{"product_id": pick["product_id"], "quantity": min(pick["quantity"] + 1, 999)}])
-        print("[4] неожиданно: заказ принят")
-    except InsufficientStock as err:
-        print(f"[4] insufficient_stock: {err.shortages}")
+    if pick["quantity"] >= 999:
+        print("[4] остаток 999+ — проверку нехватки пропускаем")
+    else:
+        try:
+            client.create_order(new_id(), [{"product_id": pick["product_id"], "quantity": pick["quantity"] + 1}])
+            print("[4] неожиданно: заказ принят")
+        except InsufficientStock as err:
+            print(f"[4] insufficient_stock: {err.shortages}")
 
     # 5. Webhook (если адрес задан)
     if me.get("webhook_configured"):
