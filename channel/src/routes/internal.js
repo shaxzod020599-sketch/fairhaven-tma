@@ -461,7 +461,11 @@ const KEY_KINDS = { medicalka: ['token', 'secret'], uzum: ['oauth'], yandex: ['o
 
 router.get('/keys', async (_req, res) => {
   try {
-    const keys = await ChannelKey().find({}).sort({ createdAt: -1 }).limit(200).lean();
+    // Marketplace keys only: Partner API keys belong to a partner and are listed
+    // (and rotated) under /internal/partners, and the panel's key list refuses
+    // a channel it does not know.
+    const keys = await ChannelKey().find({ channel: { $in: Object.keys(KEY_KINDS) } })
+      .sort({ createdAt: -1 }).limit(200).lean();
     res.json({
       keys: keys.map((key) => ({
         id: String(key._id),

@@ -388,6 +388,13 @@ test('admin: list, key rotation revokes the old pair, switching off locks the pa
   assert.equal(list.body.partners[0].code, 'apteka24');
   assert.equal(list.body.partners[0].billz.hasSecret, true);
   assert.equal(list.body.partners[0].keys.length, 2);
+  // The marketplace key list stays free of partner keys (the panel refuses
+  // a channel it does not know, which would blank the whole list).
+  const marketplace = await call('GET', '/internal/keys', {
+    headers: { 'X-Internal-Token': process.env.CHANNEL_INTERNAL_TOKEN },
+  });
+  assert.equal(marketplace.status, 200);
+  assert.equal(marketplace.body.keys.some((k) => String(k.channel).startsWith('partner')), false);
 
   const bad = await internal('POST', '/', { code: 'uzum', name: 'Fake Uzum' });
   assert.equal(bad.status, 422);

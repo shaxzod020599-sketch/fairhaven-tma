@@ -45,6 +45,8 @@ const channelsSchema = new mongoose.Schema({
   medicalka: { type: channelConfigSchema, default: () => ({}) },
   uzum: { type: channelConfigSchema, default: () => ({}) },
   yandex: { type: yandexChannelConfigSchema, default: () => ({}) },
+  // Shared by every Partner API partner: one price and one switch for all.
+  partners: { type: channelConfigSchema, default: () => ({}) },
 }, { _id: false });
 
 const productSchema = new mongoose.Schema({
@@ -147,6 +149,7 @@ productSchema.index(
 productSchema.index({ 'channels.medicalka.enabled': 1 });
 productSchema.index({ 'channels.uzum.enabled': 1 });
 productSchema.index({ 'channels.yandex.enabled': 1 });
+productSchema.index({ 'channels.partners.enabled': 1 });
 
 productSchema.virtual('allImages').get(function () {
   const out = [];

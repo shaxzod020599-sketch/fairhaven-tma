@@ -15,7 +15,7 @@ const { availableQuantity } = require('../services/stockReconciler');
  * here).
  */
 
-const CHANNELS = ['medicalka', 'uzum', 'yandex'];
+const CHANNELS = ['medicalka', 'uzum', 'yandex', 'partners'];
 const FORCE_STATUSES = ['auto', 'in', 'out'];
 const YANDEX_BARCODE_TYPES = Product.schema.path('channels.yandex.barcodeType').enumValues;
 const MAX_LIMIT = 200;
@@ -644,7 +644,8 @@ exports.triggerSync = async (_req, res) => {
  * revoked in the minute somebody notices, rather than whenever the next
  * deployment happens.
  */
-const KEY_KINDS = { medicalka: ['token', 'secret'], uzum: ['oauth'], yandex: ['oauth'] };
+// Partner API keys are issued per partner from the partners section, not here.
+const KEY_KINDS = { medicalka: ['token', 'secret'], uzum: ['oauth'], yandex: ['oauth'], partners: [] };
 
 function validKeyKind(channel, kind) {
   return CHANNELS.includes(channel) && KEY_KINDS[channel].includes(kind);

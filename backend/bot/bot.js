@@ -662,6 +662,7 @@ function createBot(token, frontendUrl) {
   registerMedicalkaActions(bot);
   require('../services/uzumTelegramAction').registerUzumActions(bot);
   require('../services/yandexTelegramAction').registerYandexActions(bot);
+  require('../services/partnerTelegramAction').registerPartnerActions(bot);
 
   // Attach a helper for customer-initiated cancellations — edits the existing
   // channel card to strip the approve/reject buttons and append a verdict.

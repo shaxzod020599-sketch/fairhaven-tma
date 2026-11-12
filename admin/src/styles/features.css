@@ -634,3 +634,23 @@
   .fh-metric-ledger__item, .fh-metric-ledger__item:nth-child(n), .fh-sales-metrics > div, .fh-sales-metrics > div:nth-child(n) { border-right: 0; border-bottom: 1px solid var(--fh-line); }
   .fh-metric-ledger__item:last-child, .fh-sales-metrics > div:last-child { border-bottom: 0; }
 }
+
+/* ── Partner API partners (Connections page) ─────────────────────────────── */
+.fh-partners-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+.fh-partner-section { display: grid; gap: 10px; padding-top: 16px; border-top: 1px solid var(--fh-line-soft); }
+.fh-partner-section h3 { margin: 0; color: var(--fh-burgundy-deep); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
+.fh-partner-section p { margin: 0; color: var(--fh-muted); line-height: 1.5; }
+.fh-partner-modes { display: flex; flex-wrap: wrap; gap: 8px; }
+.fh-partner-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fh-partner-key { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fh-partner-order { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--fh-line-soft); }
+.fh-partner-order b { display: block; font-size: 14px; }
+.fh-partner-order small { display: block; margin-top: 2px; color: var(--fh-muted); font-size: 12px; }
+.fh-partner-order small.is-error { color: var(--fh-danger); font-weight: 700; }
+.fh-partner-order__actions { display: flex; gap: 6px; }
+@media (max-width: 760px) {
+  .fh-partners-card__head { flex-direction: column; }
+  .fh-partner-fields { grid-template-columns: 1fr; }
+  .fh-partner-order { grid-template-columns: minmax(0, 1fr) auto; }
+  .fh-partner-order__actions { grid-column: 1 / -1; }
+}

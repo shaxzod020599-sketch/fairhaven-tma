@@ -9,6 +9,7 @@ import { Field } from '../../ui/Field';
 import { useToast } from '../../ui/ToastProvider';
 import { MedicalkaPartnerDialog } from './MedicalkaPartnerDialog';
 import { MedicalkaWizard } from './MedicalkaWizard';
+import { PartnersPanel } from './PartnersPanel';
 import { RetailConnectionDetails } from './RetailConnectionDetails';
 
 /**
@@ -175,7 +176,7 @@ function OAuthCredentialsDialog({ channel, mode, api, onClose, onSaved }) {
   );
 }
 
-export function ConnectionsPage({ api = connectionsApi }) {
+export function ConnectionsPage({ api = connectionsApi, partnersApi }) {
   const toast = useToast();
   const [sync, setSync] = useState(null);
   const [keys, setKeys] = useState([]);
@@ -348,6 +349,8 @@ export function ConnectionsPage({ api = connectionsApi }) {
           <Button onClick={runSync}>Обновить остатки сейчас</Button>
         </Card>
       </section>
+
+      <PartnersPanel {...(partnersApi ? { api: partnersApi } : {})} />
 
       {errors.keys && (
         <div className="fh-stale-note">

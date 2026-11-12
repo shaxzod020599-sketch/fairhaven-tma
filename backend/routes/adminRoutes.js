@@ -12,6 +12,7 @@ const salesExport = require('../controllers/salesExportController');
 const medicalka = require('../controllers/medicalkaController');
 const uzum = require('../controllers/uzumController');
 const yandex = require('../controllers/yandexController');
+const partners = require('../controllers/partnerController');
 const {
   adminLoginLimiter,
   adminPollLimiter,
@@ -92,6 +93,17 @@ router.get('/medicalka/sub-orders/:id', medicalka.detailSubOrder);
 router.post('/medicalka/sub-orders/:id/status', medicalka.transitionSubOrder);
 router.post('/medicalka/sub-orders/:id/cancel', medicalka.cancelSubOrder);
 router.post('/medicalka/sub-orders/:id/labels', medicalka.addSubOrderLabel);
+// Partner API partners (our own contract, any number of partners)
+router.get('/partners', partners.list);
+router.post('/partners', partners.create);
+router.post('/partners/orders/:id/decision', partners.decide);
+router.post('/partners/orders/:id/cancel', partners.cancel);
+router.patch('/partners/:code', partners.update);
+router.post('/partners/:code/keys', partners.issueKeys);
+router.get('/partners/:code/webhook-secret', partners.webhookSecret);
+router.post('/partners/:code/webhook-secret', partners.rotateWebhookSecret);
+router.post('/partners/:code/webhook/test', partners.testWebhook);
+router.get('/partners/:code/orders', partners.orders);
 router.get('/uzum/orders', uzum.list);
 router.get('/uzum/orders/:id', uzum.detail);
 router.post('/uzum/orders/:id/decision', uzum.decide);
