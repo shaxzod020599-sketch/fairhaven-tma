@@ -43,6 +43,7 @@ router.use(internalLimiter, requireInternalToken);
 router.use('/connections', require('../retail/connections'));
 router.use('/uzum', require('../uzum/internal'));
 router.use('/yandex', require('../yandex/internal'));
+router.use('/partners', require('../partners/internal'));
 
 // ── Catalogue ───────────────────────────────────────────────────────────────
 router.post('/sync', async (req, res) => {

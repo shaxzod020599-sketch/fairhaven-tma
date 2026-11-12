@@ -45,6 +45,7 @@ channelKeySchema.index({ channel: 1, kind: 1, active: 1 });
 
 const KIND_TAG = { token: 't', secret: 's', oauth: 'o' };
 const CHANNEL_TAG = { medicalka: 'fhm', uzum: 'fhu', yandex: 'fhy' };
+const PARTNER_TAG = 'fhp';
 
 /**
  * Key format: `<channelTag>_<kindTag>_<43 base64url chars>`, e.g. `fhm_t_...`.
@@ -54,8 +55,15 @@ const CHANNEL_TAG = { medicalka: 'fhm', uzum: 'fhu', yandex: 'fhy' };
  * swapping the two keys, and a visible tag lets us answer "you sent the read
  * token to an order endpoint" instead of a bare 401.
  */
+function channelTagOf(channel) {
+  // Every Partner API partner shares one tag: the key's channel is in the
+  // record, the tag only has to say "this is a partner key".
+  if (String(channel || '').startsWith('partner:')) return PARTNER_TAG;
+  return CHANNEL_TAG[channel];
+}
+
 function generateKey(channel, kind) {
-  const channelTag = CHANNEL_TAG[channel];
+  const channelTag = channelTagOf(channel);
   const kindTag = KIND_TAG[kind];
   if (!channelTag) throw new Error(`unknown channel "${channel}"`);
   if (!kindTag) throw new Error(`unknown key kind "${kind}"`);
@@ -84,7 +92,9 @@ function generateClientId(channel) {
 function describeKey(presented) {
   const match = /^(fh[a-z])_([tso])_([A-Za-z0-9_-]{43})$/.exec(String(presented || ''));
   if (!match) return null;
-  const channel = Object.keys(CHANNEL_TAG).find((c) => CHANNEL_TAG[c] === match[1]);
+  const channel = match[1] === PARTNER_TAG
+    ? 'partner'
+    : Object.keys(CHANNEL_TAG).find((c) => CHANNEL_TAG[c] === match[1]);
   const kind = Object.keys(KIND_TAG).find((k) => KIND_TAG[k] === match[2]);
   return { channel, kind, prefix: `${match[1]}_${match[2]}`, last4: match[3].slice(-4) };
 }
@@ -103,3 +113,4 @@ module.exports.hashKey = hashKey;
 module.exports.describeKey = describeKey;
 module.exports.CHANNEL_TAG = CHANNEL_TAG;
 module.exports.KIND_TAG = KIND_TAG;
+module.exports.PARTNER_TAG = PARTNER_TAG;

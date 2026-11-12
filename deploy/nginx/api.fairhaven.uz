@@ -63,6 +63,19 @@ server {
         include snippets/fairhaven-api-proxy.conf;
     }
 
+    # FairHaven Partner API (our own contract, any partner) and its spec.
+    location = /partner/v1 {
+        include snippets/fairhaven-api-proxy.conf;
+    }
+
+    location ^~ /partner/v1/ {
+        include snippets/fairhaven-api-proxy.conf;
+    }
+
+    location = /partner/openapi.yaml {
+        include snippets/fairhaven-api-proxy.conf;
+    }
+
     location = /uzum {
         error_page 429 = @uzum_rate_limited;
         include snippets/fairhaven-api-proxy.conf;

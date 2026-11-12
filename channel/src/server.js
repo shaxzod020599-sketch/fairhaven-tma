@@ -58,6 +58,24 @@ if (config.yandex.enabled) {
   app.use('/yandex', require('./adapters/yandex/routes'));
 }
 
+// FairHaven Partner API: our own contract for any partner (catalogue, stock,
+// orders, webhooks), plus its public documentation.
+if (config.partners.enabled) {
+  app.use('/partner/v1', require('./adapters/partner/routes'));
+  app.use('/partner', require('./adapters/partner/docs'));
+  // A body that is not JSON fails in the shared parser, before the router;
+  // answer it in the Partner API's own error shape.
+  app.use('/partner', (err, _req, res, next) => {
+    if (err?.type === 'entity.parse.failed') {
+      return res.status(400).json({ error: { code: 'invalid_json', message: 'request body is not valid JSON' } });
+    }
+    if (err?.type === 'entity.too.large') {
+      return res.status(413).json({ error: { code: 'payload_too_large', message: 'request body is too large' } });
+    }
+    return next(err);
+  });
+}
+
 // Service-to-service surface: catalogue sync from the panel, and bot order
 // goals from the backend. Token-guarded and never proxied by nginx.
 app.use('/internal', require('./routes/internal'));
@@ -205,6 +223,7 @@ async function start() {
   const uzumTimer = require('./uzum/notifications').start();
   const yandexCancellationTimer = require('./yandex/lifecycle').start();
   const yandexNotificationTimer = require('./yandex/notifications').start();
+  const partnerRuntime = require('./partners/runtime').start();
 
   if (!notify.isConfigured()) {
     logger.warn('telegram announcements are off — marketplace orders will not appear in the channel');
@@ -218,6 +237,7 @@ async function start() {
     if (yandexCancellationTimer) clearInterval(yandexCancellationTimer);
     if (yandexNotificationTimer) clearInterval(yandexNotificationTimer);
     medicalka.stop();
+    partnerRuntime?.stop();
     server.close();
     await db.disconnect();
     process.exit(0);

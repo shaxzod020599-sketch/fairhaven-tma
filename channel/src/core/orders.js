@@ -389,8 +389,12 @@ function billzKeyOf(order) {
  * shared one.
  */
 function paymentTypeFor(channel) {
-  const own = config.billz.channels?.[channel];
+  const own = billzAuth.channelSettings(channel);
   if (own?.paymentTypeId) return { id: own.paymentTypeId, name: own.paymentTypeName };
+  const partners = config.billz.channels?.partners;
+  if (String(channel || '').startsWith('partner:') && partners?.paymentTypeId) {
+    return { id: partners.paymentTypeId, name: partners.paymentTypeName };
+  }
   return { id: config.billz.paymentTypeId, name: config.billz.paymentTypeName };
 }
 

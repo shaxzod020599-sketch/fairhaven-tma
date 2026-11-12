@@ -33,6 +33,8 @@ const BILLZ_CHANNEL_ENV = {
   uzum: 'UZUM',
   yandex: 'YANDEX',
   'fairhaven-bot': 'BOT',
+  // Shared by every Partner API partner that has no Billz key of its own.
+  partners: 'PARTNERS',
 };
 
 const config = {
@@ -105,6 +107,22 @@ const config = {
     botToken: process.env.TELEGRAM_BOT_TOKEN || '',
     ordersChannelId: process.env.ORDERS_CHANNEL_ID || '',
     enabled: bool('CHANNEL_TELEGRAM_ENABLED', true),
+  },
+
+  // Generic Partner API (/partner/v1). Partners themselves are records in the
+  // `partners` collection, managed from the admin panel.
+  partners: {
+    enabled: bool('PARTNER_API_ENABLED', true),
+    // Encrypts each partner's webhook signing secret and optional Billz key.
+    // Falls back to the Medicalka key so an existing server needs no new env.
+    credentialsEncryptionKey: process.env.PARTNER_CREDENTIALS_ENCRYPTION_KEY
+      || process.env.MEDICALKA_CREDENTIALS_ENCRYPTION_KEY || '',
+    // Seconds before a test-mode order is decided automatically.
+    testDecisionSeconds: number('PARTNER_TEST_DECISION_SECONDS', 10),
+    sweepMs: number('PARTNER_SWEEP_MS', 5000),
+    webhookTimeoutMs: number('PARTNER_WEBHOOK_TIMEOUT_MS', 10000),
+    // A webhook may go to plain http only outside production (local testing).
+    allowInsecureWebhooks: bool('PARTNER_ALLOW_INSECURE_WEBHOOKS', false),
   },
 
   medicalkaPartner: {

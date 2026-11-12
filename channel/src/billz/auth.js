@@ -33,9 +33,37 @@ const DEFAULT_KEY = 'default';
 const cached = new Map();
 const inFlight = new Map();
 
+// Channels whose Billz settings live in the database rather than in `.env` —
+// Partner API partners, added from the admin panel without a restart. The
+// provider answers synchronously from an in-memory cache.
+let channelSettingsProvider = () => null;
+
+function setChannelSettingsProvider(fn) {
+  channelSettingsProvider = typeof fn === 'function' ? fn : () => null;
+}
+
+/** Billz settings a channel has of its own: `.env` first, then the provider. */
+function channelSettings(channel) {
+  const configured = config.billz.channels?.[channel];
+  if (configured?.secretToken || configured?.paymentTypeId) return configured;
+  try {
+    return channelSettingsProvider(channel) || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function isPartnerChannel(channel) {
+  return String(channel || '').startsWith('partner:');
+}
+
 /** The key a channel writes with: its own when configured, else the shared one. */
 function keyForChannel(channel) {
-  return config.billz.channels?.[channel]?.secretToken ? channel : DEFAULT_KEY;
+  if (channelSettings(channel)?.secretToken) return channel;
+  // A partner without its own key still writes as "partners", not as the
+  // shop-wide key, so Billz can at least tell partner sales from the rest.
+  if (isPartnerChannel(channel) && config.billz.channels?.partners?.secretToken) return 'partners';
+  return DEFAULT_KEY;
 }
 
 /**
@@ -44,7 +72,7 @@ function keyForChannel(channel) {
  */
 function resolve(key) {
   if (key && key !== DEFAULT_KEY) {
-    const own = config.billz.channels?.[key]?.secretToken;
+    const own = channelSettings(key)?.secretToken;
     if (own) return { key, secret: own };
     logger.warn('billz channel key is no longer configured, using the shared key', { key });
   }
@@ -182,5 +210,7 @@ module.exports = {
   getAccessToken,
   invalidate,
   keyForChannel,
+  channelSettings,
+  setChannelSettingsProvider,
   _reset,
 };

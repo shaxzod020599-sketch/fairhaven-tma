@@ -1,0 +1,440 @@
+openapi: 3.0.3
+info:
+  title: FairHaven Partner API
+  version: "1.0.0"
+  description: |
+    API аптеки FairHaven Health для партнёров: каталог, остатки, заказы и
+    уведомления (webhooks) о смене статуса заказа.
+
+    * Ключ передаётся в заголовке `Authorization: Bearer <ключ>` (или `X-Api-Key`).
+    * **Токен чтения** (`fhp_t_…`) — каталог, остатки, просмотр заказов.
+    * **Секрет заказов** (`fhp_s_…`) — всё то же, плюс создание и изменение заказов.
+    * Деньги — целое число сумов (UZS), количество — целые штуки, время — ISO 8601 (UTC).
+    * Ошибка всегда имеет вид `{"error": {"code": "...", "message": "...", "details": {...}}}`.
+  contact:
+    name: FairHaven Health
+servers:
+  - url: https://api.fairhaven.uz/partner/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Access
+  - name: Catalogue
+  - name: Orders
+  - name: Webhooks
+paths:
+  /me:
+    get:
+      tags: [Access]
+      summary: Проверка ключа и режима подключения
+      responses:
+        "200":
+          description: Ключ действителен
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Disabled" }
+  /products:
+    get:
+      tags: [Catalogue]
+      summary: Каталог (постранично)
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: search
+          in: query
+          description: Поиск по названию, бренду, артикулу или штрихкоду
+          schema: { type: string, maxLength: 100 }
+      responses:
+        "200":
+          description: Страница каталога
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/Product" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /products/{id}:
+    get:
+      tags: [Catalogue]
+      summary: Один товар
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Карточка товара
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "404": { $ref: "#/components/responses/Error" }
+  /stock:
+    get:
+      tags: [Catalogue]
+      summary: Остатки и цены всех товаров каталога
+      description: |
+        Возвращает **все** товары каталога, включая закончившиеся (`quantity: 0`).
+        Количество — то, что можно продать вам: остаток минус резервы других
+        каналов и страховой запас аптеки. Рекомендуемая частота — раз в 1–5 минут.
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Остатки
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      generated_at: { type: string, format: date-time }
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/StockRow" }
+  /orders:
+    post:
+      tags: [Orders]
+      summary: Создать заказ
+      description: |
+        Нужен секрет заказов. Повторная отправка с тем же `order_id` не создаёт
+        второй заказ: ответ `200` с уже сохранённым заказом. Новый заказ — `201`.
+        Цены берутся из нашего каталога, цены из запроса не принимаются.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderCreate" }
+      responses:
+        "201":
+          description: Заказ принят в обработку (статус `new`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "200":
+          description: Заказ с таким `order_id` уже существует — возвращён он
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404":
+          description: Товара нет в каталоге (`product_not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Недостаточно остатка (`insufficient_stock`), в `details.items` — что и сколько есть
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
+    get:
+      tags: [Orders]
+      summary: Список ваших заказов (новые сверху)
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/OrderStatus" }
+      responses:
+        "200":
+          description: Страница заказов
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/Order" }
+  /orders/{order_id}:
+    get:
+      tags: [Orders]
+      summary: Заказ по вашему order_id
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Заказ
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/Error" }
+  /orders/{order_id}/cancel:
+    post:
+      tags: [Orders]
+      summary: Отменить заказ (из статусов new или accepted)
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 200, example: "Покупатель отказался" }
+      responses:
+        "200":
+          description: Заказ отменён, резерв снят
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/RetryLater" }
+  /orders/{order_id}/complete:
+    post:
+      tags: [Orders]
+      summary: Заказ доставлен и оплачен (из статуса accepted)
+      description: После этого вызова продажа проводится в нашем учёте. Повторный вызов безопасен.
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Заказ завершён
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/RetryLater" }
+  /webhook/test:
+    post:
+      tags: [Webhooks]
+      summary: Отправить тестовое событие `ping` на ваш webhook
+      responses:
+        "200":
+          description: Результат отправки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  delivered: { type: boolean }
+                  status_code: { type: integer, nullable: true }
+                  error: { type: string, nullable: true }
+        "409": { $ref: "#/components/responses/Error" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+    OrderId:
+      name: order_id
+      in: path
+      required: true
+      description: Ваш собственный идентификатор заказа
+      schema: { type: string }
+  responses:
+    Error:
+      description: Ошибка
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Ключ не передан, неверен или отозван (`unauthorized`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Disabled:
+      description: Доступ партнёра выключен (`partner_disabled`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Validation:
+      description: Неверные данные запроса (`validation_error`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Действие недоступно в текущем статусе (`invalid_status`) или заказ сейчас обрабатывается (`order_busy`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RetryLater:
+      description: Временная ошибка учёта — повторите через минуту
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, example: insufficient_stock }
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
+    Page:
+      type: object
+      properties:
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+    Me:
+      type: object
+      properties:
+        partner:
+          type: object
+          properties:
+            code: { type: string, example: apteka24 }
+            name: { type: string }
+            mode: { type: string, enum: [test, live] }
+        key: { type: string, enum: [token, secret] }
+        shop:
+          type: object
+          properties:
+            name: { type: string }
+        webhook_configured: { type: boolean }
+        server_time: { type: string, format: date-time }
+    Product:
+      type: object
+      properties:
+        id: { type: integer, example: 701 }
+        name: { type: string }
+        name_uz: { type: string }
+        brand: { type: string }
+        category: { type: string, example: vitamins }
+        category_name: { type: string, example: Витамины }
+        barcode: { type: string }
+        sku: { type: string }
+        description: { type: string }
+        description_uz: { type: string }
+        images:
+          type: array
+          items: { type: string, format: uri }
+        mxik: { type: string, description: ИКПУ (MXIK) }
+        package_code: { type: string, description: Код упаковки }
+        unit: { type: string, enum: [pcs] }
+        price: { type: integer, description: Цена за штуку, UZS }
+        old_price: { type: integer, nullable: true, description: Цена до скидки, если есть }
+        quantity: { type: integer }
+        available: { type: boolean }
+        updated_at: { type: string, format: date-time, nullable: true }
+    StockRow:
+      type: object
+      properties:
+        product_id: { type: integer }
+        quantity: { type: integer }
+        available: { type: boolean }
+        price: { type: integer }
+    OrderStatus:
+      type: string
+      enum: [new, accepted, rejected, cancelled, completed]
+    OrderCreate:
+      type: object
+      required: [order_id, items]
+      properties:
+        order_id:
+          type: string
+          maxLength: 64
+          description: Ваш уникальный идентификатор заказа (печатные ASCII-символы без пробелов)
+          example: "A24-100045"
+        items:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            required: [product_id, quantity]
+            properties:
+              product_id: { type: integer, example: 701 }
+              quantity: { type: integer, minimum: 1, maximum: 999, example: 2 }
+        customer:
+          type: object
+          properties:
+            name: { type: string, maxLength: 100 }
+            phone: { type: string, maxLength: 32 }
+        delivery:
+          type: object
+          properties:
+            type: { type: string, enum: [courier, pickup], default: courier }
+            address: { type: string, maxLength: 300 }
+            comment: { type: string, maxLength: 500 }
+        comment: { type: string, maxLength: 500 }
+        test_outcome:
+          type: string
+          enum: [accept, reject]
+          description: Только в тестовом режиме — каким будет автоматическое решение
+    Order:
+      type: object
+      properties:
+        id: { type: integer, description: Номер заказа у нас }
+        order_id: { type: string, description: Ваш идентификатор }
+        status: { $ref: "#/components/schemas/OrderStatus" }
+        reason:
+          type: string
+          nullable: true
+          description: "Причина для rejected/cancelled: timeout, rejected_by_shop, cancelled_by_shop или ваш текст"
+        test: { type: boolean }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              product_id: { type: integer }
+              name: { type: string }
+              quantity: { type: integer }
+              price: { type: integer }
+              total: { type: integer }
+        total: { type: integer }
+        customer:
+          type: object
+          properties:
+            name: { type: string }
+            phone: { type: string }
+        delivery:
+          type: object
+          properties:
+            type: { type: string, enum: [courier, pickup] }
+            address: { type: string }
+            comment: { type: string }
+        comment: { type: string }
+        decision_deadline:
+          type: string
+          format: date-time
+          nullable: true
+          description: До какого времени аптека ответит на заказ (только для new)
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { $ref: "#/components/schemas/OrderStatus" }
+              at: { type: string, format: date-time }
+              reason: { type: string, nullable: true }
+    WebhookEvent:
+      type: object
+      description: |
+        Тело POST-запроса на ваш webhook. Заголовки: `X-FairHaven-Event`,
+        `X-FairHaven-Event-Id`, `X-FairHaven-Timestamp`,
+        `X-FairHaven-Signature: v1=<hex HMAC-SHA256(секрет, timestamp + "." + тело)>`.
+      properties:
+        id: { type: string, description: Уникальный id события — используйте для защиты от повторов }
+        type: { type: string, enum: [order.status_changed, ping] }
+        created_at: { type: string, format: date-time }
+        data: { $ref: "#/components/schemas/Order" }
