@@ -319,6 +319,21 @@ test('courier callbacks advance monotonically and preserve duplicate revision', 
   assert.equal((await call('GET', `/yandex/order/${id}/status`)).body.status, 'DELIVERED');
 });
 
+test('staff cannot reject once the courier has the order; Yandex still can', async () => {
+  for (const handedOver of ['TAKEN_BY_COURIER', 'DELIVERED']) {
+    await seed(`p-${handedOver}`); const { id } = await receive(incoming([{ id: `p-${handedOver}`, name: 'Item', price: 80, quantity: 1 }]));
+    config.billzWriteEnabled = true;
+    assert.equal((await decision(id, 'accept')).status, 200); assert.equal((await decision(id, 'ready')).status, 200);
+    assert.equal((await callback(id, handedOver)).status, 204);
+    assert.deepEqual((await get(id)).body.data.actions, []);
+    const refused = await decision(id, 'reject'); assert.equal(refused.status, 409);
+    assert.equal(refused.body.error, 'yandex_invalid_transition');
+    const row = await raw(id); assert.equal(row.yandex.fulfillmentStatus, handedOver); assert.equal(row.yandex.cancelRequested, null);
+    assert.equal((await callback(id, 'CANCELLED')).status, 204);
+    assert.equal((await raw(id)).yandex.fulfillmentStatus, 'CANCELLED');
+  }
+});
+
 test('phase-one upgrade preserves original input and exposes safe defaults', async () => {
   const body = incoming(); const id = randomUUID();
   await Order.collection.insertOne({ channel: 'yandex', internalOrderId: id, externalId: body.eatsId, status: 'received',
@@ -589,7 +604,8 @@ for (const action of ['accept', 'cooking', 'ready']) {
     assert.equal(attempts(), 3); assert.equal(result.body.order.status, 'DELIVERED');
     assert.equal(result.body.order.reconciliationRequired, false); assert.equal(result.body.order.inProgress, false);
     assert.equal(result.body.order.accountingStatus, action === 'ready' ? 'sold' : 'reserved');
-    assert.ok(result.body.order.actions.includes(action === 'ready' ? 'reject' : 'ready'));
+    // Delivered: only the still-missing Billz sale («Готов») may remain, never a rejection.
+    assert.deepEqual(result.body.order.actions, action === 'ready' ? [] : ['ready']);
     assert.equal(result.body.order.audit.filter((entry) => entry.action === action && entry.outcome === 'applied').length, 1);
     const retry = await decision(id, action, { expectedRevision: before.yandex.revision, expectedItemsRevision: before.yandex.itemsRevision });
     assert.equal(retry.body.idempotent, true); assert.equal(attempts(), 3);

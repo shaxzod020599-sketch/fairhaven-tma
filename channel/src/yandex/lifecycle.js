@@ -4,6 +4,8 @@ const picking = require('./picking');
 const ID = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
 const ACTIONS = ['accept', 'cooking', 'ready', 'reject'];
 const STATUSES = ['NEW', 'ACCEPTED_BY_RESTAURANT', 'COOKING', 'READY', 'TAKEN_BY_COURIER', 'DELIVERED', 'CANCELLED'];
+// The courier has the goods: the shop can no longer reject (Yandex itself may still cancel).
+const HANDED_OVER = ['TAKEN_BY_COURIER', 'DELIVERED'];
 const STALE_MS = 5 * 60_000;
 const pending = { 'yandex.notification.pending': true, 'yandex.notification.retryAt': null };
 function failure(code, status = 409) { return Object.assign(new Error(code), { code, status }); }
@@ -47,7 +49,7 @@ function cleanOrder(row, at = new Date(), flags = {}) {
       ...(accountingEnabled && !y.acceptedAt && ['received', 'failed'].includes(row.status) ? ['accept'] : []),
       ...(status === 'ACCEPTED_BY_RESTAURANT' && row.status === 'reserved' ? ['cooking'] : []),
       ...(accountingEnabled && y.acceptedAt && !y.readyAt && row.status === 'reserved' ? ['ready'] : []),
-      ...(row.status !== 'cancelled' ? ['reject'] : []),
+      ...(row.status !== 'cancelled' && !HANDED_OVER.includes(status) ? ['reject'] : []),
     ] : [],
     audit: (y.audit || []).slice(-100),
   };
@@ -178,6 +180,7 @@ function createLifecycle({ Model = require('../models/ChannelOrder')(), core = r
     if (row.yandex.decisions?.[action] === key) return { order: clean(row), idempotent: true };
     if (row.yandex.revision !== input.expectedRevision) throw failure('yandex_revision_conflict');
     if (action === 'reject') {
+      if (HANDED_OVER.includes(row.yandex.fulfillmentStatus)) throw failure('yandex_invalid_transition');
       const requested = await requestCancellation(id, actor, reason, { expectedRevision: input.expectedRevision, key });
       await cleanupCancellation(id);
       return { order: await get(id), idempotent: requested.idempotent };
